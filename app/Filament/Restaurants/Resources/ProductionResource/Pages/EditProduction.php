@@ -1,0 +1,26 @@
+<?php
+
+namespace App\Filament\Restaurants\Resources\ProductionResource\Pages;
+
+use App\Filament\Restaurants\Resources\ProductionResource;
+use Filament\Actions;
+use Filament\Resources\Pages\EditRecord;
+use Illuminate\Contracts\Support\Htmlable;
+
+class EditProduction extends EditRecord
+{
+    protected static string $resource = ProductionResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\DeleteAction::make(),
+        ];
+    }
+
+    // 👇 importante: visibilidad public y tipo de retorno string|Htmlable
+    public function getTitle(): string|Htmlable
+    {
+        return 'Editar ' . $this->record->slug;
+    }
+}
