@@ -7,31 +7,31 @@ use App\Filament\Clusters\Products\Resources\ProductResource\Pages\CreateProduct
 use App\Filament\Clusters\Products\Resources\ProductResource\Pages\EditProduct;
 use App\Filament\Clusters\Products\Resources\ProductResource\Pages\ListProducts;
 use App\Models\Product;
-use App\Models\Production;
 use App\Models\Attribute;
 use App\Enums\TipoProducto;
 use App\Filament\Clusters\Products\ProductsCluster;
 use App\Models\Value;
 use Filament\Forms;
+use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Split;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\Group;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Tabs;
+use Filament\Forms\Components\Tabs\Tab;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
-use Filament\Tables\Columns\ColorColumn;
-use Illuminate\Support\Collection;
 
 class ProductResource extends Resource
 {
@@ -49,17 +49,108 @@ class ProductResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\Grid::make(1)
-                    ->schema([
-                        Split::make([
-                            Section::make('Información Principal')
-                                ->schema([
-                                    TextInput::make('name')->label('Nombre')
-                                        ->required()
-                                        ->maxLength(255)
-                                        ->reactive()
-                                        ->lazy()
-                                        ->afterStateUpdated(fn($state, callable $set) => $set('slug', \Illuminate\Support\Str::slug($state))),
+                Tabs::make('ProductTabs')
+                    ->columnSpanFull()
+                    ->tabs([
+                        // 🔵 TAB 1 — INFORMACIÓN
+                        Tab::make('Información')
+                            ->schema([
+                                Forms\Components\Grid::make(2)
+                                    ->schema([
+                                        Forms\Components\Grid::make(3)
+                                            ->schema([
+                                                FileUpload::make('image_path')
+                                                    ->label('Imagen del producto')
+                                                    ->image()
+                                                    ->directory('products')
+                                                    ->disk('public')
+                                                    ->preserveFilenames()
+                                                    ->previewable(true)
+                                                    ->columnSpanFull(),
+
+                                                TextInput::make('name')
+                                                    ->label('Nombre')
+                                                    ->required()
+                                                    ->maxLength(255)
+                                                    ->reactive()
+                                                    ->lazy()
+                                                    ->afterStateUpdated(
+                                                        fn($state, callable $set) =>
+                                                        $set('slug', \Illuminate\Support\Str::slug($state))
+                                                    )
+                                                    ->columnSpan(2),
+
+                                                Select::make('unid_id')
+                                                    ->label('Unidad de medida')
+                                                    ->relationship('unit', 'name')
+                                                    ->searchable()
+                                                    ->preload()
+                                                    ->required()
+                                            ]),
+
+                                        ToggleButtons::make('type')
+                                            ->label('Tipo de Producto')
+                                            ->inline()
+                                            ->options(TipoProducto::class)
+                                            ->required(),
+                                        
+                                        ToggleButtons::make('production_id')
+                                            ->label('Área de Producción')
+                                            ->options(fn() => \App\Models\Production::pluck('name', 'id')->toArray())
+                                            ->inline(true)
+                                            ->required(),
+
+                                        TextInput::make('price')
+                                            ->label('Precio Base')
+                                            ->numeric()
+                                            ->prefix('S/.')
+                                            ->step('0.01')
+                                            ->nullable(),
+
+
+
+                                        Select::make('brand_id')
+                                            ->label('Marca')
+                                            ->relationship('brand', 'name')
+                                            ->searchable()
+                                            ->preload(),
+
+                                        Select::make('categories')
+                                            ->label('Categorías')
+                                            ->multiple()
+                                            ->relationship('categories', 'name')
+                                            ->searchable()
+                                            ->preload(),
+                                        Select::make('status')
+                                            ->label('Publicado')
+                                            ->options(StatusProducto::class)
+                                            ->required()
+                                            ->helperText('Activa o desactiva la visibilidad del producto.'),
+
+
+
+                                    ]),
+                            ]),
+
+                        // 🟣 TAB 2 — VARIANTES
+                        Tab::make('Variantes')
+                            ->schema([
+                                self::getAttributesValuesRepeater(),
+                            ]),
+
+                        // 🟢 TAB 3 — CONFIGURACIÓN
+                        Tab::make('Configuración')
+                            ->schema([
+                                Grid::make(3)->schema([
+                                    TextInput::make('order')
+                                        ->label('Orden')
+                                        ->numeric()
+                                        ->nullable(),
+
+                                    DateTimePicker::make('created_at')
+                                        ->label('Fecha de Publicación')
+                                        ->disabled(),
+
                                     TextInput::make('slug')
                                         ->label('Slug')
                                         ->required()
@@ -70,110 +161,70 @@ class ProductResource extends Resource
                                         ->validationMessages([
                                             'unique' => 'Este slug ya existe. Por favor ingresa uno diferente.',
                                         ]),
-                                    ToggleButtons::make('type')
-                                        ->label('Tipo de Producto')
-                                        ->inline()
-                                        ->options(TipoProducto::class)
-                                        ->required(),
+                                ]),
 
-                                    ToggleButtons::make('production_id')
-                                        ->label('Área de Producción')
-                                        ->options(fn() => Production::pluck('name', 'id')->toArray())
-                                        ->inline(true)
-                                        ->required(),
+                                Section::make('Opciones')
+                                    ->description('Configuraciones adicionales del producto')
+                                    ->schema([
+                                        Grid::make(3)->schema([
+                                            Toggle::make('cortesia')
+                                                ->label('Es de cortesía')
+                                                ->default(false)
+                                                ->inline(true)
+                                                ->onIcon('heroicon-m-check')
+                                                ->offIcon('heroicon-m-x-mark')
+                                                ->hintAction(
+                                                    Action::make('info')
+                                                        ->icon('heroicon-m-information-circle')
+                                                        ->tooltip('Para productos obsequiados al cliente. En el POS podrás marcarlos como cortesía y su precio será S/ 0.')
+                                                ),
 
-                                    TextInput::make('price')
-                                        ->label('Precio Base')
-                                        ->numeric()
-                                        ->prefix('S/.')
-                                        ->step('0.01')
-                                        ->nullable(),
+                                            Toggle::make('visible')
+                                                ->label('Visible en carta')
+                                                ->default(true)
+                                                ->inline(true)
+                                                ->onIcon('heroicon-m-check')
+                                                ->offIcon('heroicon-m-x-mark')
+                                                ->hintAction(
+                                                    Action::make('info')
+                                                        ->icon('heroicon-m-information-circle')
+                                                        ->tooltip('Habilita que el producto aparezca en la carta digital para pedidos.')
+                                                ),
 
-                                    Toggle::make('cortesia')
-                                        ->label('Es de cortesía')
-                                        ->default(false),
+                                            Toggle::make('control_stock')
+                                                ->label('Control de stock')
+                                                ->default(true)
+                                                ->inline(true)
+                                                ->onIcon('heroicon-m-check')
+                                                ->offIcon('heroicon-m-x-mark')
+                                                ->hintAction(
+                                                    Action::make('info')
+                                                        ->icon('heroicon-m-information-circle')
+                                                        ->tooltip('Controla salidas, ingresos y traslados del producto. Evita ventas sin stock.')
+                                                ),
 
-                                    Toggle::make('visible')
-                                        ->label('Visible en carta')
-                                        ->default(true),
+                                            Toggle::make('venta_sin_stock')
+                                                ->label('Venta sin stock')
+                                                ->default(true)
+                                                ->inline(true)
+                                                ->onIcon('heroicon-m-check')
+                                                ->offIcon('heroicon-m-x-mark')
+                                                ->hintAction(
+                                                    Action::make('info')
+                                                        ->icon('heroicon-m-information-circle')
+                                                        ->tooltip('Puede venderse el producto aunque no haya stock disponible.')
+                                                ),
 
-                                    TextInput::make('order')
-                                        ->label('Orden')
-                                        ->numeric()
-                                        ->nullable(),
-                                ])
-                                ->columnSpan('full'),
+                                        ]),
+                                    ])
+                                    ->collapsible(),
 
-                            Group::make()
-                                ->schema([
-                                    Section::make('Estado')
-                                        ->schema([
-                                            Select::make('status')
-                                                ->label('Publicado')
-                                                ->options(StatusProducto::class) // toma todos los casos del enum
-                                                ->required()
-                                                ->helperText('Activa o desactiva la visibilidad del producto.'),
+                            ])
 
-                                            DateTimePicker::make('created_at')
-                                                ->label('Día de Publicación')
-                                                ->disabled(),
-                                        ])
-                                        ->columns(1),
 
-                                    Section::make('Asociaciones')
-                                        ->schema([
-                                            Select::make('brand_id')
-                                                ->label('Marca')
-                                                ->relationship('brand', 'name')
-                                                ->searchable()
-                                                ->preload(),
-                                            Select::make('categories')
-                                                ->label('Categorías')
-                                                ->multiple()
-                                                ->relationship('categories', 'name')
-                                                ->searchable()
-                                                ->preload(),
-                                        ])
-                                        ->columns(1),
-                                ])->grow(false),
-                        ])->from('md')->columnSpan('full'),
-
-                        Section::make('Atributos y Variantes')
-                            ->schema([
-                                self::getAttributesValuesRepeater(),
-                            ])->columnSpan('full')
-                    ]),
+                    ])
             ]);
     }
-
-    // public static function getAttributesValuesRepeater(): Repeater
-    // {
-    //     return Repeater::make('attribute_values')
-    //         ->label('')
-    //         ->columns(2)
-    //         ->schema([
-    //             // Seleccionar atributo
-    //             Select::make('attribute_id')
-    //                 ->label('Atributo')
-    //                 ->options(Attribute::pluck('name', 'id'))
-    //                 ->searchable()
-    //                 ->reactive(), // para actualizar los valores al cambiar
-
-    //             // Seleccionar valores del atributo
-    //             Select::make('values')
-    //                 ->label('Valores')
-    //                 ->multiple()
-    //                 ->options(function (callable $get) {
-    //                     $attributeId = $get('attribute_id');
-    //                     if (! $attributeId) {
-    //                         return [];
-    //                     }
-    //                     return Value::where('attribute_id', $attributeId)->pluck('value', 'id')->toArray();
-    //                 }),
-    //         ])
-    //         ->addActionLabel('Agregar atributo');
-    // }
-
 
 
     public static function getAttributesValuesRepeater(): Repeater
@@ -190,7 +241,7 @@ class ProductResource extends Resource
                     ->preload()
                     ->live()
                     ->afterStateUpdated(function (Set $set) {
-                        $set('value_id', null);
+                        $set('vales', null);
                     })
                     ->createOptionForm([
                         TextInput::make('name')
@@ -209,7 +260,7 @@ class ProductResource extends Resource
                     ->createOptionUsing(fn(array $data) => Attribute::create($data)->id),
 
                 // Seleccionar valores del atributo
-                Select::make('value_id')
+                Select::make('values')
                     ->label('Valores')
                     ->searchable()
                     ->preload()
@@ -248,66 +299,65 @@ class ProductResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table
-            ->columns([
-                Tables\Columns\TextColumn::make('name')
-                    ->label('Nombre')
-                    ->searchable()
-                    ->sortable(),
+        return $table->columns([
+            Tables\Columns\TextColumn::make('name')
+                ->label('Nombre')
+                ->searchable()
+                ->sortable(),
 
-                Tables\Columns\TextColumn::make('brand.name')
-                    ->label('Marca')
-                    ->sortable()
-                    ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+            Tables\Columns\TextColumn::make('brand.name')
+                ->label('Marca')
+                ->sortable()
+                ->searchable()
+                ->toggleable(isToggledHiddenByDefault: true),
 
-                Tables\Columns\TextColumn::make('categories.name')
-                    ->label('Categorías')
-                    ->badge()
-                    ->separator(', ')
-                    ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+            Tables\Columns\TextColumn::make('categories.name')
+                ->label('Categorías')
+                ->badge()
+                ->separator(', ')
+                ->searchable()
+                ->toggleable(isToggledHiddenByDefault: true),
 
-                Tables\Columns\TextColumn::make('production.name')
-                    ->label('Área de producción')
-                    ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+            Tables\Columns\TextColumn::make('production.name')
+                ->label('Área de producción')
+                ->searchable()
+                ->toggleable(isToggledHiddenByDefault: true),
 
-                Tables\Columns\TextColumn::make('type')
-                    ->label('Tipo')
-                    ->sortable(),
+            Tables\Columns\TextColumn::make('type')
+                ->label('Tipo')
+                ->sortable(),
 
-                Tables\Columns\TextColumn::make('price')
-                    ->label('Precio')
-                    ->money('PEN', true)
-                    ->sortable(),
+            Tables\Columns\TextColumn::make('price')
+                ->label('Precio')
+                ->money('PEN', true)
+                ->sortable(),
 
-                Tables\Columns\IconColumn::make('cortesia')
-                    ->label('Cortesía')
-                    ->boolean()
-                    ->toggleable(isToggledHiddenByDefault: true),
+            Tables\Columns\IconColumn::make('cortesia')
+                ->label('Cortesía')
+                ->boolean()
+                ->toggleable(isToggledHiddenByDefault: true),
 
-                Tables\Columns\IconColumn::make('visible')
-                    ->label('Visible')
-                    ->boolean()
-                    ->toggleable(isToggledHiddenByDefault: true),
+            Tables\Columns\IconColumn::make('visible')
+                ->label('Visible')
+                ->boolean()
+                ->toggleable(isToggledHiddenByDefault: true),
 
-                Tables\Columns\TextColumn::make('order')
-                    ->label('Orden')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+            Tables\Columns\TextColumn::make('order')
+                ->label('Orden')
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true),
 
-                Tables\Columns\TextColumn::make('status')
-                    ->label('Estado')
-                    ->sortable(),
+            Tables\Columns\TextColumn::make('status')
+                ->label('Estado')
+                ->sortable(),
 
-                Tables\Columns\TextColumn::make('created_at')
-                    ->label('Creado')
-                    ->dateTime('d/m/Y H:i')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+            Tables\Columns\TextColumn::make('created_at')
+                ->label('Creado')
+                ->dateTime('d/m/Y H:i')
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true),
 
-            ])
+        ])
             ->actions([
                 Tables\Actions\EditAction::make(),
             ])

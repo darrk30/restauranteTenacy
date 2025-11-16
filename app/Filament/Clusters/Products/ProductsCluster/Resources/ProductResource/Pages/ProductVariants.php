@@ -6,7 +6,6 @@ use App\Filament\Clusters\Products\Resources\ProductResource;
 use App\Models\Product;
 use Filament\Resources\Pages\Page;
 use Filament\Tables;
-use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 

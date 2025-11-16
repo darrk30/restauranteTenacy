@@ -54,6 +54,11 @@ class Unit extends Model
         return $this->hasMany(Unit::class, 'reference_unit_id');
     }
 
+    public function products()
+    {
+        return $this->hasMany(Product::class);
+    }
+
     /**
      * 💡 Helper: verificar si esta unidad es base.
      */

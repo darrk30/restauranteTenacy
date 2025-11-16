@@ -21,8 +21,6 @@ return new class extends Migration
             $table->foreignId('unit_category_id')->constrained()->onDelete('cascade');
             $table->foreignId('restaurant_id')->constrained()->onDelete('cascade');
             $table->timestamps();
-
-            // ✅ Restricción única compuesta por restaurante
             $table->unique(['restaurant_id', 'code'], 'units_restaurant_code_unique');
         });
     }

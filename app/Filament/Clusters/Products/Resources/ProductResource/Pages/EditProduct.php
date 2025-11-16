@@ -14,23 +14,6 @@ class EditProduct extends EditRecord
 
     protected static string $resource = ProductResource::class;
 
-    // protected function afterSave(): void
-    // {
-    //     $data = $this->form->getState();
-    //     $attributeValues = collect($data['attribute_values'] ?? [])
-    //         ->filter(fn($item) => isset($item['attribute_id']) && !empty($item['values']));
-
-    //     if ($attributeValues->isEmpty()) {
-    //         $this->record->attributes()->sync([]);
-    //         Variant::where('product_id', $this->record->id)
-    //             ->update(['status' => 'archivado']);
-    //         return;
-    //     }
-
-    //     $valuesByAttribute = $this->syncProductAttributes($attributeValues->toArray(), $this->record);
-    //     $this->syncVariants($valuesByAttribute, $this->record);
-    // }
-
     protected function afterSave(): void
     {
         $data = $this->form->getState();

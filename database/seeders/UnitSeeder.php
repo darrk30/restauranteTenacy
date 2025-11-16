@@ -167,6 +167,21 @@ class UnitSeeder extends Seeder
             'reference_unit_id' => $piece->id,
         ]);
 
+        $serviceCategory = UnitCategory::firstOrCreate([
+            'restaurant_id' => $restaurantId,
+            'name' => 'Servicio',
+        ]);
+
+        $service = Unit::firstOrCreate([
+            'restaurant_id' => $restaurantId,
+            'code' => 'ZZ',
+        ], [
+            'unit_category_id' => $serviceCategory->id,
+            'name' => 'Servicio',
+            'quantity' => 1,
+            'is_base' => true,
+        ]);
+
         // -----------------------
         // 5️⃣ TIEMPO / Time
         // -----------------------

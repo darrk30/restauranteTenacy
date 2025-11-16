@@ -12,18 +12,6 @@ class CreateProduct extends CreateRecord
 
     protected static string $resource = ProductResource::class;
 
-    // protected function afterCreate(): void
-    // {
-    //     $data = $this->form->getState();
-    //     $attributeValues = collect($data['attribute_values'] ?? [])
-    //         ->filter(fn($item) => isset($item['attribute_id']) && !empty($item['values']));
-
-    //     if ($attributeValues->isEmpty()) return;
-
-    //     $valuesByAttribute = $this->syncProductAttributes($attributeValues->toArray(), $this->record);
-    //     $this->syncVariants($valuesByAttribute, $this->record);
-    // }
-
     protected function afterCreate(): void
     {
         $data = $this->form->getState();

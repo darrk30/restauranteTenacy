@@ -15,7 +15,6 @@ class Variant extends Model
         'stock_real',
         'stock_virtual',
         'stock_minimo',
-        'venta_sin_stock',
         'product_id',
         'status'
     ];

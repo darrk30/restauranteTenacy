@@ -20,7 +20,6 @@ return new class extends Migration
             $table->integer('stock_real')->nullable()->default(0);        // Stock total
             $table->integer('stock_virtual')->nullable()->default(0);        // Stock virtual
             $table->integer('stock_minimo')->nullable()->default(0); // Stock mínimo
-            $table->boolean('venta_sin_stock')->default(false);  // Permitir pedidos sin stock
             $table->string('status')->default('Activo');
             $table->foreignId('product_id')->constrained()->onDelete('cascade');
             $table->foreignId('restaurant_id')->constrained()->onDelete('cascade');
