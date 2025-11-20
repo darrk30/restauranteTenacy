@@ -10,6 +10,10 @@ use App\Models\Product;
 use App\Models\Attribute;
 use App\Enums\TipoProducto;
 use App\Filament\Clusters\Products\ProductsCluster;
+use App\Models\Brand;
+use App\Models\Category;
+use App\Models\Production;
+use App\Models\Unit;
 use App\Models\Value;
 use Filament\Forms;
 use Filament\Forms\Components\Actions\Action;
@@ -86,19 +90,38 @@ class ProductResource extends Resource
                                                     ->searchable()
                                                     ->preload()
                                                     ->required()
+                                                    ->default(fn() => Unit::where('code', 'NIU')->value('id') ?? null)
+                                                    ->disabled(fn(Get $get) => in_array($get('type'), [
+                                                        TipoProducto::Servicio->value,
+                                                        TipoProducto::Combinacion->value,
+                                                    ])),
                                             ]),
-
                                         ToggleButtons::make('type')
                                             ->label('Tipo de Producto')
                                             ->inline()
                                             ->options(TipoProducto::class)
-                                            ->required(),
-                                        
+                                            ->required()
+                                            ->reactive()
+                                            ->afterStateUpdated(function ($state, callable $set) {
+                                                if ($state === TipoProducto::Producto->value) {
+                                                    $set('unid_id', Unit::where('code', 'NIU')->value('id'));
+                                                    return;
+                                                }
+                                                if ($state === TipoProducto::Servicio->value) {
+                                                    $set('unid_id', Unit::where('code', 'ZZ')->value('id'));
+                                                    return;
+                                                }
+                                                if ($state === TipoProducto::Combinacion->value) {
+                                                    $set('unid_id', Unit::where('code', 'NIU')->value('id'));
+                                                    return;
+                                                }
+                                            }),
+
+
                                         ToggleButtons::make('production_id')
                                             ->label('Área de Producción')
-                                            ->options(fn() => \App\Models\Production::pluck('name', 'id')->toArray())
-                                            ->inline(true)
-                                            ->required(),
+                                            ->options(fn() => Production::pluck('name', 'id')->toArray())
+                                            ->inline(true),
 
                                         TextInput::make('price')
                                             ->label('Precio Base')
@@ -107,28 +130,39 @@ class ProductResource extends Resource
                                             ->step('0.01')
                                             ->nullable(),
 
-
-
                                         Select::make('brand_id')
                                             ->label('Marca')
-                                            ->relationship('brand', 'name')
+                                            ->relationship('brand', 'name', fn($query) => $query->where('status', true)) // Solo activas
                                             ->searchable()
-                                            ->preload(),
+                                            ->preload()
+                                            ->createOptionForm([
+                                                TextInput::make('name')
+                                                    ->label('Nombre de la marca')
+                                                    ->required(),
+                                            ])
+                                            ->createOptionUsing(fn(array $data) => Brand::create($data)->id),
+
 
                                         Select::make('categories')
                                             ->label('Categorías')
                                             ->multiple()
-                                            ->relationship('categories', 'name')
+                                            ->relationship('categories', 'name', fn($query) => $query->where('status', true)) // Solo activas
                                             ->searchable()
-                                            ->preload(),
+                                            ->preload()
+                                            ->createOptionForm([
+                                                TextInput::make('name')
+                                                    ->label('Nombre de la categoría')
+                                                    ->required(),
+                                            ])
+                                            ->createOptionUsing(fn(array $data) => Category::create($data)->id),
+
+
                                         Select::make('status')
                                             ->label('Publicado')
                                             ->options(StatusProducto::class)
                                             ->required()
+                                            ->default(StatusProducto::Activo)
                                             ->helperText('Activa o desactiva la visibilidad del producto.'),
-
-
-
                                     ]),
                             ]),
 
@@ -181,7 +215,7 @@ class ProductResource extends Resource
 
                                             Toggle::make('visible')
                                                 ->label('Visible en carta')
-                                                ->default(true)
+                                                ->default(false)
                                                 ->inline(true)
                                                 ->onIcon('heroicon-m-check')
                                                 ->offIcon('heroicon-m-x-mark')
@@ -193,7 +227,14 @@ class ProductResource extends Resource
 
                                             Toggle::make('control_stock')
                                                 ->label('Control de stock')
-                                                ->default(true)
+                                                ->default(false)
+                                                ->live() // ← IMPORTANTE
+                                                ->afterStateUpdated(function ($state, callable $set) {
+                                                    if (!$state) {
+                                                        // Si control_stock = false, forzar venta_sin_stock = false
+                                                        $set('venta_sin_stock', false);
+                                                    }
+                                                })
                                                 ->inline(true)
                                                 ->onIcon('heroicon-m-check')
                                                 ->offIcon('heroicon-m-x-mark')
@@ -205,15 +246,18 @@ class ProductResource extends Resource
 
                                             Toggle::make('venta_sin_stock')
                                                 ->label('Venta sin stock')
-                                                ->default(true)
+                                                ->default(false)
                                                 ->inline(true)
                                                 ->onIcon('heroicon-m-check')
                                                 ->offIcon('heroicon-m-x-mark')
+                                                ->live()
+                                                ->visible(fn(callable $get) => $get('control_stock') === true)
                                                 ->hintAction(
                                                     Action::make('info')
                                                         ->icon('heroicon-m-information-circle')
                                                         ->tooltip('Puede venderse el producto aunque no haya stock disponible.')
                                                 ),
+
 
                                         ]),
                                     ])

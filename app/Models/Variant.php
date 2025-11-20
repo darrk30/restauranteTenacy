@@ -2,9 +2,12 @@
 
 namespace App\Models;
 
+use App\Observers\VariantObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 
+#[ObservedBy([VariantObserver::class])]
 class Variant extends Model
 {
     protected $fillable = [
@@ -12,9 +15,7 @@ class Variant extends Model
         'sku',
         'internal_code',
         'extra_price',
-        'stock_real',
-        'stock_virtual',
-        'stock_minimo',
+        'stock_inicial',
         'product_id',
         'status'
     ];
@@ -33,6 +34,21 @@ class Variant extends Model
     {
         return $this->belongsToMany(Value::class, 'variant_value');
     }
+
+    public function stocks()
+    {
+        return $this->hasMany(WarehouseStock::class);
+    }
+
+    public function getFullNameAttribute()
+    {
+        $values = $this->values->map(function ($value) {
+            return $value->attribute->name . ': ' . $value->name;
+        })->implode(', ');
+
+        return $this->product->name . ($values ? " ({$values})" : '');
+    }
+
 
     protected static function booted(): void
     {

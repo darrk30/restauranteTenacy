@@ -29,8 +29,6 @@ class CreateProduct extends CreateRecord
         if ($attributeValues->isEmpty()) {
             $this->record->variants()->create([
                 'extra_price' => 0,       // precio extra 0
-                'stock_real' => 0,         // stock inicial
-                'stock_virtual' => 0,
                 'status' => 'activo',      // estado activo
                 'restaurant_id' => $this->record->restaurant_id,
             ]);
