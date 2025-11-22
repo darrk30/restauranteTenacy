@@ -18,7 +18,15 @@ class UnitCategoryResource extends Resource
 {
     protected static ?string $model = UnitCategory::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-puzzle-piece';
+
+    protected static ?string $navigationGroup = 'Configuración';
+
+    protected static ?int $navigationSort = 5;
+
+    protected static ?string $navigationLabel = 'Unidades de Medida';
+
+    protected static ?string $pluralModelLabel = 'Unidades de Medida';
 
     protected static ?string $recordTitleAttribute = 'name';
 

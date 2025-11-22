@@ -24,6 +24,11 @@ class Production extends Model
         return $this->hasMany(Product::class);
     }
 
+    public function promotions()
+    {
+        return $this->hasMany(Promotion::class);
+    }
+
     protected static function booted(): void
     {
         static::addGlobalScope('restaurant', function (Builder $query) {

@@ -47,6 +47,8 @@ class ProductResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    protected static ?string $pluralModelLabel = 'Productos';
+
     protected static ?int $navigationSort = 1;
 
     public static function form(Form $form): Form
@@ -77,6 +79,9 @@ class ProductResource extends Resource
                                                     ->required()
                                                     ->maxLength(255)
                                                     ->reactive()
+                                                    ->validationMessages([
+                                                        'required' => 'Nombre requerido',
+                                                    ])
                                                     ->lazy()
                                                     ->afterStateUpdated(
                                                         fn($state, callable $set) =>
@@ -91,16 +96,25 @@ class ProductResource extends Resource
                                                     ->preload()
                                                     ->required()
                                                     ->default(fn() => Unit::where('code', 'NIU')->value('id') ?? null)
-                                                    ->disabled(fn(Get $get) => in_array($get('type'), [
-                                                        TipoProducto::Servicio->value,
-                                                        TipoProducto::Combinacion->value,
-                                                    ])),
+                                                    ->selectablePlaceholder(false)
+                                                    ->disableOptionWhen(function (Get $get, $value) {
+                                                        $type = $get('type');
+                                                        $unit = Unit::find($value);
+                                                        if (!$unit) return false;
+                                                        if ($type === TipoProducto::Servicio->value) {
+                                                            return $unit->code !== 'ZZ';
+                                                        }
+                                                        return false;
+                                                    }),
                                             ]),
                                         ToggleButtons::make('type')
                                             ->label('Tipo de Producto')
                                             ->inline()
                                             ->options(TipoProducto::class)
                                             ->required()
+                                            ->validationMessages([
+                                                'required' => 'Tipo de producto requerido',
+                                            ])
                                             ->reactive()
                                             ->afterStateUpdated(function ($state, callable $set) {
                                                 if ($state === TipoProducto::Producto->value) {
@@ -109,10 +123,6 @@ class ProductResource extends Resource
                                                 }
                                                 if ($state === TipoProducto::Servicio->value) {
                                                     $set('unid_id', Unit::where('code', 'ZZ')->value('id'));
-                                                    return;
-                                                }
-                                                if ($state === TipoProducto::Combinacion->value) {
-                                                    $set('unid_id', Unit::where('code', 'NIU')->value('id'));
                                                     return;
                                                 }
                                             }),
@@ -128,8 +138,10 @@ class ProductResource extends Resource
                                             ->numeric()
                                             ->prefix('S/.')
                                             ->step('0.01')
-                                            ->nullable(),
-
+                                            ->required()
+                                            ->validationMessages([
+                                                'required' => 'Precio requerido',
+                                            ]),
                                         Select::make('brand_id')
                                             ->label('Marca')
                                             ->relationship('brand', 'name', fn($query) => $query->where('status', true)) // Solo activas
@@ -161,6 +173,10 @@ class ProductResource extends Resource
                                             ->label('Publicado')
                                             ->options(StatusProducto::class)
                                             ->required()
+                                            ->selectablePlaceholder(false)
+                                            ->validationMessages([
+                                                'required' => 'Estado requerido',
+                                            ])
                                             ->default(StatusProducto::Activo)
                                             ->helperText('Activa o desactiva la visibilidad del producto.'),
                                     ]),
@@ -168,6 +184,13 @@ class ProductResource extends Resource
 
                         // 🟣 TAB 2 — VARIANTES
                         Tab::make('Variantes')
+                            ->visible(fn(callable $get) => !in_array(
+                                $get('type'),
+                                [
+                                    TipoProducto::Insumo->value,
+                                ]
+                            ))
+
                             ->schema([
                                 self::getAttributesValuesRepeater(),
                             ]),
@@ -207,6 +230,10 @@ class ProductResource extends Resource
                                                 ->inline(true)
                                                 ->onIcon('heroicon-m-check')
                                                 ->offIcon('heroicon-m-x-mark')
+                                                ->visible(
+                                                    fn(Get $get) =>
+                                                    $get('type') !== TipoProducto::Insumo->value
+                                                )
                                                 ->hintAction(
                                                     Action::make('info')
                                                         ->icon('heroicon-m-information-circle')
@@ -219,6 +246,10 @@ class ProductResource extends Resource
                                                 ->inline(true)
                                                 ->onIcon('heroicon-m-check')
                                                 ->offIcon('heroicon-m-x-mark')
+                                                ->visible(
+                                                    fn(Get $get) =>
+                                                    $get('type') !== TipoProducto::Insumo->value
+                                                )
                                                 ->hintAction(
                                                     Action::make('info')
                                                         ->icon('heroicon-m-information-circle')
@@ -238,6 +269,12 @@ class ProductResource extends Resource
                                                 ->inline(true)
                                                 ->onIcon('heroicon-m-check')
                                                 ->offIcon('heroicon-m-x-mark')
+                                                ->visible( fn(callable $get) =>
+                                                    !in_array($get('type'), [
+                                                        TipoProducto::Servicio->value,
+                                                    ])
+                                                )
+
                                                 ->hintAction(
                                                     Action::make('info')
                                                         ->icon('heroicon-m-information-circle')
@@ -251,7 +288,24 @@ class ProductResource extends Resource
                                                 ->onIcon('heroicon-m-check')
                                                 ->offIcon('heroicon-m-x-mark')
                                                 ->live()
-                                                ->visible(fn(callable $get) => $get('control_stock') === true)
+                                                // ->visible( fn(Get $get) => $get('type') === TipoProducto::Insumo->value && $get('control_stock') === true)
+                                                ->visible(function (callable $get) {
+
+                                                    $controlStock = $get('control_stock');
+                                                    $tipo = $get('type'); // TipoProducto::Insumo->value
+
+                                                    // 1. NO mostrar si es insumo
+                                                    if ($tipo === TipoProducto::Insumo->value) {
+                                                        return false;
+                                                    }
+
+                                                    // 2. NO mostrar si control_stock está desactivado
+                                                    if (!$controlStock) {
+                                                        return false;
+                                                    }
+
+                                                    return true;
+                                                })
                                                 ->hintAction(
                                                     Action::make('info')
                                                         ->icon('heroicon-m-information-circle')

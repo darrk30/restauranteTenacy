@@ -6,13 +6,15 @@ use App\Filament\Restaurants\Resources\FloorResource\Pages;
 use App\Filament\Restaurants\Resources\FloorResource\RelationManagers;
 use App\Models\Floor;
 use Filament\Forms;
+use Filament\Forms\Components\Grid;
+use Filament\Forms\Components\Section;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class FloorResource extends Resource
 {
@@ -20,41 +22,37 @@ class FloorResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-building-office';
 
+    protected static ?string $navigationGroup = 'Configuración';
+
+    protected static ?int $navigationSort = 5;
+
+    protected static ?string $navigationLabel = 'Pisos';
+
+    protected static ?string $pluralModelLabel = 'Pisos';
+
     protected static ?string $recordTitleAttribute = 'name';
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Forms\Components\Section::make()
+                Section::make()
                     ->schema([
-                        Forms\Components\Grid::make(2) // 👈 dos columnas
+                        Grid::make(2) // 👈 dos columnas
                             ->schema([
-                                    TextInput::make('name')
-                                        ->label('Nombre')
-                                        ->required()
-                                        ->maxLength(255)
-                                        ->reactive()
-                                        ->lazy()
-                                        ->afterStateUpdated(fn($state, callable $set) => $set('slug', \Illuminate\Support\Str::slug($state))),
+                                TextInput::make('name')
+                                    ->label('Nombre')
+                                    ->required()
+                                    ->maxLength(255),
 
-                                    TextInput::make('slug')
-                                        ->label('Slug')
-                                        ->required()
-                                        ->maxLength(255)
-                                        ->disabled()
-                                        ->dehydrated(),
-
-
-                                Forms\Components\Select::make('printer_id')
+                                Select::make('printer_id')
                                     ->label('Impresora asignada')
                                     ->relationship('printer', 'name')
-                                    ->required()
                                     ->searchable()
                                     ->preload(),
                             ]),
 
-                        Forms\Components\Toggle::make('status')
+                        Toggle::make('status')
                             ->label('Activo')
                             ->required()
                             ->default(true)
@@ -72,8 +70,8 @@ class FloorResource extends Resource
                     ->searchable(),
                 Tables\Columns\TextColumn::make('printer.name')
                     ->label('Impresora')
-                    ->sortable()
-                    ->searchable(),
+                    ->placeholder('Ninguna')
+                    ->sortable(),
                 Tables\Columns\IconColumn::make('status')
                     ->boolean(),
                 Tables\Columns\TextColumn::make('created_at')

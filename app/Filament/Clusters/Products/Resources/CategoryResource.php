@@ -28,6 +28,8 @@ class CategoryResource extends Resource
 
     protected static ?string $cluster = ProductsCluster::class;
 
+    protected static ?string $pluralModelLabel = 'Categorías';
+
     protected static ?int $navigationSort = 2;
 
     public static function form(Form $form): Form

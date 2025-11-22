@@ -61,6 +61,14 @@ trait SyncProductAttributesTrait
                     'status' => 'activo',
                 ]);
                 $variant->values()->sync($combo);
+                do {
+                    $code = "producto_{$variant->id}";
+                } while (
+                    Variant::where('internal_code', $code)->exists()
+                );
+                $variant->update([
+                    'internal_code' => $code,
+                ]);
             }
         }
     }

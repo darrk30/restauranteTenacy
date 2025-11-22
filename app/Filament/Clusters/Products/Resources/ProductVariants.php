@@ -109,7 +109,7 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                             ->preserveFilenames()
                             ->previewable(true),
                         Forms\Components\TextInput::make('sku')
-                            ->label('SKU')
+                            ->label('Codigo de barras')
                             ->maxLength(100),
 
                         Forms\Components\TextInput::make('internal_code')
@@ -123,42 +123,52 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
 
                         Forms\Components\TextInput::make('stock_inicial')
                             ->label(function ($record) {
-                                $unitName = $record?->product?->unit?->name ?? '';
+                                $unitName = $record?->product?->unit?->name;
                                 return $unitName
-                                    ? "Stock inicial ($unitName)"
+                                    ? "Stock inicial ({$unitName})"
                                     : "Stock inicial";
                             })
                             ->default(0)
                             ->visible(function ($record) {
-                                if (!$record->product?->control_stock) { return false; }
-                                if ($record->stock_inicial != false) { return false; }
-                                $unitName = $record->product?->unit?->name ?? null;
-                                if ($unitName === 'Servicio') { return false; }
+                                $product = $record?->product;
+                                $unitCode = $product?->unit?->code;
+
+                                if (!$product?->control_stock) return false;
+                                if ($record->stock_inicial != false) return false;
+                                if ($unitCode === 'ZZ') return false; // Código de servicio
+
                                 return true;
                             })
-                            ->numeric() // sigue siendo necesario
-                            ->step(function ($record) {   //BLOQUEA DECIMALES
-                                $unitName = $record?->product?->unit?->name ?? null;
-                                if ($unitName === 'Unidad' || $unitName === 'Unidades') { return 1; }
-                                return 'any'; // ← Permite decimales
+                            ->numeric()
+                            ->step(function ($record) {
+                                $unitCode = $record?->product?->unit?->code;
+
+                                return match ($unitCode) {
+                                    'NIU' => 1,          // Unidad → solo enteros
+                                    default => 'any',    // otras unidades → decimales permitidos
+                                };
                             })
                             ->rules(function ($record) {
-                                $unitName = $record?->product?->unit?->name ?? null;
-                                if ($unitName === 'Unidad' || $unitName === 'Unidades') {
-                                    return ['required', 'integer', 'min:0'];
-                                }
-                                return ['required', 'numeric', 'min:0'];
+                                $unitCode = $record?->product?->unit?->code;
+
+                                return match ($unitCode) {
+                                    'NIU' => ['required', 'integer', 'min:0'], // Unidad → enteros
+                                    default => ['required', 'numeric', 'min:0'], // otras → decimales
+                                };
                             })
                             ->helperText(function ($record) {
-                                if (!$record->product?->control_stock) { return null; }
-                                $unitName = $record?->product?->unit?->name ?? null;
-                                if ($unitName === 'Servicio') { return null; }
+                                $product = $record?->product;
+                                if (!$product?->control_stock) return null;
 
-                                if ($unitName === 'Unidad' || $unitName === 'Unidades') {
-                                    return '⚠️ Solo se permiten cantidades enteras porque la unidad del producto es "Unidad".';
-                                }
-                                return "⚠️ Puede ingresar decimales según la unidad del producto ($unitName). El stock inicial solo se podrá ingresar una única vez.";
+                                $unitCode = $product?->unit?->code;
+
+                                if ($unitCode === 'ZZ') return null; // Servicio
+
+                                return match ($unitCode) {
+                                    default => "⚠️ El stock inicial solo se podrá ingresar una única vez.",
+                                };
                             }),
+
 
                         Forms\Components\ToggleButtons::make('status')
                             ->label('Estado')
@@ -202,7 +212,7 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                                         'stock_real' => $stock->stock_real + $cantidad
                                     ]);
                                 }
-                                $record->update([ 'stock_inicial' => true, ]);
+                                $record->update(['stock_inicial' => true,]);
                             }
 
                             // No permitir guardar este dato nuevamente

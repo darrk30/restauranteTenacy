@@ -8,7 +8,9 @@ class ProductsCluster extends Cluster
 {
     protected static ?string $navigationIcon = 'heroicon-o-squares-2x2';
 
-    protected static ?string $navigationGroup = 'Productos';
+    protected static ?string $navigationLabel = 'Productos';
+
+    protected static ?string $navigationGroup = 'Inventarios';
 
     protected static ?int $navigationSort = 0;
 

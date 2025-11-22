@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('tables', function (Blueprint $table) {
             $table->id();
             $table->string('name')->unique();
+            $table->integer('asientos');
             $table->boolean('status')->default(true);
             $table->foreignId('floor_id')->constrained('floors')->onDelete('cascade');
             $table->foreignId('restaurant_id')->constrained('restaurants')->onDelete('cascade');

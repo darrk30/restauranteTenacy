@@ -19,6 +19,14 @@ class UserResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-users';
 
+    protected static ?string $navigationGroup = 'Configuración';
+
+    protected static ?int $navigationSort = 5;
+
+    protected static ?string $navigationLabel = 'Usuarios';
+
+    protected static ?string $pluralModelLabel = 'Usuarios';
+
     protected static ?string $tenantOwnershipRelationshipName = 'restaurants';
 
     protected static ?string $recordTitleAttribute = 'name';

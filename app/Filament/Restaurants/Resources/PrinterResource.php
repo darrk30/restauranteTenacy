@@ -20,6 +20,14 @@ class PrinterResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-printer';
 
+    protected static ?string $navigationGroup = 'Configuración';
+
+    protected static ?int $navigationSort = 5;
+
+    protected static ?string $navigationLabel = 'Impresoras';
+
+    protected static ?string $pluralModelLabel = 'Impresoras';
+
     protected static ?string $recordTitleAttribute = 'name';
 
     public static function form(Form $form): Form
@@ -28,16 +36,8 @@ class PrinterResource extends Resource
             ->schema([
                 Forms\Components\TextInput::make('name')
                     ->required()
-                    ->maxLength(255)
-                    ->reactive() // necesario para afterStateUpdated
-                    ->lazy() // 👈 genera el slug solo cuando terminas de escribir
-                    ->afterStateUpdated(fn($state, callable $set) => $set('slug', \Illuminate\Support\Str::slug($state))),
-                TextInput::make('slug')
-                    ->label('Slug')
-                    ->required()
-                    ->maxLength(255)
-                    ->disabled()
-                    ->dehydrated(),
+                    ->maxLength(255),
+                Forms\Components\TextInput::make('description'),
                 Forms\Components\Toggle::make('status')
                     ->required()
                     ->default(true)
@@ -50,6 +50,9 @@ class PrinterResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('description')
+                    ->placeholder('Ninguna')
                     ->searchable(),
                 Tables\Columns\IconColumn::make('status')
                     ->boolean(),

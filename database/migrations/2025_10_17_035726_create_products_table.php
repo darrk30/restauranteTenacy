@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('name');                      // Nombre del producto
             $table->string('slug')->unique();            // Slug para rutas
             $table->string('image_path')->nullable();            // Ruta de la imagen
-            $table->enum('type', ['Producto', 'Servicio', 'Combinacion']); // Tipo de producto
+            $table->string('type'); // Tipo de producto
             $table->foreignId('production_id')->nullable()->constrained()->onDelete('restrict'); // Área de producción
             $table->foreignId('brand_id')->nullable()->constrained()->onDelete('restrict'); // Marca
             $table->foreignId('unit_id')->nullable()->constrained()->onDelete('restrict'); // Marca

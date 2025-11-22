@@ -11,11 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('pisos', function (Blueprint $table) {
+        Schema::create('promotion_products', function (Blueprint $table) {
             $table->id();
-            $table->string('name')->unique();
-            $table->boolean('status')->default(true);
-            $table->foreignId('restaurant_id')->constrained('restaurants')->onDelete('cascade');
+            $table->foreignId('promotion_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('product_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
+            $table->integer('quantity')->default(1);
             $table->timestamps();
         });
     }
@@ -25,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('pisos');
+        Schema::dropIfExists('promotion_products');
     }
 };

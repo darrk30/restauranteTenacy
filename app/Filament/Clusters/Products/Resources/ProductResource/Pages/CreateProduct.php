@@ -27,10 +27,17 @@ class CreateProduct extends CreateRecord
 
         // 2️⃣ Si NO hay atributos, crear la variante principal automáticamente
         if ($attributeValues->isEmpty()) {
-            $this->record->variants()->create([
+            $variant = $this->record->variants()->create([
                 'extra_price' => 0,       // precio extra 0
                 'status' => 'activo',      // estado activo
                 'restaurant_id' => $this->record->restaurant_id,
+            ]);
+            do {
+                $code = "producto_{$variant->id}";
+            } while ($this->record->variants()->where('internal_code', $code)->exists());
+
+            $variant->update([
+                'internal_code' => $code,
             ]);
         }
     }

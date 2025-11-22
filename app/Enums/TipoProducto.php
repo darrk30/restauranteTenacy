@@ -10,14 +10,14 @@ enum TipoProducto: string implements HasColor, HasIcon, HasLabel
 {
     case Producto = 'Producto';
     case Servicio = 'Servicio';
-    case Combinacion = 'Combinacion';
+    case Insumo = 'Insumo';
 
     public function getLabel(): string
     {
         return match ($this) {
             self::Producto => 'Producto',
             self::Servicio => 'Servicio',
-            self::Combinacion => 'Combinacion',
+            self::Insumo => 'Insumo',
         };
     }
 
@@ -26,7 +26,7 @@ enum TipoProducto: string implements HasColor, HasIcon, HasLabel
         return match ($this) {
             self::Producto => 'warning',
             self::Servicio => 'success',
-            self::Combinacion => 'info',
+            self::Insumo => 'info',
         };
     }
 
@@ -35,7 +35,7 @@ enum TipoProducto: string implements HasColor, HasIcon, HasLabel
         return match ($this) {
             self::Producto => 'heroicon-o-cube', // ejemplo ícono para Producto
             self::Servicio => 'heroicon-o-wrench-screwdriver', // ejemplo ícono para Servicio
-            self::Combinacion => 'heroicon-o-square-2-stack', // ejemplo ícono para combinación
+            self::Insumo => 'heroicon-o-beaker', // ejemplo ícono para Insumo
         };
     }
 }

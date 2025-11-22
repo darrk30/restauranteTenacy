@@ -13,11 +13,15 @@ class WarehouseStockPage extends Page implements Tables\Contracts\HasTable
 {
     use Tables\Concerns\InteractsWithTable;
 
-    protected static ?string $navigationIcon = 'heroicon-o-document-text';
-    protected static ?string $navigationLabel = 'Stock General';
+    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
+
+    protected static ?string $navigationLabel = 'Existencias';
+
     protected static ?string $navigationGroup = 'Inventarios';
 
-    protected static string $view = 'filament.warehouse.pages.warehouse-stock-page';
+    protected static ?string $title = 'Existencias de Almacén';
+
+    protected static string $view = 'filament.warehouse.pages.existencias';
 
     public function table(Table $table): Table
     {
