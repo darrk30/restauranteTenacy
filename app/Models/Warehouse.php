@@ -12,6 +12,7 @@ class Warehouse extends Model
         'code',
         'direccion',
         'order',
+        'restaurant_id',
     ];
 
     public function stocks()
@@ -24,7 +25,7 @@ class Warehouse extends Model
         return $this->belongsTo(Restaurant::class);
     }
 
-    protected static function booted(): void
+        protected static function booted(): void
     {
         static::addGlobalScope('restaurant', function (Builder $query) {
             if (filament()->getTenant()) {
@@ -32,10 +33,15 @@ class Warehouse extends Model
             }
         });
 
-        static::creating(function ($production) {
-            if (filament()->getTenant()) {
-                $production->restaurant_id = filament()->getTenant()->id;
+        static::creating(function ($model) {
+            if (app()->has('bypass_tenant_scope')) {
+                return; // omitir asignación
+            }
+
+            if (filament()->getTenant() && ! $model->restaurant_id) {
+                $model->restaurant_id = filament()->getTenant()->id;
             }
         });
+
     }
 }

@@ -16,16 +16,9 @@ class Promotion extends Model
         'restaurant_id',
         'visible',
         'description',
-        'active',
+        'status',
         'date_start',
         'date_end',
-    ];
-
-    protected $casts = [
-        'visible' => 'boolean',
-        'active' => 'boolean',
-        'date_start' => 'datetime',
-        'date_end' => 'datetime',
     ];
 
     /*
@@ -33,13 +26,6 @@ class Promotion extends Model
     | Relaciones
     |--------------------------------------------------------------------------
     */
-
-    public function products()
-    {
-        return $this->belongsToMany(Product::class, 'promotion_products')
-            ->withPivot('quantity')
-            ->withTimestamps();
-    }
 
     public function rules()
     {
@@ -54,6 +40,11 @@ class Promotion extends Model
     public function production()
     {
         return $this->belongsTo(Production::class);
+    }
+
+    public function promotionproducts()
+    {
+        return $this->hasMany(PromotionProduct::class);
     }
 
     /*

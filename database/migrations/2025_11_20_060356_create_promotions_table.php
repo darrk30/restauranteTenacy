@@ -21,7 +21,7 @@ return new class extends Migration
             $table->foreignId('restaurant_id')->constrained('restaurants')->onDelete('cascade');
             $table->boolean('visible')->default(true);
             $table->text('description')->nullable();
-             $table->string('status')->default('Activo'); // Visibilidad / estado
+            $table->string('status')->default('Activo'); // Visibilidad / estado
             $table->dateTime('date_start')->nullable();
             $table->dateTime('date_end')->nullable();
             $table->timestamps();

@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('promotion_id')->constrained()->cascadeOnDelete();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('variant_id')->constrained()->cascadeOnDelete();
             $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
             $table->integer('quantity')->default(1);
             $table->timestamps();

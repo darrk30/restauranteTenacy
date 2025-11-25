@@ -35,6 +35,11 @@ class Variant extends Model
         return $this->belongsToMany(Value::class, 'variant_value');
     }
 
+    public function promotionproducts()
+    {
+        return $this->hasMany(PromotionProduct::class);
+    }
+
     public function stocks()
     {
         return $this->hasMany(WarehouseStock::class);
@@ -46,7 +51,7 @@ class Variant extends Model
             return $value->attribute->name . ': ' . $value->name;
         })->implode(', ');
 
-        return $this->product->name . ($values ? " ({$values})" : '');
+        return $this->product->name . ($values ? " ({$values})" : ' (Unica)');
     }
 
 

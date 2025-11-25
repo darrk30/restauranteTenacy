@@ -64,6 +64,11 @@ class Product extends Model
             ->withTimestamps();
     }
 
+    public function promotionproducts()
+    {
+        return $this->hasMany(PromotionProduct::class);
+    }
+
     protected $casts = [
         'type' => TipoProducto::class,
         'status' => StatusProducto::class,

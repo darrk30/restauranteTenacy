@@ -10,6 +10,7 @@ class PromotionProduct extends Model
     protected $fillable = [
         'promotion_id',
         'product_id',
+        'variant_id',
         'restaurant_id',
         'quantity',
     ];
@@ -28,6 +29,11 @@ class PromotionProduct extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function variant()
+    {
+        return $this->belongsTo(Variant::class);
     }
 
     public function restaurant()

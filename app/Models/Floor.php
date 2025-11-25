@@ -33,6 +33,9 @@ class Floor extends Model
         });
 
         static::creating(function ($floor) {
+            if (app()->has('bypass_tenant_scope')) {
+                return; // omitir asignación
+            }
             if (filament()->getTenant()) {
                 $floor->restaurant_id = filament()->getTenant()->id;
             }
