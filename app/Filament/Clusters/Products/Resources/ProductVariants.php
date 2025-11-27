@@ -4,13 +4,11 @@ namespace App\Filament\Clusters\Products\Resources;
 
 use App\Filament\Clusters\Products\Resources\ProductResource;
 use App\Models\Product;
-use App\Models\Unit;
 use Filament\Resources\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms;
 use Filament\Notifications\Notification;
-use Illuminate\Database\Eloquent\Builder;
 
 class ProductVariants extends Page implements Tables\Contracts\HasTable
 {
@@ -41,7 +39,6 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                     ->with('product')
                     ->where('status', 'activo')
             )
-
             ->columns([
                 Tables\Columns\ImageColumn::make('image_path')
                     ->label('Imagen')

@@ -45,15 +45,19 @@ class Variant extends Model
         return $this->hasMany(WarehouseStock::class);
     }
 
+    public function ajustesitems()
+    {
+        return $this->hasMany(StockAdjustmentItem::class);
+    }
+
     public function getFullNameAttribute()
     {
         $values = $this->values->map(function ($value) {
             return $value->attribute->name . ': ' . $value->name;
         })->implode(', ');
 
-        return $this->product->name . ($values ? " ({$values})" : ' (Unica)');
+        return ($values ? " ({$values})" : ' (Unica)');
     }
-
 
     protected static function booted(): void
     {

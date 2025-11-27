@@ -3,7 +3,6 @@
 namespace App\Filament\Restaurants\Resources;
 
 use App\Filament\Restaurants\Resources\ProductionResource\Pages;
-use App\Filament\Restaurants\Resources\ProductionResource\RelationManagers;
 use App\Models\Production;
 use Filament\Forms;
 use Filament\Forms\Components\TextInput;
@@ -11,8 +10,6 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Forms\Set;
-use Illuminate\Support\Str;
 
 class ProductionResource extends Resource
 {

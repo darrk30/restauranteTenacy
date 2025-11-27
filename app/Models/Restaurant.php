@@ -77,4 +77,18 @@ class Restaurant extends Model
         return $this->hasMany(Promotion::class);
     }
 
+    public function units()
+    {
+        return $this->hasMany(Unit::class);
+    }
+
+    public function stockAdjustments()
+    {
+        return $this->hasMany(StockAdjustment::class);
+    }
+
+    public function stockAdjustmentItems()
+    {
+        return $this->hasMany(StockAdjustmentItem::class);
+    }
 }

@@ -65,4 +65,9 @@ class User extends Authenticatable implements HasTenants
     {
         return $this->restaurants()->whereKey($tenant)->exists();
     }
+
+    public function stockAdjustments()
+    {
+        return $this->hasMany(StockAdjustment::class);
+    }
 }

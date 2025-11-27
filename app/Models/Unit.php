@@ -59,6 +59,11 @@ class Unit extends Model
         return $this->hasMany(Product::class);
     }
 
+    public function ajustesitems()
+    {
+        return $this->hasMany(StockAdjustmentItem::class);
+    }
+
     /**
      * 💡 Helper: verificar si esta unidad es base.
      */

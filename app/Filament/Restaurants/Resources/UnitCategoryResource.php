@@ -3,7 +3,6 @@
 namespace App\Filament\Restaurants\Resources;
 
 use App\Filament\Restaurants\Resources\UnitCategoryResource\Pages;
-use App\Filament\Restaurants\Resources\UnitCategoryResource\RelationManagers;
 use App\Filament\Restaurants\Resources\UnitCategoryResource\RelationManagers\UnitRelationManager;
 use App\Models\UnitCategory;
 use Filament\Forms;
@@ -11,8 +10,6 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class UnitCategoryResource extends Resource
 {

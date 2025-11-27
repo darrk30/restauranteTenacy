@@ -69,6 +69,11 @@ class Product extends Model
         return $this->hasMany(PromotionProduct::class);
     }
 
+    public function stockadjustmentitems()
+    {
+        return $this->hasMany(StockAdjustmentItem::class);
+    }
+
     protected $casts = [
         'type' => TipoProducto::class,
         'status' => StatusProducto::class,

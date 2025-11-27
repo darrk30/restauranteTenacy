@@ -20,12 +20,17 @@ class Warehouse extends Model
         return $this->hasMany(WarehouseStock::class);
     }
 
+    public function ajustesitems()
+    {
+        return $this->hasMany(StockAdjustment::class);
+    }
+
     public function restaurant()
     {
         return $this->belongsTo(Restaurant::class);
     }
 
-        protected static function booted(): void
+    protected static function booted(): void
     {
         static::addGlobalScope('restaurant', function (Builder $query) {
             if (filament()->getTenant()) {

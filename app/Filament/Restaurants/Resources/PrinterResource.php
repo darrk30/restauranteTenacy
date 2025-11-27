@@ -3,16 +3,12 @@
 namespace App\Filament\Restaurants\Resources;
 
 use App\Filament\Restaurants\Resources\PrinterResource\Pages;
-use App\Filament\Restaurants\Resources\PrinterResource\RelationManagers;
 use App\Models\Printer;
 use Filament\Forms;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class PrinterResource extends Resource
 {

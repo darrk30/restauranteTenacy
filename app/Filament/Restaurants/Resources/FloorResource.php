@@ -5,7 +5,6 @@ namespace App\Filament\Restaurants\Resources;
 use App\Filament\Restaurants\Resources\FloorResource\Pages;
 use App\Filament\Restaurants\Resources\FloorResource\RelationManagers;
 use App\Models\Floor;
-use Filament\Forms;
 use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;

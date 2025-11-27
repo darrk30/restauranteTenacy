@@ -4,9 +4,6 @@ namespace App\Filament\Restaurants\Resources;
 
 use App\Enums\StatusProducto;
 use App\Filament\Restaurants\Resources\PromotionResource\Pages;
-use App\Filament\Restaurants\Resources\PromotionResource\RelationManagers\PromotionProductRelationManager;
-use App\Filament\Restaurants\Resources\PromotionResource\RelationManagers\PromotionProductsRelationManager;
-use App\Filament\Restaurants\Resources\PromotionResource\RelationManagers\PromotionRulesRelationManager;
 use App\Models\Promotion;
 use App\Models\Variant;
 use Filament\Forms;

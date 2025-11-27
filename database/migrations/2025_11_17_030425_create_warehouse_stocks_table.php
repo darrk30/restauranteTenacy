@@ -15,9 +15,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('warehouse_id')->constrained()->cascadeOnDelete();
             $table->foreignId('variant_id')->constrained()->cascadeOnDelete();
-            $table->integer('stock_real')->default(0);
-            $table->integer('stock_reserva')->default(0);
-            $table->integer('min_stock')->default(0);
+            $table->double('stock_real')->default(0);
+            $table->double('stock_reserva')->default(0);
+            $table->double('min_stock')->default(0);
             $table->foreignId('restaurant_id')->constrained()->onDelete('cascade');
             $table->unique(['warehouse_id', 'variant_id']);
             $table->timestamps();
