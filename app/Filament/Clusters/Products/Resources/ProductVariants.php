@@ -4,11 +4,14 @@ namespace App\Filament\Clusters\Products\Resources;
 
 use App\Filament\Clusters\Products\Resources\ProductResource;
 use App\Models\Product;
+use App\Services\BarcodeLookupService;
 use Filament\Resources\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Forms\Components\Actions\Action;
 
 class ProductVariants extends Page implements Tables\Contracts\HasTable
 {
@@ -30,6 +33,21 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
         return "Variantes de {$this->record->name}";
     }
 
+    protected function getListeners(): array
+    {
+        return [
+            'barcode-scanned' => 'setBarcode',
+        ];
+    }
+
+    public function setBarcode($data)
+    {
+        $this->form->fill([
+            'barcode' => $data['code'],
+        ]);
+    }
+
+
     public function table(Table $table): Table
     {
         return $table
@@ -37,7 +55,7 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                 fn() => $this->record
                     ->variants()
                     ->with('product')
-                    ->where('status', 'activo')
+                    ->whereIn('status', ['activo', 'inactivo'])
             )
             ->columns([
                 Tables\Columns\ImageColumn::make('image_path')
@@ -46,7 +64,6 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                     ->disk('public')
                     ->visibility('public')
                     ->default(asset('img/productdefault.jpg')),
-
 
                 Tables\Columns\TextColumn::make('product.name')
                     ->label('Producto'),
@@ -119,53 +136,32 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                             ->prefix('S/'),
 
                         Forms\Components\TextInput::make('stock_inicial')
-                            ->label(function ($record) {
-                                $unitName = $record?->product?->unit?->name;
-                                return $unitName
-                                    ? "Stock inicial ({$unitName})"
-                                    : "Stock inicial";
-                            })
+                            ->label(
+                                fn($record) =>
+                                $record?->product?->unit?->name
+                                    ? "Stock inicial ({$record->product->unit->name})"
+                                    : "Stock inicial"
+                            )
                             ->default(0)
                             ->visible(function ($record) {
-                                $product = $record?->product;
-                                $unitCode = $product?->unit?->code;
-
-                                if (!$product?->control_stock) return false;
-                                if ($record->stock_inicial != false) return false;
-                                if ($unitCode === 'ZZ') return false; // Código de servicio
+                                if (!$record?->product?->control_stock) return false;           // Controla stock
+                                if ($record?->product?->unit?->code === 'ZZ') return false;     // No es servicio
+                                if ($record->stock_inicial != false) return false;           // Solo 1 vez
 
                                 return true;
                             })
                             ->numeric()
-                            ->step(function ($record) {
-                                $unitCode = $record?->product?->unit?->code;
-
-                                return match ($unitCode) {
-                                    'NIU' => 1,          // Unidad → solo enteros
-                                    default => 'any',    // otras unidades → decimales permitidos
-                                };
-                            })
-                            ->rules(function ($record) {
-                                $unitCode = $record?->product?->unit?->code;
-
-                                return match ($unitCode) {
-                                    'NIU' => ['required', 'integer', 'min:0'], // Unidad → enteros
-                                    default => ['required', 'numeric', 'min:0'], // otras → decimales
-                                };
-                            })
-                            ->helperText(function ($record) {
-                                $product = $record?->product;
-                                if (!$product?->control_stock) return null;
-
-                                $unitCode = $product?->unit?->code;
-
-                                if ($unitCode === 'ZZ') return null; // Servicio
-
-                                return match ($unitCode) {
-                                    default => "⚠️ El stock inicial solo se podrá ingresar una única vez.",
-                                };
-                            }),
-
+                            ->step(
+                                fn($record) =>
+                                $record?->product?->unit?->code === 'NIU' ? 1 : 'any'
+                            )
+                            ->rules(
+                                fn($record) =>
+                                $record?->product?->unit?->code === 'NIU'
+                                    ? ['required', 'integer', 'min:0']
+                                    : ['required', 'numeric', 'min:0']
+                            )
+                            ->helperText("El stock inicial solo se podrá ingresar una única vez."),
 
                         Forms\Components\ToggleButtons::make('status')
                             ->label('Estado')
@@ -207,6 +203,18 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                                     );
                                     $stock->update([
                                         'stock_real' => $stock->stock_real + $cantidad
+                                    ]);
+
+                                    $record->kardexes()->create([
+                                        'product_id'      => $record->product_id,
+                                        'variant_id'      => $record->id,
+                                        'restaurant_id'   => filament()->getTenant()->id,
+                                        'tipo_movimiento' => 'Stock Inicial',
+                                        'cantidad'        => $cantidad,
+                                        'stock_restante'  => $stock->stock_real,
+                                        'modelo_type'     => ProductVariants::class,
+                                        'modelo_id'       => $record->id,
+                                        'comprobante'     => 'STOCK-INICIAL',
                                     ]);
                                 }
                                 $record->update(['stock_inicial' => true,]);

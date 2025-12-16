@@ -15,9 +15,7 @@ use Filament\Forms;
 use Filament\Forms\Components\Select;
 use Filament\Tables;
 use Filament\Forms\Form;
-use Filament\Forms\Get;
 use Filament\Forms\Set;
-use Filament\Notifications\Collection;
 use Filament\Notifications\Notification;
 use Filament\Tables\Table;
 use Filament\Resources\Resource;
@@ -40,10 +38,9 @@ class StockAdjustmentResource extends Resource
 
                 Forms\Components\Section::make('Información del ajuste')
                     ->schema([
-                        Forms\Components\Grid::make(2) // dos columnas: izquierda y derecha
+                        Forms\Components\Grid::make(2)
                             ->schema([
-                                // Columna derecha (tipo y almacén)
-                                Forms\Components\Grid::make(1) // 👈 fuerza una sola columna
+                                Forms\Components\Grid::make(1)
                                     ->schema([
                                         Forms\Components\Select::make('tipo')
                                             ->label('Tipo de ajuste')
@@ -52,17 +49,8 @@ class StockAdjustmentResource extends Resource
                                                 'salida' => 'Salida',
                                             ])
                                             ->required(),
-
-                                        Forms\Components\Select::make('warehouse_id')
-                                            ->label('Almacén')
-                                            ->relationship('warehouse', 'name')
-                                            ->default(fn() => \App\Models\Warehouse::query()->first()?->id)
-                                            ->required(),
-
                                     ])
                                     ->columnSpan(1),
-
-                                // Columna izquierda (motivo)
                                 Forms\Components\Textarea::make('motivo')
                                     ->label('Motivo del ajuste')
                                     ->rows(5)
@@ -124,6 +112,11 @@ class StockAdjustmentResource extends Resource
                                     ->preload()
                                     ->required()
                                     ->columnSpan(2),
+                                Forms\Components\Select::make('warehouse_id')
+                                    ->label('Almacén')
+                                    ->relationship('warehouse', 'name')
+                                    ->default(fn() => \App\Models\Warehouse::query()->first()?->id)
+                                    ->required(),
 
                                 Forms\Components\TextInput::make('cantidad')
                                     ->label('Cantidad')
@@ -171,11 +164,6 @@ class StockAdjustmentResource extends Resource
                     })
                     ->html(),
 
-                Tables\Columns\TextColumn::make('warehouse.name')
-                    ->label('Almacén')
-                    ->sortable()
-                    ->searchable(),
-
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Fecha')
                     ->sortable()
@@ -199,6 +187,7 @@ class StockAdjustmentResource extends Resource
 
                 Tables\Columns\TextColumn::make('motivo')
                     ->label('Motivo')
+                    ->placeholder('Sin motivo')
                     ->sortable()
                     ->searchable(),
 
@@ -276,9 +265,6 @@ class StockAdjustmentResource extends Resource
                 // Tables\Actions\DeleteBulkAction::make(),
             ]);
     }
-
-
-
 
     public static function getRelations(): array
     {

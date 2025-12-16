@@ -16,7 +16,6 @@ class Product extends Model
         'type',
         'production_id',
         'brand_id',
-        'category_id',
         'unit_id',
         'status',
         'price',
@@ -41,7 +40,7 @@ class Product extends Model
     {
         return $this->belongsTo(Brand::class);
     }
-    
+
     public function unit()
     {
         return $this->belongsTo(Unit::class);
@@ -69,6 +68,11 @@ class Product extends Model
         return $this->hasMany(PromotionProduct::class);
     }
 
+    public function kardexes()
+    {
+        return $this->hasMany(Kardex::class);
+    }
+
     public function stockadjustmentitems()
     {
         return $this->hasMany(StockAdjustmentItem::class);
@@ -84,6 +88,11 @@ class Product extends Model
         return 'slug';
     }
 
+    public function purchaseDetails()
+    {
+        return $this->hasMany(PurchaseDetail::class);
+    }
+
     protected static function booted(): void
     {
         static::addGlobalScope('restaurant', function (Builder $query) {
@@ -92,9 +101,9 @@ class Product extends Model
             }
         });
 
-        static::creating(function ($printer) {
+        static::creating(function ($product) {
             if (filament()->getTenant()) {
-                $printer->restaurant_id = filament()->getTenant()->id;
+                $product->restaurant_id = filament()->getTenant()->id;
             }
         });
     }

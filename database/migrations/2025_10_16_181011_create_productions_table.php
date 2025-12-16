@@ -13,10 +13,11 @@ return new class extends Migration
     {
         Schema::create('productions', function (Blueprint $table) {
             $table->id();
-            $table->string('name')->unique();
+            $table->string('name');
             $table->boolean('status')->default(true);
             $table->foreignId('printer_id')->nullable()->constrained('printers')->restrictOnDelete();
             $table->foreignId('restaurant_id')->constrained('restaurants')->onDelete('cascade');
+            $table->unique(['restaurant_id', 'name']);
             $table->timestamps();
         });
     }

@@ -21,12 +21,6 @@ class Promotion extends Model
         'date_end',
     ];
 
-    /*
-    |--------------------------------------------------------------------------
-    | Relaciones
-    |--------------------------------------------------------------------------
-    */
-
     public function rules()
     {
         return $this->hasMany(PromotionRule::class);
@@ -47,11 +41,6 @@ class Promotion extends Model
         return $this->hasMany(PromotionProduct::class);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Global Scope multi-tenant
-    |--------------------------------------------------------------------------
-    */
     protected static function booted(): void
     {
         static::addGlobalScope('restaurant', function (Builder $query) {

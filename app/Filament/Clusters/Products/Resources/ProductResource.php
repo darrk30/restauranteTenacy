@@ -51,277 +51,253 @@ class ProductResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
+
+    public static function getSchema(): array
+    {
+        return [
+            Tabs::make('ProductTabs')
+                ->columnSpanFull()
+                ->tabs([
+                    Tab::make('Información')
+                        ->schema([
+                            Forms\Components\Grid::make(2)
+                                ->schema([
+                                    Forms\Components\Grid::make(3)
+                                        ->schema([
+                                            FileUpload::make('image_path')
+                                                ->label('Imagen del producto')
+                                                ->image()
+                                                ->directory('products')
+                                                ->disk('public')
+                                                ->preserveFilenames()
+                                                ->previewable(true)
+                                                ->columnSpanFull(),
+
+                                            TextInput::make('name')
+                                                ->label('Nombre')
+                                                ->required()
+                                                ->maxLength(255)
+                                                ->reactive()
+                                                ->validationMessages([
+                                                    'required' => 'Nombre requerido',
+                                                ])
+                                                ->columnSpan(2),
+
+                                            Select::make('unid_id')
+                                                ->label('Unidad de medida')
+                                                ->relationship('unit', 'name')
+                                                ->searchable()
+                                                ->preload()
+                                                ->required()
+                                                ->default(fn() => Unit::where('code', 'NIU')->value('id') ?? null)
+                                                ->selectablePlaceholder(false)
+                                                ->disableOptionWhen(function (Get $get, $value) {
+                                                    $type = $get('type');
+                                                    $unit = Unit::find($value);
+                                                    if (!$unit) return false;
+                                                    if ($type === TipoProducto::Servicio->value) {
+                                                        return $unit->code !== 'ZZ';
+                                                    }
+                                                    return false;
+                                                }),
+                                        ]),
+                                    ToggleButtons::make('type')
+                                        ->label('Tipo de Producto')
+                                        ->inline()
+                                        ->options(TipoProducto::class)
+                                        ->required()
+                                        ->validationMessages([
+                                            'required' => 'Tipo de producto requerido',
+                                        ])
+                                        ->reactive()
+                                        ->afterStateUpdated(function ($state, callable $set) {
+                                            if ($state === TipoProducto::Producto->value) {
+                                                $set('unid_id', Unit::where('code', 'NIU')->value('id'));
+                                                return;
+                                            }
+                                            if ($state === TipoProducto::Servicio->value) {
+                                                $set('unid_id', Unit::where('code', 'ZZ')->value('id'));
+                                                return;
+                                            }
+                                        }),
+
+
+                                    ToggleButtons::make('production_id')
+                                        ->label('Área de Producción')
+                                        ->options(fn() => Production::pluck('name', 'id')->toArray())
+                                        ->inline(true),
+
+                                    TextInput::make('price')
+                                        ->label('Precio Base')
+                                        ->numeric()
+                                        ->prefix('S/.')
+                                        ->step('0.01')
+                                        ->required()
+                                        ->validationMessages([
+                                            'required' => 'Precio requerido',
+                                        ]),
+                                    Select::make('brand_id')
+                                        ->label('Marca')
+                                        ->relationship('brand', 'name', fn($query) => $query->where('status', true)) // Solo activas
+                                        ->searchable()
+                                        ->preload()
+                                        ->createOptionForm([
+                                            TextInput::make('name')
+                                                ->label('Nombre de la marca')
+                                                ->required(),
+                                        ])
+                                        ->createOptionUsing(fn(array $data) => Brand::create($data)->id),
+
+
+                                    Select::make('categories')
+                                        ->label('Categorías')
+                                        ->multiple()
+                                        ->relationship('categories', 'name', fn($query) => $query->where('status', true)) // Solo activas
+                                        ->searchable()
+                                        ->preload()
+                                        ->createOptionForm([
+                                            TextInput::make('name')
+                                                ->label('Nombre de la categoría')
+                                                ->required(),
+                                        ])
+                                        ->dehydrated(true)
+                                        ->createOptionUsing(fn(array $data) => Category::create($data)->id),
+
+
+                                    Select::make('status')
+                                        ->label('Publicado')
+                                        ->options(StatusProducto::class)
+                                        ->required()
+                                        ->selectablePlaceholder(false)
+                                        ->validationMessages([
+                                            'required' => 'Estado requerido',
+                                        ])
+                                        ->default(StatusProducto::Activo)
+                                        ->helperText('Activa o desactiva la visibilidad del producto.'),
+                                ]),
+                        ]),
+
+
+                    Tab::make('Variantes')
+                        ->visible(fn(callable $get) => !in_array(
+                            $get('type'),
+                            [
+                                TipoProducto::Insumo->value,
+                            ]
+                        ))
+                        ->schema([
+                            self::getAttributesValuesRepeater(),
+                        ]),
+
+
+                    Tab::make('Configuración')
+                        ->schema([
+                            Grid::make(3)->schema([
+                                TextInput::make('order')
+                                    ->label('Orden')
+                                    ->numeric()
+                                    ->nullable(),
+
+                                DateTimePicker::make('created_at')
+                                    ->label('Fecha de Publicación')
+                                    ->disabled(),
+                            ]),
+
+                            Section::make('Opciones')
+                                ->description('Configuraciones adicionales del producto')
+                                ->schema([
+                                    Grid::make(3)->schema([
+                                        Toggle::make('cortesia')
+                                            ->label('Es de cortesía')
+                                            ->default(false)
+                                            ->inline(true)
+                                            ->onIcon('heroicon-m-check')
+                                            ->offIcon('heroicon-m-x-mark')
+                                            ->visible(
+                                                fn(Get $get) =>
+                                                $get('type') !== TipoProducto::Insumo->value
+                                            )
+                                            ->hintAction(
+                                                Action::make('info')
+                                                    ->icon('heroicon-m-information-circle')
+                                                    ->tooltip('Para productos obsequiados al cliente. En el POS podrás marcarlos como cortesía y su precio será S/ 0.')
+                                            ),
+
+                                        Toggle::make('visible')
+                                            ->label('Visible en carta')
+                                            ->default(false)
+                                            ->inline(true)
+                                            ->onIcon('heroicon-m-check')
+                                            ->offIcon('heroicon-m-x-mark')
+                                            ->visible(
+                                                fn(Get $get) =>
+                                                $get('type') !== TipoProducto::Insumo->value
+                                            )
+                                            ->hintAction(
+                                                Action::make('info')
+                                                    ->icon('heroicon-m-information-circle')
+                                                    ->tooltip('Habilita que el producto aparezca en la carta digital para pedidos.')
+                                            ),
+
+                                        Toggle::make('control_stock')
+                                            ->label('Control de stock')
+                                            ->default(false)
+                                            ->live()
+                                            ->afterStateUpdated(function ($state, callable $set) {
+                                                if (!$state) {
+                                                    $set('venta_sin_stock', false);
+                                                }
+                                            })
+                                            ->inline(true)
+                                            ->onIcon('heroicon-m-check')
+                                            ->offIcon('heroicon-m-x-mark')
+                                            ->visible(
+                                                fn(callable $get) =>
+                                                !in_array($get('type'), [
+                                                    TipoProducto::Servicio->value,
+                                                ])
+                                            )
+                                            ->hintAction(
+                                                Action::make('info')
+                                                    ->icon('heroicon-m-information-circle')
+                                                    ->tooltip('Controla salidas, ingresos y traslados del producto. Evita ventas sin stock.')
+                                            ),
+
+                                        Toggle::make('venta_sin_stock')
+                                            ->label('Venta sin stock')
+                                            ->default(false)
+                                            ->inline(true)
+                                            ->onIcon('heroicon-m-check')
+                                            ->offIcon('heroicon-m-x-mark')
+                                            ->live()
+                                            ->visible(function (callable $get) {
+                                                $controlStock = $get('control_stock');
+                                                $tipo = $get('type');
+                                                if ($tipo === TipoProducto::Insumo->value) {
+                                                    return false;
+                                                }
+                                                if (!$controlStock) {
+                                                    return false;
+                                                }
+                                                return true;
+                                            })
+                                            ->hintAction(
+                                                Action::make('info')
+                                                    ->icon('heroicon-m-information-circle')
+                                                    ->tooltip('Puede venderse el producto aunque no haya stock disponible.')
+                                            ),
+                                    ]),
+                                ])
+                                ->collapsible(),
+                        ])
+                ])
+        ];
+    }
+
+
     public static function form(Form $form): Form
     {
-        return $form
-            ->schema([
-                Tabs::make('ProductTabs')
-                    ->columnSpanFull()
-                    ->tabs([
-                        // 🔵 TAB 1 — INFORMACIÓN
-                        Tab::make('Información')
-                            ->schema([
-                                Forms\Components\Grid::make(2)
-                                    ->schema([
-                                        Forms\Components\Grid::make(3)
-                                            ->schema([
-                                                FileUpload::make('image_path')
-                                                    ->label('Imagen del producto')
-                                                    ->image()
-                                                    ->directory('products')
-                                                    ->disk('public')
-                                                    ->preserveFilenames()
-                                                    ->previewable(true)
-                                                    ->columnSpanFull(),
-
-                                                TextInput::make('name')
-                                                    ->label('Nombre')
-                                                    ->required()
-                                                    ->maxLength(255)
-                                                    ->reactive()
-                                                    ->validationMessages([
-                                                        'required' => 'Nombre requerido',
-                                                    ])
-                                                    ->lazy()
-                                                    ->afterStateUpdated(
-                                                        fn($state, callable $set) =>
-                                                        $set('slug', \Illuminate\Support\Str::slug($state))
-                                                    )
-                                                    ->columnSpan(2),
-
-                                                Select::make('unid_id')
-                                                    ->label('Unidad de medida')
-                                                    ->relationship('unit', 'name')
-                                                    ->searchable()
-                                                    ->preload()
-                                                    ->required()
-                                                    ->default(fn() => Unit::where('code', 'NIU')->value('id') ?? null)
-                                                    ->selectablePlaceholder(false)
-                                                    ->disableOptionWhen(function (Get $get, $value) {
-                                                        $type = $get('type');
-                                                        $unit = Unit::find($value);
-                                                        if (!$unit) return false;
-                                                        if ($type === TipoProducto::Servicio->value) {
-                                                            return $unit->code !== 'ZZ';
-                                                        }
-                                                        return false;
-                                                    }),
-                                            ]),
-                                        ToggleButtons::make('type')
-                                            ->label('Tipo de Producto')
-                                            ->inline()
-                                            ->options(TipoProducto::class)
-                                            ->required()
-                                            ->validationMessages([
-                                                'required' => 'Tipo de producto requerido',
-                                            ])
-                                            ->reactive()
-                                            ->afterStateUpdated(function ($state, callable $set) {
-                                                if ($state === TipoProducto::Producto->value) {
-                                                    $set('unid_id', Unit::where('code', 'NIU')->value('id'));
-                                                    return;
-                                                }
-                                                if ($state === TipoProducto::Servicio->value) {
-                                                    $set('unid_id', Unit::where('code', 'ZZ')->value('id'));
-                                                    return;
-                                                }
-                                            }),
-
-
-                                        ToggleButtons::make('production_id')
-                                            ->label('Área de Producción')
-                                            ->options(fn() => Production::pluck('name', 'id')->toArray())
-                                            ->inline(true),
-
-                                        TextInput::make('price')
-                                            ->label('Precio Base')
-                                            ->numeric()
-                                            ->prefix('S/.')
-                                            ->step('0.01')
-                                            ->required()
-                                            ->validationMessages([
-                                                'required' => 'Precio requerido',
-                                            ]),
-                                        Select::make('brand_id')
-                                            ->label('Marca')
-                                            ->relationship('brand', 'name', fn($query) => $query->where('status', true)) // Solo activas
-                                            ->searchable()
-                                            ->preload()
-                                            ->createOptionForm([
-                                                TextInput::make('name')
-                                                    ->label('Nombre de la marca')
-                                                    ->required(),
-                                            ])
-                                            ->createOptionUsing(fn(array $data) => Brand::create($data)->id),
-
-
-                                        Select::make('categories')
-                                            ->label('Categorías')
-                                            ->multiple()
-                                            ->relationship('categories', 'name', fn($query) => $query->where('status', true)) // Solo activas
-                                            ->searchable()
-                                            ->preload()
-                                            ->createOptionForm([
-                                                TextInput::make('name')
-                                                    ->label('Nombre de la categoría')
-                                                    ->required(),
-                                            ])
-                                            ->createOptionUsing(fn(array $data) => Category::create($data)->id),
-
-
-                                        Select::make('status')
-                                            ->label('Publicado')
-                                            ->options(StatusProducto::class)
-                                            ->required()
-                                            ->selectablePlaceholder(false)
-                                            ->validationMessages([
-                                                'required' => 'Estado requerido',
-                                            ])
-                                            ->default(StatusProducto::Activo)
-                                            ->helperText('Activa o desactiva la visibilidad del producto.'),
-                                    ]),
-                            ]),
-
-                        // 🟣 TAB 2 — VARIANTES
-                        Tab::make('Variantes')
-                            ->visible(fn(callable $get) => !in_array(
-                                $get('type'),
-                                [
-                                    TipoProducto::Insumo->value,
-                                ]
-                            ))
-
-                            ->schema([
-                                self::getAttributesValuesRepeater(),
-                            ]),
-
-                        // 🟢 TAB 3 — CONFIGURACIÓN
-                        Tab::make('Configuración')
-                            ->schema([
-                                Grid::make(3)->schema([
-                                    TextInput::make('order')
-                                        ->label('Orden')
-                                        ->numeric()
-                                        ->nullable(),
-
-                                    DateTimePicker::make('created_at')
-                                        ->label('Fecha de Publicación')
-                                        ->disabled(),
-
-                                    TextInput::make('slug')
-                                        ->label('Slug')
-                                        ->required()
-                                        ->maxLength(255)
-                                        ->disabled()
-                                        ->dehydrated()
-                                        ->unique(ignoreRecord: true, table: Product::class)
-                                        ->validationMessages([
-                                            'unique' => 'Este slug ya existe. Por favor ingresa uno diferente.',
-                                        ]),
-                                ]),
-
-                                Section::make('Opciones')
-                                    ->description('Configuraciones adicionales del producto')
-                                    ->schema([
-                                        Grid::make(3)->schema([
-                                            Toggle::make('cortesia')
-                                                ->label('Es de cortesía')
-                                                ->default(false)
-                                                ->inline(true)
-                                                ->onIcon('heroicon-m-check')
-                                                ->offIcon('heroicon-m-x-mark')
-                                                ->visible(
-                                                    fn(Get $get) =>
-                                                    $get('type') !== TipoProducto::Insumo->value
-                                                )
-                                                ->hintAction(
-                                                    Action::make('info')
-                                                        ->icon('heroicon-m-information-circle')
-                                                        ->tooltip('Para productos obsequiados al cliente. En el POS podrás marcarlos como cortesía y su precio será S/ 0.')
-                                                ),
-
-                                            Toggle::make('visible')
-                                                ->label('Visible en carta')
-                                                ->default(false)
-                                                ->inline(true)
-                                                ->onIcon('heroicon-m-check')
-                                                ->offIcon('heroicon-m-x-mark')
-                                                ->visible(
-                                                    fn(Get $get) =>
-                                                    $get('type') !== TipoProducto::Insumo->value
-                                                )
-                                                ->hintAction(
-                                                    Action::make('info')
-                                                        ->icon('heroicon-m-information-circle')
-                                                        ->tooltip('Habilita que el producto aparezca en la carta digital para pedidos.')
-                                                ),
-
-                                            Toggle::make('control_stock')
-                                                ->label('Control de stock')
-                                                ->default(false)
-                                                ->live() // ← IMPORTANTE
-                                                ->afterStateUpdated(function ($state, callable $set) {
-                                                    if (!$state) {
-                                                        // Si control_stock = false, forzar venta_sin_stock = false
-                                                        $set('venta_sin_stock', false);
-                                                    }
-                                                })
-                                                ->inline(true)
-                                                ->onIcon('heroicon-m-check')
-                                                ->offIcon('heroicon-m-x-mark')
-                                                ->visible( fn(callable $get) =>
-                                                    !in_array($get('type'), [
-                                                        TipoProducto::Servicio->value,
-                                                    ])
-                                                )
-
-                                                ->hintAction(
-                                                    Action::make('info')
-                                                        ->icon('heroicon-m-information-circle')
-                                                        ->tooltip('Controla salidas, ingresos y traslados del producto. Evita ventas sin stock.')
-                                                ),
-
-                                            Toggle::make('venta_sin_stock')
-                                                ->label('Venta sin stock')
-                                                ->default(false)
-                                                ->inline(true)
-                                                ->onIcon('heroicon-m-check')
-                                                ->offIcon('heroicon-m-x-mark')
-                                                ->live()
-                                                // ->visible( fn(Get $get) => $get('type') === TipoProducto::Insumo->value && $get('control_stock') === true)
-                                                ->visible(function (callable $get) {
-
-                                                    $controlStock = $get('control_stock');
-                                                    $tipo = $get('type'); // TipoProducto::Insumo->value
-
-                                                    // 1. NO mostrar si es insumo
-                                                    if ($tipo === TipoProducto::Insumo->value) {
-                                                        return false;
-                                                    }
-
-                                                    // 2. NO mostrar si control_stock está desactivado
-                                                    if (!$controlStock) {
-                                                        return false;
-                                                    }
-
-                                                    return true;
-                                                })
-                                                ->hintAction(
-                                                    Action::make('info')
-                                                        ->icon('heroicon-m-information-circle')
-                                                        ->tooltip('Puede venderse el producto aunque no haya stock disponible.')
-                                                ),
-
-
-                                        ]),
-                                    ])
-                                    ->collapsible(),
-
-                            ])
-
-
-                    ])
-            ]);
+        return $form->schema(static::getSchema());
     }
 
 
@@ -331,7 +307,6 @@ class ProductResource extends Resource
             ->label('')
             ->columns(2)
             ->schema([
-                // Seleccionar atributo
                 Select::make('attribute_id')
                     ->label('Atributo')
                     ->relationship(name: 'attributes', titleAttribute: 'name')
@@ -356,8 +331,6 @@ class ProductResource extends Resource
                             ->required(),
                     ])
                     ->createOptionUsing(fn(array $data) => Attribute::create($data)->id),
-
-                // Seleccionar valores del atributo
                 Select::make('values')
                     ->label('Valores')
                     ->searchable()
@@ -382,15 +355,12 @@ class ProductResource extends Resource
                                 ->label('Color')
                                 ->visible($attribute?->tipo === 'color')
                                 ->required($attribute?->tipo === 'color'),
-
-                            // Hidden para asegurar que el nuevo value tenga el attribute_id correcto
                             Hidden::make('attribute_id')->default($attribute?->id),
                         ];
                     })
                     ->createOptionUsing(function (array $data) {
                         return Value::create($data)->id;
                     }),
-
             ])
             ->addActionLabel('Agregar atributo');
     }

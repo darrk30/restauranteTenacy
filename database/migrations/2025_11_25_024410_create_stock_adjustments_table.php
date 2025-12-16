@@ -15,11 +15,11 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('warehouse_id')->nullable()->constrained()->nullOnDelete();
             $table->string('tipo');
-            $table->string('codigo')->unique();
+            $table->string('codigo');
             $table->text('motivo')->nullable();
             $table->string('status')->default('activo');
+            $table->unique(['restaurant_id', 'codigo']);
             $table->timestamps();
         });
     }

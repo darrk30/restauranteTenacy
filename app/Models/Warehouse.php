@@ -22,7 +22,17 @@ class Warehouse extends Model
 
     public function ajustesitems()
     {
-        return $this->hasMany(StockAdjustment::class);
+        return $this->hasMany(StockAdjustmentItem::class);
+    }
+
+    public function kardexs()
+    {
+        return $this->hasMany(Kardex::class);
+    }
+
+    public function purchaseitems()
+    {
+        return $this->hasMany(PurchaseDetail::class);
     }
 
     public function restaurant()

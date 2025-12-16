@@ -18,7 +18,6 @@ class EditProduction extends EditRecord
         ];
     }
 
-    // 👇 importante: visibilidad public y tipo de retorno string|Htmlable
     public function getTitle(): string|Htmlable
     {
         return 'Editar ' . $this->record->slug;

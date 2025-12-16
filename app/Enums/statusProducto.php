@@ -8,9 +8,9 @@ use Filament\Support\Contracts\HasLabel;
 
 enum StatusProducto: string implements HasColor, HasIcon, HasLabel
 {
-    case Activo = 'Activo';
-    case Inactivo = 'Inactivo';
-    case Archivado = 'Archivado';
+    case Activo = 'activo';
+    case Inactivo = 'inactivo';
+    case Archivado = 'archivado';
 
     public function getLabel(): string
     {

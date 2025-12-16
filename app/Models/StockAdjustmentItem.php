@@ -2,18 +2,16 @@
 
 namespace App\Models;
 
-use App\Observers\StockAdjustmentItemObserver;
-use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
-#[ObservedBy([StockAdjustmentItemObserver::class])]
 class StockAdjustmentItem extends Model
 {
     protected $fillable = [
         'stock_adjustment_id',
         'variant_id',
         'product_id',
+        'warehouse_id',
         'unit_id',
         'cantidad',
         'restaurant_id',
@@ -23,6 +21,11 @@ class StockAdjustmentItem extends Model
     public function adjustment()
     {
         return $this->belongsTo(StockAdjustment::class);
+    }
+
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 
     // Variante del producto

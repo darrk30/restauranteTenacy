@@ -27,6 +27,17 @@ class WarehouseStockPage extends Page implements Tables\Contracts\HasTable
     {
         return $table
             ->query(
+                // Variant::query()
+                //     ->with([
+                //         'product',
+                //         'values.attribute',
+                //         'stocks.warehouse',
+                //     ])
+                //     ->where('status', 'activo')
+                //     ->whereHas('product', function ($q) {
+                //         $q->where('control_stock', true);
+                //     })
+                //     ->whereHas('stocks')
                 Variant::query()
                     ->with([
                         'product',
@@ -35,11 +46,15 @@ class WarehouseStockPage extends Page implements Tables\Contracts\HasTable
                     ])
                     ->where('status', 'activo')
                     ->whereHas('product', function ($q) {
-                        $q->where('control_stock', true); // 🔥 Solo productos con control de stock
+                        $q->where('status', 'activo')->where('control_stock', true);
                     })
-                    ->whereHas('stocks') // 🔥 Solo variantes con registros en warehouse_stocks
+                    ->whereHas('stocks')
             )
             ->columns([
+                Tables\Columns\TextColumn::make('product.name')
+                    ->label('Producto')
+                    ->searchable(),
+
                 Tables\Columns\TextColumn::make('full_name')
                     ->label('Variante')
                     ->searchable(),

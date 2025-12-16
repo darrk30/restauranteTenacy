@@ -14,13 +14,13 @@ return new class extends Migration
         Schema::create('products', function (Blueprint $table) {
             $table->id();
             $table->string('name');                      // Nombre del producto
-            $table->string('slug')->unique();            // Slug para rutas
+            $table->string('slug');            // Slug para rutas
             $table->string('image_path')->nullable();            // Ruta de la imagen
             $table->string('type'); // Tipo de producto
             $table->foreignId('production_id')->nullable()->constrained()->onDelete('restrict'); // Área de producción
             $table->foreignId('brand_id')->nullable()->constrained()->onDelete('restrict'); // Marca
             $table->foreignId('unit_id')->nullable()->constrained()->onDelete('restrict'); // Marca
-            $table->string('status')->default('Activo'); // Visibilidad / estado
+            $table->string('status')->default('activo'); // Visibilidad / estado
             $table->decimal('price')->default(0); // Precio base
             $table->boolean('cortesia')->default(false);  // Es producto de cortesía
             $table->boolean('control_stock')->default(false);  // Control de stock 

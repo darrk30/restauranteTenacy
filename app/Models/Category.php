@@ -10,7 +10,6 @@ class Category extends Model
 {
     protected $fillable = ['name', 'status'];
 
-
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);

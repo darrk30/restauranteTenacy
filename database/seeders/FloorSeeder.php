@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use App\Models\Floor;
 use App\Models\Restaurant;
 use App\Models\Table;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class FloorSeeder extends Seeder
@@ -20,19 +19,28 @@ class FloorSeeder extends Seeder
 
     public function runForRestaurant(Restaurant $restaurant): void
     {
-        // Crear piso único
         $floor = Floor::firstOrCreate(
             ['restaurant_id' => $restaurant->id, 'name' => 'Piso 1', 'status' => true],
         );
 
-        // Crear 5 mesas usando foreach
+        $estados = ['libre', 'ocupada', 'pagando'];
+
         foreach (range(1, 5) as $i) {
+
+            $estado = $estados[array_rand($estados)];
+
             Table::firstOrCreate(
                 ['floor_id' => $floor->id, 'name' => "Mesa {$i}"],
-                ['status' => true, 'asientos' => 1, 'restaurant_id' => $restaurant->id]
+                [
+                    'status' => true,
+                    'asientos' => 1,
+                    'restaurant_id' => $restaurant->id,
+                    'estado_mesa' => $estado,
+                    'ocupada_desde' => $estado === 'ocupada' ? '00:00:00' : null,
+                ]
             );
         }
 
-        $this->command?->info("✅ Piso y mesas creadas para: {$restaurant->name}");
+        $this->command?->info("✅ Piso y mesas creadas con estados variados para: {$restaurant->name}");
     }
 }

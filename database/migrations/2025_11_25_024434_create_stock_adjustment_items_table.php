@@ -16,6 +16,7 @@ return new class extends Migration
             $table->foreignId('stock_adjustment_id')->constrained()->cascadeOnDelete();
             $table->foreignId('variant_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('product_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('warehouse_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('unit_id')->nullable()->constrained()->onDelete('restrict');
             $table->decimal('cantidad', 12, 2)->default(0);
             $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();

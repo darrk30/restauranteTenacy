@@ -52,7 +52,7 @@ class WarehouseResource extends Resource
     {
         return $table
             ->reorderable('order')     // permitir arrastrar filas y guardar el orden
-            ->defaultSort('order')     // ordenar por defecto por order ASC
+            ->defaultSort('id', 'asc')     // ordenar por defecto por order ASC
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->label('Nombre')

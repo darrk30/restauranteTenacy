@@ -17,7 +17,8 @@ class Variant extends Model
         'extra_price',
         'stock_inicial',
         'product_id',
-        'status'
+        'status',
+        'restaurant_id'
     ];
     
     public function product()
@@ -50,6 +51,16 @@ class Variant extends Model
         return $this->hasMany(StockAdjustmentItem::class);
     }
 
+    public function purchaseDetails()
+    {
+        return $this->hasMany(PurchaseDetail::class);
+    }
+
+    public function kardexes()
+    {
+        return $this->hasMany(Kardex::class);
+    }
+
     public function getFullNameAttribute()
     {
         $values = $this->values->map(function ($value) {
@@ -67,9 +78,9 @@ class Variant extends Model
             }
         });
 
-        static::creating(function ($production) {
+        static::creating(function ($variant) {
             if (filament()->getTenant()) {
-                $production->restaurant_id = filament()->getTenant()->id;
+                $variant->restaurant_id = filament()->getTenant()->id;
             }
         });
     }

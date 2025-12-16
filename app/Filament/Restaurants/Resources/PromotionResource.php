@@ -54,10 +54,6 @@ class PromotionResource extends Resource
                                             ->numeric()
                                             ->prefix('S/'),
 
-                                        Forms\Components\TextInput::make('slug')
-                                            ->unique(ignoreRecord: true)
-                                            ->required(),
-
                                         Forms\Components\FileUpload::make('image_path')
                                             ->label('Imagen')
                                             ->image()

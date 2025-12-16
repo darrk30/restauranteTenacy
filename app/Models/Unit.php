@@ -20,17 +20,11 @@ class Unit extends Model
         'restaurant_id',
     ];
 
-    /**
-     * 🔗 Relación: la unidad pertenece a una categoría.
-     */
     public function category()
     {
         return $this->belongsTo(UnitCategory::class, 'unit_category_id');
     }
 
-    /**
-     * 🔗 Relación: la unidad pertenece a un restaurante.
-     */
     public function restaurant()
     {
         return $this->belongsTo(Restaurant::class);
@@ -64,12 +58,9 @@ class Unit extends Model
         return $this->hasMany(StockAdjustmentItem::class);
     }
 
-    /**
-     * 💡 Helper: verificar si esta unidad es base.
-     */
-    public function isBase(): bool
+    public function purchaseDetails()
     {
-        return (bool) $this->is_base;
+        return $this->hasMany(PurchaseDetail::class);
     }
 
     protected static function booted(): void

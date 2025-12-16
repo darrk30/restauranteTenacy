@@ -16,11 +16,10 @@ class PromotionRule extends Model
         'value',
     ];
 
-    /*
-    |--------------------------------------------------------------------------
-    | Relaciones
-    |--------------------------------------------------------------------------
-    */
+    protected $casts = [
+        'value' => 'array',
+    ];
+
 
     public function promotion()
     {
@@ -32,11 +31,6 @@ class PromotionRule extends Model
         return $this->belongsTo(Restaurant::class);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Global Scope multi-tenant
-    |--------------------------------------------------------------------------
-    */
     protected static function booted(): void
     {
         static::addGlobalScope('restaurant', function (Builder $query) {

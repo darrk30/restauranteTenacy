@@ -17,6 +17,7 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Njxqlus\FilamentProgressbar\FilamentProgressbarPlugin;
 
 class RestaurantsPanelProvider extends PanelProvider
 {
@@ -31,14 +32,14 @@ class RestaurantsPanelProvider extends PanelProvider
             ->favicon('/img/restaurant-favicon.ico')
             ->path('restaurants')
             ->login()
-            ->colors([
-                'danger' => '#ED3F27',
-                'gray' => '#31363F',
-                'info' => '#1A2A4F',
-                'primary' => '#1A2A4F',
-                'success' => '#73AF6F',
-                'warning' => '#FEB21A',
-            ])
+            // ->colors([
+            //     'danger' => '#ED3F27',
+            //     'gray' => '#31363F',
+            //     'info' => '#1A2A4F',
+            //     'primary' => '#1A2A4F',
+            //     'success' => '#73AF6F',
+            //     'warning' => '#FEB21A',
+            // ])
             ->font('Rubik')
             ->sidebarCollapsibleOnDesktop()
             ->renderHook('panels::body.start', fn() => '
@@ -46,10 +47,10 @@ class RestaurantsPanelProvider extends PanelProvider
                 /* ===== MODO CLARO ===== */
                 html.dark {
                     .fi-sidebar-item.fi-active .fi-sidebar-item-label, .fi-tabs-item-label, .choices__item{
-                        color: white !important;
+                        color: white;
                     }
                     .fi-sidebar-item-icon{
-                        color: white !important;
+                        color: white;
                     }
                     .fi-sidebar-nav{
                         border-right: 1px solid #393E46;
@@ -59,6 +60,10 @@ class RestaurantsPanelProvider extends PanelProvider
                 .fi-sidebar-header .fi-icon-btn{
                     border: 1px solid #393E46;
                     color: white;
+                }
+
+                .fi-page-sub-navigation-sidebar-ctn {
+                    width: 10rem !important;
                 }
                 
                 html:not(.dark) {
@@ -114,7 +119,6 @@ class RestaurantsPanelProvider extends PanelProvider
                     }
                 }
                 </style>
-
             ')
             ->discoverResources(in: app_path('Filament/Restaurants/Resources'), for: 'App\\Filament\\Restaurants\\Resources')
             ->discoverPages(in: app_path('Filament/Restaurants/Pages'), for: 'App\\Filament\\Restaurants\\Pages')
@@ -141,6 +145,7 @@ class RestaurantsPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->discoverClusters(in: app_path('Filament/Clusters'), for: 'App\\Filament\\Clusters')
-            ->tenant(Restaurant::class, slugAttribute: 'slug');
+            ->tenant(Restaurant::class, slugAttribute: 'slug')
+            ->plugin(FilamentProgressbarPlugin::make()->color('#29b'));
     }
 }
