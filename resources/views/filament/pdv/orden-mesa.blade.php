@@ -2,6 +2,7 @@
 
     @push('styles')
         <link rel="stylesheet" href="{{ asset('css/ordenmesa.css') }}">
+        <link rel="stylesheet" href="{{ asset('css/ordenmesadarrk.css') }}">
     @endpush
 
     @push('scripts')

@@ -31,7 +31,12 @@
                 <template x-for="producto in productosFiltrados()" :key="producto.id">
                     <div class="product-card" @click="abrirModal(producto)">
                         <div class="product-image">
-                            <span class="product-stock">Stock: 12</span>
+                            <span class="product-stock" x-show="producto.control_stock">
+                                Stock:
+                                <span x-text="producto.stock_reserva_total"></span>
+                            </span>
+
+
                             <img
                                 :src="producto.image_path ?
                                     `/storage/${producto.image_path}` :
@@ -43,6 +48,8 @@
                             <div class="product-price">
                                 S/ <span x-text="producto.price.toFixed(2)"></span>
                             </div>
+
+
                         </div>
                     </div>
 
@@ -108,9 +115,11 @@
                 <span>S/ <span x-text="total().toFixed(2)"></span></span>
             </div>
 
-            <button class="order-btn">
+            <button class="order-btn" @click="ordenarPedido">
                 ORDENAR
             </button>
+
+
         </div>
     </div>
 
@@ -121,18 +130,43 @@
             <div class="modal">
 
                 <div class="modal-header" x-text="productoActual.name"></div>
+                <template x-if="imagenVariante">
+                    <div class="variant-image-box">
+                        <img :src="imagenVariante ? `/storage/${imagenVariante}` : ''" alt="Variante"
+                            class="variant-image">
+                    </div>
+                </template>
+                <template x-if="modal && !puedeAgregar()">
+                    <div class="stock-alert">
+                        Stock insuficiente para esta variante
+                    </div>
+                </template>
+
+
+                <template x-if="productoActual.cortesia">
+                    <label class="cortesia-switch">
+                        <span class="cortesia-text">Cortesía</span>
+
+                        <input type="checkbox" x-model="esCortesia" class="sr-only">
+
+                        <div class="switch">
+                            <div class="switch-dot"></div>
+                        </div>
+                    </label>
+                </template>
+
 
                 <div class="modal-body">
 
                     <!-- VARIANTES AGRUPADAS -->
                     <template x-for="group in productoActual.variant_groups" :key="group.attribute">
-                        <div class="mb-4">
-                            <div class="font-semibold mb-2" x-text="group.attribute"></div>
+                        <div>
+                            <div class="note-label" x-text="group.attribute"></div>
 
                             <div class="flex gap-2 flex-wrap">
                                 <template x-for="opt in group.options" :key="opt.id">
                                     <button class="variant-btn" :class="{ active: variante == opt.id }"
-                                        @click="variante = opt.id">
+                                        @click="variante = opt.id; imagenVariante = opt.image_path ?? null">
 
                                         <span class="variant-label" x-text="opt.label"></span>
 
@@ -142,9 +176,18 @@
                                             </span>
                                         </template>
 
-                                    </button>
+                                        <!-- STOCK POR VARIANTE -->
+                                        <template x-if="productoActual.control_stock">
+                                            <div class="text-xs text-gray-500 mt-1">
+                                                Stock:
+                                                <span x-text="opt.stock_reserva_total_variante"></span>
+                                            </div>
+                                        </template>
 
+
+                                    </button>
                                 </template>
+
                             </div>
                         </div>
                     </template>
@@ -152,13 +195,14 @@
                     <!-- NOTAS PARA COCINA -->
                     <div class="note-box">
                         <label class="note-label">Notas para cocina</label>
-                        <textarea x-model="nota" placeholder="Ej: sin cebolla, bien cocido, poco picante..." class="note-input" rows="2"></textarea>
+                        <textarea x-model="nota" placeholder="Ej: sin cebolla, bien cocido, poco picante..." class="note-input"
+                            rows="2"></textarea>
                     </div>
 
 
                     <!-- CANTIDAD -->
                     <div class="qty-box">
-                        <span>Cantidad</span>
+                        <span class="note-label">Cantidad</span>
 
                         <div class="qty-controls">
                             <button type="button" @click="cantidad = Math.max(1, cantidad - 1)">
@@ -182,9 +226,10 @@
 
                 <div class="modal-footer">
                     <button class="btn-cancel" @click="cerrarModal()">Cancelar</button>
-                    <button class="btn-confirm" :disabled="!variante" @click="agregar()">
-                        <span x-text="editando ? 'Actualizar' : 'Agregar'"></span>
+                    <button class="btn-confirm" :disabled="!variante || !puedeAgregar()" @click="agregar()"
+                        x-text="editando ? 'Actualizar' : 'Agregar'">
                     </button>
+
                 </div>
 
             </div>

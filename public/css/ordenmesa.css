@@ -100,9 +100,8 @@ body {
     pointer-events: none; /* 👈 no interfiere con click */
 }
 
-/* Imagen del producto */
 .product-image {
-    position: relative;          /* 👈 necesario para el stock */
+    position: relative;
     width: 100%;
     height: 120px;
     background: #ffffff;
@@ -116,7 +115,7 @@ body {
 .product-image img {
     max-width: 100%;
     max-height: 100%;
-    object-fit: contain;        /* 👈 NO se corta */
+    object-fit: contain;
     display: block;
 }
 
@@ -186,81 +185,13 @@ body {
     cursor: pointer;
 }
 
-/* .qty-control {
-    display: flex;
-    align-items: center;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    overflow: hidden;
-    width: 71px;
-    background: #fff;
-} */
-
-/* .qty-buttons {
-    display: flex;
-    flex-direction: column;
-}
-
-.qty-buttons button {
-    width: 30px;
-    height: 22px;
-    border: none;
-    background: #f3f4f6;
-    font-size: 16px;
-    cursor: pointer;
-}
-
-.qty-buttons button:first-child {
-    border-bottom: 1px solid #ddd;
-}
-
-.qty-buttons button:hover {
-    background: #e5e7eb;
-} */
-
-/* .qty-input {
-    width: 40px;
-    height: 44px;
-    text-align: center;
-    border: none;
-    font-size: 16px;
-    font-weight: bold;
-    outline: none;
-    background: transparent;
-} */
-
 .order-name {
     white-space: normal;      /* permite varias líneas */
     word-break: break-word;   /* evita desbordes */
     line-height: 1.2;
 }
 
-/* NOTAS EN MODAL */
-.note-box {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
 
-.note-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: #374151;
-}
-
-.note-input {
-    width: 100%;
-    resize: none;
-    border-radius: 10px;
-    border: 1px solid #d1d5db;
-    padding: 8px 10px;
-    font-size: 14px;
-    outline: none;
-}
-
-.note-input:focus {
-    border-color: #2563eb;
-}
 
 /* CANTIDAD DEL ITEM */
 .order-qty {
@@ -287,8 +218,6 @@ body {
     justify-content: flex-end;
 }
 
-
-
 .order-footer {
     padding: 16px;
     border-top: 1px solid #e5e7eb;
@@ -313,22 +242,91 @@ body {
 }
 
 /* ===== MODAL ===== */
+.modal {
+    background: white;
+    width: 380px;
+    max-height: calc(100vh - 32px);
+    border-radius: 16px;
+    overflow: hidden;
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+
 .modal-backdrop {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, .45);
     display: flex;
-    align-items: center;
     justify-content: center;
+    align-items: flex-start;
+    overflow-y: auto;
+    padding: 16px 0;
     z-index: 9999;
 }
 
-.modal {
-    background: white;
-    width: 380px;
-    border-radius: 16px;
-    overflow: hidden;
+.stock-alert {
+    background: #fee2e2;          /* rojo suave */
+    color: #991b1b;               /* rojo oscuro */
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 14px;
+    margin: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: fadeIn 0.2s ease-out;
 }
+
+.cortesia-switch {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: 14px;
+    margin-top: 14px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.cortesia-text {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #374151; /* gray-700 */
+}
+
+/* SWITCH */
+.switch {
+    width: 44px;
+    height: 24px;
+    background: #d1d5db; /* gray-300 */
+    border-radius: 9999px;
+    position: relative;
+    transition: background 0.25s ease;
+}
+
+.switch-dot {
+    width: 18px;
+    height: 18px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    transition: transform 0.25s ease;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+
+/* CHECKED */
+input:checked + .switch {
+    background: #22c55e; /* green-500 */
+}
+
+input:checked + .switch .switch-dot {
+    transform: translateX(20px);
+}
+
 
 .modal-header {
     padding: 16px;
@@ -336,46 +334,42 @@ body {
     border-bottom: 1px solid #e5e7eb;
 }
 
+.variant-image-box {
+    display: flex;
+    justify-content: center;
+    padding: 10px 0 0;
+}
+
+.variant-image {
+    width: 160px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+}
+
+
 .modal-body {
     padding: 16px;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
-.variant-title {
-    font-weight: 700;
-    margin-bottom: 6px;
-}
-
-.variant-options {
+.variant-btn {
     display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.variant-btn {
-    padding: 10px 14px;
-    border-radius: 10px;
-    border: 2px solid #e5e7eb;
-    cursor: pointer;
-    background: #f9fafb;
-    font-size: 14px;
-}
-
-.variant-btn {
-    display: inline-flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
-
-    padding: 10px 14px;
+    padding: 5px 8px;
     border-radius: 10px;
     border: 2px solid #e5e7eb;
     cursor: pointer;
     background: #f9fafb;
     font-size: 14px;
-
-    transition: all 0.2s ease;
+    width: 100%;
+    text-align: left;
 }
 
 .variant-btn:hover {
@@ -383,27 +377,24 @@ body {
     background: #dcfce7;
 }
 
-/* TEXTO DE LA VARIANTE */
 .variant-label {
     font-weight: 500;
     color: #374151;
+    flex: 1;              /* 👈 empuja todo lo demás a la derecha */
 }
 
-/* ETIQUETA DE PRECIO */
+
 .price-badge {
     font-size: 12px;
     font-weight: 600;
-
     background: #fde68a;
     color: #92400e;
-
     padding: 6px;
     border-radius: 15px;
-
     line-height: 1;
     white-space: nowrap;
+    margin-left: auto;    /* 👈 CLAVE */
 }
-
 
 .variant-btn.active {
     border-color: #16a34a;
@@ -419,10 +410,38 @@ body {
     margin-left: 6px;
 }
 
+/* NOTAS EN MODAL */
+.note-box {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.note-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 10px;
+}
+
+.note-input {
+    width: 100%;
+    resize: none;
+    border-radius: 10px;
+    border: 1px solid #d1d5db;
+    padding: 8px 10px;
+    font-size: 14px;
+    outline: none;
+}
+
+.note-input:focus {
+    border-color: #2563eb;
+}
+
 .qty-box {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    /* align-items: center; */
 }
 
 .qty-controls {
@@ -434,27 +453,33 @@ body {
 .qty-controls button {
     width: 32px;
     height: 32px;
-    border-radius: 50%;
+    border-radius: 10px;
     border: none;
     background: #2563eb;
     color: white;
     font-size: 18px;
 }
 
-.btn-remove {
-    background: none;
-    border: none;
-    cursor: pointer;
+.qty-input {
+    width: 40px;
+    text-align: center;
+    font-weight: bold;
+    border: 1px solid #ccc;
+    border-radius: 6px;
     padding: 4px;
-    display: flex;
-    align-items: center;
 }
 
-.btn-remove:hover svg {
-    transform: scale(1.1);
-    color: red;
+/* Chrome, Edge, Safari */
+.qty-input::-webkit-inner-spin-button,
+.qty-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 
+/* Firefox */
+.qty-input {
+    -moz-appearance: textfield;
+}
 
 .modal-footer {
     display: flex;
@@ -487,25 +512,20 @@ body {
     opacity: .5;
 }
 
-.qty-input {
-    width: 40px;
-    text-align: center;
-    font-weight: bold;
-    border: 1px solid #ccc;
-    border-radius: 6px;
+/* FIN DEL MODAL */
+
+.btn-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
     padding: 4px;
+    display: flex;
+    align-items: center;
 }
 
-/* Chrome, Edge, Safari */
-.qty-input::-webkit-inner-spin-button,
-.qty-input::-webkit-outer-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-}
-
-/* Firefox */
-.qty-input {
-    -moz-appearance: textfield;
+.btn-remove:hover svg {
+    transform: scale(1.1);
+    color: red;
 }
 
 .empty-state {
@@ -620,5 +640,16 @@ body {
 @media (max-width: 640px) {
     .products-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }

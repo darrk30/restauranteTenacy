@@ -202,7 +202,8 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                                         ]
                                     );
                                     $stock->update([
-                                        'stock_real' => $stock->stock_real + $cantidad
+                                        'stock_real' => $stock->stock_real + $cantidad,
+                                        'stock_reserva' => $stock->stock_real + $cantidad
                                     ]);
 
                                     $record->kardexes()->create([

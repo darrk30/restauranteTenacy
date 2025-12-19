@@ -75,11 +75,13 @@ trait ManjoStockProductos
                 $variant->update(['stock_inicial' => true]);
             }
             $stock->increment('stock_real', $cantidadFinal);
+            $stock->increment('stock_reserva', $cantidadFinal);
         }
 
         if ($tipo === 'salida') {
             $nuevo = max(0, $stock->stock_real - $cantidadFinal);
             $stock->update(['stock_real' => $nuevo]);
+            $stock->update(['stock_reserva' => $nuevo]);
         }
 
         /*** REGISTRO DE KARDEX ***/
@@ -123,11 +125,13 @@ trait ManjoStockProductos
             // Si fue entrada, ahora restamos
             $nuevo = max(0, $stock->stock_real - $cantidadFinal);
             $stock->update(['stock_real' => $nuevo]);
+            $stock->update(['stock_reserva' => $nuevo]);
         }
 
         if ($tipo === 'salida') {
             // Si fue salida, ahora sumamos
             $stock->increment('stock_real', $cantidadFinal);
+            $stock->increment('stock_reserva', $cantidadFinal);
         }
 
         $variant->kardexes()->create([
