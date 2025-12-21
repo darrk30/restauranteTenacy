@@ -21,6 +21,9 @@ return new class extends Migration
             // cantidad de asientos fijos
             $table->integer('asientos')->default(1);
 
+            // id del pedido actual (NULL si no hay pedido)
+            $table->integer('order_id')->nullable();
+
             // cuántas personas están sentadas actualmente
             $table->integer('numero_personas')->default(0);
 

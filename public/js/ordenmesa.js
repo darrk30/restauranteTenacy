@@ -1,9 +1,10 @@
 function pedidoMesa(productosIniciales) {
     return {
+        loading: false,
+        showSuccess: false,
         productos: productosIniciales,
         categoria: 'todos',
         search: '',
-
         modal: false,
         productoActual: null,
         variante: null,
@@ -61,28 +62,40 @@ function pedidoMesa(productosIniciales) {
             this.precioBase = producto.price
         },
 
-
         editarItem(item) {
             this.editando = true
             this.editKey = item.key
 
-            // separar la key
             const [productoId, varianteId, tipo] = item.key.split('-')
 
             const producto = this.productos.find(
                 p => p.id === Number(productoId)
             )
 
+            if (!producto) return
+
             this.productoActual = producto
+
+            // 🔥 CLAVES PARA CONTROL DE STOCK
+            this.varianteOriginal = Number(varianteId)
+            this.cantidadOriginal = item.cantidad
+
+            // valores editables
             this.variante = Number(varianteId)
             this.cantidad = item.cantidad
             this.nota = item.nota ?? ''
-
-            // definir si es cortesía
             this.esCortesia = tipo === 'cortesia'
+
+            const option = producto.variant_groups
+                ?.flatMap(g => g.options)
+                ?.find(o => o.id === Number(varianteId))
+
+            this.imagenVariante = option?.image_path ?? producto.image_path ?? null
 
             this.modal = true
         },
+
+
 
 
         precioActual() {
@@ -96,7 +109,6 @@ function pedidoMesa(productosIniciales) {
         },
 
         puedeAgregar() {
-            // ⛑️ GUARDAS DE SEGURIDAD
             if (!this.productoActual) return true
             if (!this.variante) return false
 
@@ -113,31 +125,67 @@ function pedidoMesa(productosIniciales) {
             this.productoActual = null
             this.editando = false
             this.editKey = null
+            this.varianteOriginal = null
+            this.cantidadOriginal = null
+            this.variante = null
             this.cantidad = 1
             this.nota = ''
             this.imagenVariante = null
         },
 
 
+
         agregar() {
-            const option = this.productoActual.variant_groups
+            const opciones = this.productoActual.variant_groups
                 .flatMap(g => g.options)
-                .find(o => o.id === this.variante)
+
+            const optionNueva = opciones.find(o => o.id === this.variante)
 
             const tipo = this.esCortesia ? 'cortesia' : 'normal'
             const newKey = `${this.productoActual.id}-${this.variante}-${tipo}`
 
-
-            //EDITANDO
+            // =========================
+            // EDITANDO
+            // =========================
             if (this.editando) {
 
-                const index = this.carrito.findIndex(i => i.key === this.editKey)
+                const indexOriginal = this.carrito.findIndex(
+                    i => i.key === this.editKey
+                )
 
-                if (index !== -1) {
-                    this.carrito[index] = {
+                if (indexOriginal === -1) {
+                    this.cerrarModal()
+                    return
+                }
+
+                const indexExistente = this.carrito.findIndex(
+                    i => i.key === newKey
+                )
+
+                // 🔥 DEVOLVER STOCK ORIGINAL
+                if (this.productoActual.control_stock) {
+                    const optionOriginal = opciones.find(
+                        o => o.id === this.varianteOriginal
+                    )
+
+                    if (optionOriginal) {
+                        optionOriginal.stock_reserva_total_variante += this.cantidadOriginal
+                    }
+                }
+
+                // 🟢 UNIR SI YA EXISTE
+                if (indexExistente !== -1 && indexExistente !== indexOriginal) {
+
+                    this.carrito[indexExistente].cantidad += this.cantidadOriginal
+
+                    // eliminar solo el editado
+                    this.carrito.splice(indexOriginal, 1)
+
+                } else {
+                    // 🟢 EDITAR NORMAL
+                    this.carrito[indexOriginal] = {
                         key: newKey,
-                        nombre: this.productoActual.name + ' (' + option.label + ')',
-                        // precio: this.productoActual.price + option.extra_price,
+                        nombre: `${this.productoActual.name} (${optionNueva.label})`,
                         precio: this.esCortesia ? 0 : this.precioActual(),
                         cantidad: this.cantidad,
                         nota: this.nota.trim(),
@@ -145,8 +193,16 @@ function pedidoMesa(productosIniciales) {
                     }
                 }
 
-            } else {
-                //AGREGAR NORMAL
+                // 🔥 DESCONTAR STOCK NUEVO
+                if (this.productoActual.control_stock && optionNueva) {
+                    optionNueva.stock_reserva_total_variante -= this.cantidad
+                }
+            }
+
+            // =========================
+            // AGREGAR NORMAL
+            // =========================
+            else {
                 const existente = this.carrito.find(i => i.key === newKey)
 
                 if (existente) {
@@ -155,30 +211,26 @@ function pedidoMesa(productosIniciales) {
                 } else {
                     this.carrito.push({
                         key: newKey,
-                        nombre: this.productoActual.name + ' (' + option.label + ')',
+                        nombre: `${this.productoActual.name} (${optionNueva.label})`,
                         precio: this.esCortesia ? 0 : this.precioActual(),
                         cantidad: this.cantidad,
                         nota: this.nota.trim(),
                         cortesia: this.esCortesia,
                     })
                 }
+
+                // 🔥 DESCONTAR STOCK NORMAL
+                if (this.productoActual.control_stock && optionNueva) {
+                    optionNueva.stock_reserva_total_variante -= this.cantidad
+                }
             }
 
-            // DESCONTAR STOCK VISUAL
-            if (this.productoActual.control_stock) {
-                const option = this.productoActual.variant_groups
-                    .flatMap(g => g.options)
-                    .find(o => o.id === this.variante)
-
-                option.stock_reserva_total_variante -= this.cantidad
-                this.recalcularStockProducto(this.productoActual)
-            }
-
-
-            
+            // 🔁 RECALCULAR STOCK TOTAL DEL PRODUCTO
+            this.recalcularStockProducto(this.productoActual)
 
             this.cerrarModal()
         },
+
 
         total() {
             return this.carrito.reduce((t, i) => t + i.precio * i.cantidad, 0);
@@ -188,21 +240,29 @@ function pedidoMesa(productosIniciales) {
             const item = this.carrito.find(i => i.key === key)
             if (!item) return
 
+            // 🔥 key = productoId-varianteId-tipo
             const [productoId, varianteId] = key.split('-')
 
             const producto = this.productos.find(
                 p => p.id === Number(productoId)
             )
 
-            const option = producto.variant_groups
-                .flatMap(g => g.options)
-                .find(o => o.id === Number(varianteId))
+            if (!producto) return
 
-            if (producto.control_stock && !producto.venta_sin_stock) {
+            const option = producto.variant_groups
+                ?.flatMap(g => g.options)
+                ?.find(o => o.id === Number(varianteId))
+
+            // 🔁 DEVOLVER STOCK
+            if (
+                producto.control_stock &&
+                option
+            ) {
                 option.stock_reserva_total_variante += item.cantidad
                 this.recalcularStockProducto(producto)
             }
 
+            // ❌ eliminar item del carrito
             this.carrito = this.carrito.filter(i => i.key !== key)
         },
 
@@ -242,7 +302,7 @@ function pedidoMesa(productosIniciales) {
 
             // 3️⃣ Calcular el stock del producto
             if (existeStockPositivo) {
-                // 👉 Sumar SOLO los stocks positivos
+                // Sumar SOLO los stocks positivos
                 producto.stock_reserva_total = stockPorVariante
                     .filter(stockVariante => stockVariante > 0)
                     .reduce(
@@ -250,7 +310,7 @@ function pedidoMesa(productosIniciales) {
                         0
                     )
             } else {
-                // 👉 Todas las variantes están en 0 o negativo
+                // Todas las variantes están en 0 o negativo
                 producto.stock_reserva_total = stockPorVariante.reduce(
                     (total, stockVariante) => total + stockVariante,
                     0
@@ -268,18 +328,15 @@ function pedidoMesa(productosIniciales) {
                 total: this.total(),
                 items: this.carrito.map(item => {
                     const [producto_id, variante_id, tipo] = item.key.split('-')
-
                     return {
                         producto_id: Number(producto_id),
                         variante_id: Number(variante_id),
-
-                        // 👇 AQUÍ VA EL NOMBRE
                         nombre: item.nombre,
-
                         cantidad: item.cantidad,
                         precio: item.precio,
                         nota: item.nota ?? '',
                         cortesia: tipo === 'cortesia',
+                        subtotal: item.precio * item.cantidad,
                     }
                 })
             }

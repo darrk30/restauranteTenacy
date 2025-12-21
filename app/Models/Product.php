@@ -93,6 +93,11 @@ class Product extends Model
         return $this->hasMany(PurchaseDetail::class);
     }
 
+    public function orderDetails()
+    {
+        return $this->hasMany(OrderDetail::class);
+    }
+
     protected static function booted(): void
     {
         static::addGlobalScope('restaurant', function (Builder $query) {

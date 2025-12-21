@@ -61,6 +61,11 @@ class Variant extends Model
         return $this->hasMany(Kardex::class);
     }
 
+    public function orderDetails()
+    {
+        return $this->hasMany(OrderDetail::class);
+    }
+
     public function getFullNameAttribute()
     {
         $values = $this->values->map(function ($value) {

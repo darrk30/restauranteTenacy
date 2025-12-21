@@ -99,7 +99,6 @@ trait ManjoStockProductos
         ]);
     }
 
-
     /**
      * Reverso del ajuste.
      */

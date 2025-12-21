@@ -7,11 +7,16 @@ use Illuminate\Database\Eloquent\Builder;
 
 class Table extends Model
 {
-    protected $fillable = ['name', 'status', 'asientos', 'floor_id', 'restaurant_id'];
+    protected $fillable = ['name', 'status', 'asientos', 'floor_id', 'restaurant_id', 'order_id'];
 
     public function restaurant()
     {
         return $this->belongsTo(Restaurant::class);
+    }
+
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
     }
 
     protected static function booted(): void

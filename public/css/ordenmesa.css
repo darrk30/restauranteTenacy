@@ -624,6 +624,64 @@ input:checked + .switch .switch-dot {
     }
 }
 
+/* === OVERLAY === */
+.success-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    /* 🔥 CLAVE */
+    z-index: 9999;
+    pointer-events: auto;
+}
+
+/* === MODAL === */
+.success-modal {
+    background: #ffffff;
+    width: 380px;
+    padding: 24px;
+    border-radius: 14px;
+    text-align: center;
+
+    position: relative;
+    z-index: 10000;
+}
+
+/* === TEXTO === */
+.success-title {
+    font-size: 20px;
+    font-weight: bold;
+    color: #16a34a;
+    margin-bottom: 12px;
+}
+
+.success-text {
+    font-size: 14px;
+    color: #4b5563;
+    margin-bottom: 20px;
+}
+
+/* === BOTÓN === */
+.success-btn {
+    width: 100%;
+    padding: 12px;
+    background: #16a34a;
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.success-btn:hover {
+    background: #15803d;
+}
+
+
 
 @media (max-width: 1200px) {
     .products-grid {

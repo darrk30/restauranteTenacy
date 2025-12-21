@@ -2,11 +2,20 @@
 
 namespace App\Livewire;
 
+use App\Enums\statusPedido;
 use App\Enums\StatusProducto;
 use App\Enums\TipoProducto;
 use Livewire\Component;
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\Order;
+use App\Models\OrderDetail;
+use App\Models\Table;
+use App\Models\WarehouseStock;
+use Carbon\Carbon;
+use Filament\Facades\Filament;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class PedidoMesa extends Component
 {
@@ -14,10 +23,14 @@ class PedidoMesa extends Component
     public $categorias;
     public $productos;
     public array $carrito = [];
+    public $restaurantSlug;
 
-    public function mount(int $mesa)
+    public function mount(int $mesa, $tenant)
     {
         $this->mesa = $mesa;
+        $tenant = Filament::getTenant(); // devuelve el modelo Restaurant
+
+        $this->restaurantSlug = $tenant?->slug;
         // Categorías
         $this->categorias = Category::where('status', true)
             ->select('id', 'name')
@@ -72,11 +85,8 @@ class PedidoMesa extends Component
 
                 $variantOptions = $product->variants->map(function ($variant) use (&$stockRealTotal, &$stockReservaTotal) {
 
-                    // 👉 sumamos stocks por variante
                     $variantStockReal = $variant->stocks->sum('stock_real');
                     $variantStockReserva = $variant->stocks->sum('stock_reserva');
-
-                    // 👉 acumulamos al producto
                     $stockRealTotal += $variantStockReal;
                     $stockReservaTotal += $variantStockReserva;
 
@@ -90,16 +100,12 @@ class PedidoMesa extends Component
 
                         'extra_price' => (float) $variant->extra_price,
                         'image_path'  => $variant->image_path,
-
-                        // 👇 stocks detallados (NO se tocan)
                         'stocks' => $variant->stocks->map(fn($s) => [
                             'warehouse_id'  => $s->warehouse_id,
                             'stock_real_variante'    => $s->stock_real,
                             'stock_reserva_variante' => $s->stock_reserva,
                             'min_stock'     => $s->min_stock,
                         ])->values(),
-
-                        // 👇 opcional: total por variante (muy útil)
                         'stock_real_total_variante'    => $variantStockReal,
                         'stock_reserva_total_variante' => $variantStockReserva,
                     ];
@@ -113,8 +119,6 @@ class PedidoMesa extends Component
                     'cortesia'        => $product->cortesia,
                     'control_stock'   => $product->control_stock,
                     'venta_sin_stock' => $product->venta_sin_stock,
-
-                    // 👇 TOTALES A NIVEL PRODUCTO
                     'stock_real_total'    => $stockRealTotal,
                     'stock_reserva_total' => $stockReservaTotal,
 
@@ -135,11 +139,48 @@ class PedidoMesa extends Component
 
     public function ordenar(array $data)
     {
-        dd([
-            'mesa'  => $this->mesa,
-            'data'  => $data,
-            'items' => $data['items'] ?? null,
-        ]);
+        DB::transaction(function () use ($data) {
+
+            // 1️⃣ Crear PEDIDO
+            $order = Order::create([
+                'table_id'      => $this->mesa,
+                'code'          => 'PED-' . now()->format('YmdHis'),
+                'status'        => statusPedido::Pendiente,
+                'subtotal'      => collect($data['items'])->sum('subtotal'),
+                'igv'           => 0, // luego puedes calcularlo
+                'total'         => $data['total'],
+                'fecha_pedido'  => Carbon::now('America/Lima'),
+                'user_id'       => Auth::id(),
+            ]);
+
+            // 2️⃣ Crear DETALLES
+            foreach ($data['items'] as $item) {
+                OrderDetail::create([
+                    'order_id'      => $order->id,
+                    'restaurant_id' => $order->restaurant_id,
+                    'product_id'    => $item['producto_id'],
+                    'variant_id'    => $item['variante_id'],
+                    'price'         => $item['precio'],
+                    'cantidad'      => $item['cantidad'],
+                    'status'        => 'pendiente',
+                    'notes'         => $item['nota'] ?? null,
+                    'fecha_envio_cocina' => null,
+                    'fecha_listo'   => null,
+                ]);
+            }
+
+            WarehouseStock::where('variant_id', $item['variante_id'])
+                ->decrement('stock_reserva', $item['cantidad']);
+
+            // 3️⃣ (Opcional) actualizar estado de la mesa
+            Table::where('id', $this->mesa)->update([
+                'estado_mesa' => 'ocupada',
+                'order_id'    => $order->id,
+            ]);
+        });
+
+        // 4️⃣ limpiar carrito (frontend)
+        $this->dispatch('pedido-guardado');
     }
 
 

@@ -1,4 +1,10 @@
-<div x-data="pedidoMesa(@js($productos))" class="pdv">
+<div x-data="pedidoMesa(@js($productos))" x-init="loading = false;
+showSuccess = false;
+
+$wire.on('pedido-guardado', () => {
+    loading = false;
+    showSuccess = true;
+});" class="pdv">
     <!-- ================= LEFT ================= -->
     <div class="left-panel">
 
@@ -66,6 +72,9 @@
 
     </div>
 
+
+
+
     <!-- ================= RIGHT ================= -->
     <div class="right-panel" :class="{ 'open': carritoAbierto }">
         <button class="close-cart" @click="carritoAbierto = false">
@@ -115,9 +124,25 @@
                 <span>S/ <span x-text="total().toFixed(2)"></span></span>
             </div>
 
-            <button class="order-btn" @click="ordenarPedido">
-                ORDENAR
+            <button class="order-btn flex items-center justify-center gap-2" :disabled="loading"
+                @click=" loading = true; ordenarPedido();">
+                <template x-if="!loading">
+                    <span>ORDENAR</span>
+                </template>
+
+                <template x-if="loading">
+                    <span class="flex items-center gap-2">
+                        <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                stroke-width="4" fill="none"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z">
+                            </path>
+                        </svg>
+                        Guardando...
+                    </span>
+                </template>
             </button>
+
 
 
         </div>
@@ -235,4 +260,29 @@
             </div>
         </div>
     </template>
+
+    <div x-show="showSuccess" x-transition.opacity class="success-overlay">
+        <div class="success-modal">
+
+            <h2 class="success-title">
+                ✅ Pedido registrado
+            </h2>
+
+            <p class="success-text">
+                El pedido fue enviado correctamente a cocina.
+            </p>
+
+            <button type="button" class="success-btn"
+                @click="
+                showSuccess = false;
+                window.location.href =
+                    '/restaurants/{{ $restaurantSlug }}/point-of-sale';
+            ">
+                Aceptar
+            </button>
+
+        </div>
+    </div>
+
+
 </div>
