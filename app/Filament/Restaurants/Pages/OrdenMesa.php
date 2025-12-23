@@ -11,16 +11,19 @@ class OrdenMesa extends Page
     protected static string $panel = 'restaurants';
 
     public int $mesa;
+    public ?int $pedido = null;
 
-    public function mount(int $mesa)
+    public function mount(int $mesa, ?int $pedido = null)
     {
         $this->mesa = $mesa;
+        $this->pedido = $pedido;
     }
 
     public static function getSlug(): string
     {
-        return 'orden-mesa/{mesa}';
+        return 'orden-mesa/{mesa}/{pedido?}';
     }
+
 
     public function getHeading(): string
     {
@@ -32,6 +35,7 @@ class OrdenMesa extends Page
         return [
             'tenant'   => Filament::getTenant(), // aquí sí es objeto
             'mesa'     => $this->mesa,
+            'pedido' => $this->pedido,
         ];
     }
 

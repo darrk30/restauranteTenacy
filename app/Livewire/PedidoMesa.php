@@ -20,17 +20,24 @@ use Illuminate\Support\Facades\DB;
 class PedidoMesa extends Component
 {
     public int $mesa;
+    public ?int $pedido = null;
     public $categorias;
     public $productos;
     public array $carrito = [];
     public $restaurantSlug;
 
-    public function mount(int $mesa, $tenant)
+    public function mount(int $mesa, $tenant, ?int $pedido = null)
     {
         $this->mesa = $mesa;
-        $tenant = Filament::getTenant(); // devuelve el modelo Restaurant
+        $this->pedido = $pedido;
+        //$tenant = Filament::getTenant(); // devuelve el modelo Restaurant
 
         $this->restaurantSlug = $tenant?->slug;
+
+        if ($this->pedido) {
+            $this->cargarPedido($this->pedido);
+        }
+
         // Categorías
         $this->categorias = Category::where('status', true)
             ->select('id', 'name')
@@ -137,51 +144,350 @@ class PedidoMesa extends Component
         //dd($this->productos);
     }
 
-    public function ordenar(array $data)
+    protected function cargarPedido(int $pedidoId): void
     {
-        DB::transaction(function () use ($data) {
+        $order = Order::with([
+            'details' => function ($query) {
+                $query->where('status', '!=', 'cancelado');
+            },
+            'details.product',
+            'details.variant.values.attribute',
+        ])
+            ->where('id', $pedidoId)
+            ->where('table_id', $this->mesa)
+            ->where('status', '!=', 'cancelado')
+            ->first();
 
-            // 1️⃣ Crear PEDIDO
+        if (! $order) {
+            return;
+        }
+
+        foreach ($order->details as $detail) {
+
+            $variantLabel = $detail->variant && $detail->variant->values->isNotEmpty()
+                ? $detail->variant->values
+                ->map(fn($v) => $v->attribute->name . ': ' . $v->name)
+                ->implode(' / ')
+                : 'Normal';
+
+            $tipo = $detail->cortesia ? 'cortesia' : 'normal';
+
+            $this->carrito[] = [
+                'detail_id' => $detail->id,
+                'key'      => $detail->product_id . '-' . $detail->variant_id . '-' . $tipo,
+                'nombre'   => $detail->product?->name . ' (' . $variantLabel . ')',
+                'precio'   => (float) $detail->price,
+                'cantidad' => (int) $detail->cantidad,
+                'nota'     => $detail->notes ?? '',
+                'cortesia' => (bool) $detail->cortesia,
+            ];
+        }
+        //dd($this->carrito);
+    }
+
+
+public function ordenar(array $data)
+{
+    DB::transaction(function () use ($data) {
+
+        $esPedidoNuevo   = false;
+        $itemsParaCocina = [];
+
+        /*
+        |------------------------------------------------------------------
+        | 1️⃣ OBTENER O CREAR PEDIDO
+        |------------------------------------------------------------------
+        */
+        if (!empty($data['pedido_id'])) {
+
+            $order = Order::with('table')->findOrFail($data['pedido_id']);
+
+        } else {
+
+            $esPedidoNuevo = true;
+
             $order = Order::create([
-                'table_id'      => $this->mesa,
-                'code'          => 'PED-' . now()->format('YmdHis'),
-                'status'        => statusPedido::Pendiente,
-                'subtotal'      => collect($data['items'])->sum('subtotal'),
-                'igv'           => 0, // luego puedes calcularlo
-                'total'         => $data['total'],
-                'fecha_pedido'  => Carbon::now('America/Lima'),
-                'user_id'       => Auth::id(),
+                'table_id'     => $this->mesa,
+                'code'         => 'PED-' . now()->format('YmdHis'),
+                'status'       => statusPedido::Pendiente->value,
+                'subtotal'     => 0,
+                'igv'          => 0,
+                'total'        => 0,
+                'fecha_pedido' => Carbon::now('America/Lima'),
+                'user_id'      => Auth::id(),
             ]);
 
-            // 2️⃣ Crear DETALLES
-            foreach ($data['items'] as $item) {
-                OrderDetail::create([
-                    'order_id'      => $order->id,
-                    'restaurant_id' => $order->restaurant_id,
-                    'product_id'    => $item['producto_id'],
-                    'variant_id'    => $item['variante_id'],
-                    'price'         => $item['precio'],
-                    'cantidad'      => $item['cantidad'],
-                    'status'        => 'pendiente',
-                    'notes'         => $item['nota'] ?? null,
-                    'fecha_envio_cocina' => null,
-                    'fecha_listo'   => null,
-                ]);
-            }
-
-            WarehouseStock::where('variant_id', $item['variante_id'])
-                ->decrement('stock_reserva', $item['cantidad']);
-
-            // 3️⃣ (Opcional) actualizar estado de la mesa
             Table::where('id', $this->mesa)->update([
                 'estado_mesa' => 'ocupada',
                 'order_id'    => $order->id,
             ]);
+        }
+
+        /*
+        |------------------------------------------------------------------
+        | 2️⃣ DETALLES EXISTENTES (SOLO ACTIVOS)
+        |------------------------------------------------------------------
+        */
+        $detallesExistentes = OrderDetail::with('product')
+            ->where('order_id', $order->id)
+            ->where('status', '!=', 'cancelado')
+            ->get()
+            ->keyBy(fn ($d) => $d->product_id . '-' . $d->variant_id);
+
+        /*
+        |------------------------------------------------------------------
+        | 3️⃣ PROCESAR ITEMS DEL CARRITO
+        |------------------------------------------------------------------
+        */
+        foreach ($data['items'] as $item) {
+
+            $key = $item['producto_id'] . '-' . $item['variante_id'];
+
+            /*
+            |--------------------------------------------------
+            | 🔁 DETALLE EXISTENTE
+            |--------------------------------------------------
+            */
+            if ($detallesExistentes->has($key)) {
+
+                $detalle = $detallesExistentes[$key];
+
+                $cantidadAnterior = (int) $detalle->cantidad;
+                $cantidadNueva    = (int) $item['cantidad'];
+                $diferencia       = $cantidadNueva - $cantidadAnterior;
+
+                // ✅ REEMPLAZAR NOTA (NO MERGE)
+                $detalle->update([
+                    'cantidad' => $cantidadNueva,
+                    'price'    => $item['precio'],
+                    'notes'    => !empty($item['nota'])
+                        ? trim($item['nota'])
+                        : null,
+                ]);
+
+                // 📦 STOCK (solo si aumenta)
+                if ($diferencia > 0) {
+                    WarehouseStock::where('variant_id', $item['variante_id'])
+                        ->decrement('stock_reserva', $diferencia);
+                }
+
+                // 🍳 ENVIAR A COCINA SOLO CAMBIOS
+                if ($diferencia > 0 || !empty($item['nota'])) {
+                    $itemsParaCocina[] = [
+                        'cantidad' => $diferencia > 0 ? $diferencia : 1,
+                        'producto' => $detalle->product->name,
+                        'nota'     => $item['nota'] ?? '',
+                    ];
+                }
+
+            /*
+            |--------------------------------------------------
+            | 🆕 NUEVO PRODUCTO
+            |--------------------------------------------------
+            */
+            } else {
+
+                $detalle = OrderDetail::create([
+                    'order_id'            => $order->id,
+                    'restaurant_id'       => $order->restaurant_id,
+                    'product_id'          => $item['producto_id'],
+                    'variant_id'          => $item['variante_id'],
+                    'price'               => $item['precio'],
+                    'cantidad'            => $item['cantidad'],
+                    'status'              => 'pendiente',
+                    'notes'               => $item['nota'] ?? null,
+                    'fecha_envio_cocina'  => now(),
+                ]);
+
+                WarehouseStock::where('variant_id', $item['variante_id'])
+                    ->decrement('stock_reserva', $item['cantidad']);
+
+                $itemsParaCocina[] = [
+                    'cantidad' => $item['cantidad'],
+                    'producto' => $detalle->product->name,
+                    'nota'     => $item['nota'] ?? '',
+                ];
+            }
+        }
+
+        /*
+        |------------------------------------------------------------------
+        | 4️⃣ CANCELAR DETALLES QUITADOS DEL CARRITO
+        |------------------------------------------------------------------
+        */
+        $keysActuales = collect($data['items'])
+            ->map(fn ($i) => $i['producto_id'] . '-' . $i['variante_id'])
+            ->toArray();
+
+        foreach ($detallesExistentes as $key => $detalleEliminado) {
+
+            if (!in_array($key, $keysActuales)) {
+
+                WarehouseStock::where('variant_id', $detalleEliminado->variant_id)
+                    ->increment('stock_reserva', $detalleEliminado->cantidad);
+
+                $detalleEliminado->update([
+                    'status' => 'cancelado',
+                ]);
+
+                $itemsParaCocina[] = [
+                    'cantidad' => $detalleEliminado->cantidad,
+                    'producto' => $detalleEliminado->product->name,
+                    'nota'     => 'ELIMINADO',
+                ];
+            }
+        }
+
+        /*
+        |------------------------------------------------------------------
+        | 5️⃣ RECALCULAR TOTALES
+        |------------------------------------------------------------------
+        */
+        $subtotal = OrderDetail::where('order_id', $order->id)
+            ->where('status', '!=', 'cancelado')
+            ->sum(DB::raw('price * cantidad'));
+
+        $igv   = round($subtotal * 0.18, 2);
+        $total = round($subtotal + $igv, 2);
+
+        $order->update([
+            'subtotal' => $subtotal,
+            'igv'      => $igv,
+            'total'    => $total,
+        ]);
+
+        /*
+        |------------------------------------------------------------------
+        | 6️⃣ ORDEN PARA COCINA
+        |------------------------------------------------------------------
+        */
+        $ordenCocina = [
+            'pedido' => $order->code,
+            'mesa'   => $order->table->name ?? $this->mesa,
+            'mozo'   => Auth::user()->name,
+            'fecha'  => now('America/Lima')->format('d/m/Y H:i'),
+            'tipo'   => $esPedidoNuevo ? 'NUEVO PEDIDO' : 'ACTUALIZACIÓN',
+            'items'  => $itemsParaCocina,
+        ];
+
+        // logger($ordenCocina);
+    });
+
+    $this->dispatch('pedido-guardado');
+}
+
+
+
+    public function anularPedido($pedidoId)
+    {
+        DB::transaction(function () use ($pedidoId) {
+
+            // Cargamos la orden y sus detalles
+            $order = Order::with('details')->findOrFail($pedidoId);
+
+            // 1️⃣ Devolver stock
+            // IMPORTANTE: Solo devolvemos stock de los items que NO estaban ya cancelados
+            foreach ($order->details as $detail) {
+                if ($detail->status !== statusPedido::Cancelado->value) {
+                    WarehouseStock::where('variant_id', $detail->variant_id)
+                        ->increment('stock_reserva', $detail->cantidad);
+                }
+            }
+
+            $order->details()
+                ->where('status', '!=', statusPedido::Cancelado)
+                ->update([
+                    'status' => statusPedido::Cancelado,
+                ]);
+
+            // 3️⃣ Anular pedido (Cabecera)
+            $order->update([
+                'status' => statusPedido::Cancelado,
+            ]);
+
+            // 4️⃣ Liberar mesa
+            if ($order->table_id) {
+                Table::where('id', $order->table_id)->update([
+                    'estado_mesa' => 'libre',
+                    'order_id'    => null,
+                ]);
+            }
         });
 
-        // 4️⃣ limpiar carrito (frontend)
-        $this->dispatch('pedido-guardado');
+        $this->dispatch('pedido-anulado');
     }
+
+    public function cancelarDetalle($detailId)
+    {
+        $detail = OrderDetail::find($detailId);
+
+        if (! $detail || $detail->status === 'cancelado') {
+            return;
+        }
+
+        DB::transaction(function () use ($detail) {
+
+            // 🔁 DEVOLVER STOCK
+            WarehouseStock::where('variant_id', $detail->variant_id)
+                ->increment('stock_reserva', $detail->cantidad);
+
+            // ❌ CANCELAR DETALLE
+            $detail->update([
+                'status' => 'cancelado',
+            ]);
+        });
+
+        // ✅ SOLO NOTIFICAR (OPCIONAL)
+        $this->dispatch('detalle-cancelado');
+    }
+
+
+
+    // public function ordenar(array $data)
+    // {
+    //     DB::transaction(function () use ($data) {
+
+    //         // 1️⃣ Crear PEDIDO
+    //         $order = Order::create([
+    //             'table_id'      => $this->mesa,
+    //             'code'          => 'PED-' . now()->format('YmdHis'),
+    //             'status'        => statusPedido::Pendiente,
+    //             'subtotal'      => collect($data['items'])->sum('subtotal'),
+    //             'igv'           => 0, // luego puedes calcularlo
+    //             'total'         => $data['total'],
+    //             'fecha_pedido'  => Carbon::now('America/Lima'),
+    //             'user_id'       => Auth::id(),
+    //         ]);
+
+    //         // 2️⃣ Crear DETALLES
+    //         foreach ($data['items'] as $item) {
+    //             OrderDetail::create([
+    //                 'order_id'      => $order->id,
+    //                 'restaurant_id' => $order->restaurant_id,
+    //                 'product_id'    => $item['producto_id'],
+    //                 'variant_id'    => $item['variante_id'],
+    //                 'price'         => $item['precio'],
+    //                 'cantidad'      => $item['cantidad'],
+    //                 'status'        => 'pendiente',
+    //                 'notes'         => $item['nota'] ?? null,
+    //                 'fecha_envio_cocina' => null,
+    //                 'fecha_listo'   => null,
+    //             ]);
+    //         }
+
+    //         WarehouseStock::where('variant_id', $item['variante_id'])
+    //             ->decrement('stock_reserva', $item['cantidad']);
+
+    //         // 3️⃣ (Opcional) actualizar estado de la mesa
+    //         Table::where('id', $this->mesa)->update([
+    //             'estado_mesa' => 'ocupada',
+    //             'order_id'    => $order->id,
+    //         ]);
+    //     });
+
+    //     // 4️⃣ limpiar carrito (frontend)
+    //     $this->dispatch('pedido-guardado');
+    // }
 
 
     public function render()

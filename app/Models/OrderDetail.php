@@ -17,7 +17,7 @@ class OrderDetail extends Model
         'variant_id',
         'product_name',
         'price',
-        'quantity',
+        'cantidad',
         'status',
         'notes',
         'fecha_envio_cocina',

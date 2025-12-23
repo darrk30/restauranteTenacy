@@ -175,3 +175,16 @@ body.dark {
 .dark .empty-state p {
     color: #9ca3af;
 }
+
+
+.dark .modal-confirm {
+    background: #2a2a2a;
+}
+
+.dark .modal-confirm h3 {
+    color: #ffffff;
+}
+
+.dark .modal-confirm p {
+    color: #ffffff;
+}

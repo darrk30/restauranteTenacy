@@ -1,9 +1,18 @@
-<div x-data="pedidoMesa(@js($productos))" x-init="loading = false;
+<div wire:ignore x-data="pedidoMesa(@js($productos), {{ $mesa }}, {{ $pedido ?? 'null' }}, @js($carrito))" x-init="loading = false;
 showSuccess = false;
-
+pedidoCancelado = false;
+detalleCancelado = false;
 $wire.on('pedido-guardado', () => {
     loading = false;
     showSuccess = true;
+});
+$wire.on('pedido-anulado', () => {
+    loading = false;
+    pedidoCancelado = true;
+});
+$wire.on('detalle-cancelado', () => {
+    loading = false;
+    detalleCancelado = true;
 });" class="pdv">
     <!-- ================= LEFT ================= -->
     <div class="left-panel">
@@ -72,17 +81,34 @@ $wire.on('pedido-guardado', () => {
 
     </div>
 
-
-
-
     <!-- ================= RIGHT ================= -->
     <div class="right-panel" :class="{ 'open': carritoAbierto }">
         <button class="close-cart" @click="carritoAbierto = false">
             ✕
         </button>
 
-        <div class="order-header" style="display: flex; align-items: center; justify-content: center;">
-            <span>Mesa {{ $mesa }}</span>
+        <div class="order-header">
+
+            <!-- Info Mesa / Pedido -->
+            <div class="order-info">
+                <span class="mesa">Mesa {{ $mesa }}</span>
+
+                @if ($pedido)
+                    <span class="pedido">
+                        Pedido #<span x-text="pedidoId"></span>
+                    </span>
+                @endif
+            </div>
+
+            <!-- Acciones -->
+            <div class="order-actions">
+                <button class="btn-remove btn-remove-pedido" title="Anular pedido" x-show="pedidoId" x-on:click="abrirModalAnular">
+                    <x-heroicon-o-trash class="w-5 h-5" />
+                </button>
+
+                <!-- aquí puedes agregar más botones -->
+            </div>
+
         </div>
 
         <div class="order-items">
@@ -108,9 +134,10 @@ $wire.on('pedido-guardado', () => {
                             <span x-text="(item.precio * item.cantidad).toFixed(2)"></span>
                         </span>
 
-                        <button class="btn-remove" @click="eliminarItem(item.key)">
+                        <button class="btn-remove" @click="abrirModalAnularDetalle(item)">
                             <x-heroicon-o-trash class="w-5 h-5" />
                         </button>
+
                     </div>
 
                 </div>
@@ -148,12 +175,64 @@ $wire.on('pedido-guardado', () => {
         </div>
     </div>
 
-    <!-- ================= MODAL ================= -->
+    <!-- ================= MODAL ANULAR PEDIDO ================= -->
+    <div class="modal-backdrop" x-show="modalAnular" x-transition>
+        <div class="modal-confirm">
+
+            <h3>¿Anular pedido?</h3>
+
+            <p>
+                Esta acción no se puede deshacer.<br>
+                El pedido será anulado y la mesa quedará libre.
+            </p>
+
+            <div class="modal-actions">
+                <button class="btn cancel" x-on:click="cerrarModalAnular">
+                    Cancelar
+                </button>
+
+                <button class="btn danger" x-on:click="confirmarAnular">
+                    Anular
+                </button>
+            </div>
+
+        </div>
+    </div>
+    <!-- ================= MODAL ANULAR DETALLE PEDIDO ================= -->
+    <div class="modal-backdrop" x-show="modalAnularDetalle" x-transition>
+        <div class="modal-confirm">
+
+            <h3>¿Anular Item?</h3>
+
+            <p>
+                Esta acción no se puede deshacer.<br>
+                El producto será anulado y se notificara a cocina.
+            </p>
+
+            <div class="modal-actions">
+                <button class="btn cancel" x-on:click="cerrarModalAnularDetalle">
+                    Cancelar
+                </button>
+
+                <button class="btn danger" x-on:click="confirmarAnularDetalle">
+                    Anular
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ================= MODAL PARA AGREGAR/EDITAR VARIANTE ================= -->
     <template x-if="modal">
-        <div class="modal-backdrop">
+            <div class="modal-backdrop moda-variats modal-enter"
+         x-init="
+            requestAnimationFrame(() => {
+                $el.classList.add('modal-enter-active')
+            })
+         "
+         @click.self="cerrarModal()">
 
-            <div class="modal">
-
+        <div class="modal modal-scale">
                 <div class="modal-header" x-text="productoActual.name"></div>
                 <template x-if="imagenVariante">
                     <div class="variant-image-box">
@@ -261,6 +340,7 @@ $wire.on('pedido-guardado', () => {
         </div>
     </template>
 
+    <!-- ================= MODAL ÉXITO PEDIDO ================= -->
     <div x-show="showSuccess" x-transition.opacity class="success-overlay">
         <div class="success-modal">
 
@@ -284,5 +364,47 @@ $wire.on('pedido-guardado', () => {
         </div>
     </div>
 
+    <!-- ================= MODAL ÉXITO PEDIDO CANCELADO ================= -->
+    <div x-show="pedidoCancelado" x-transition.opacity class="success-overlay">
+        <div class="success-modal">
 
+            <h2 class="success-title">
+                Pedido Cancelado
+            </h2>
+
+            <p class="success-text">
+                El pedido fue cancelado correctamente y se notifico a cocina.
+            </p>
+
+            <button type="button" class="success-btn"
+                @click="
+                pedidoCancelado = false;
+                window.location.href =
+                    '/restaurants/{{ $restaurantSlug }}/point-of-sale';
+            ">
+                Aceptar
+            </button>
+
+        </div>
+    </div>
+
+    <!-- ================= MODAL ÉXITO DETALLE CANCELADO ================= -->
+    <div x-show="detalleCancelado" x-transition.opacity class="success-overlay">
+        <div class="success-modal">
+
+            <h2 class="success-title">
+                Detalle Cancelado
+            </h2>
+
+            <p class="success-text">
+                El detalle fue cancelado correctamente y se notifico a cocina.
+            </p>
+
+            <button @click="detalleCancelado = false" class="success-btn">
+                Aceptar
+            </button>
+
+
+        </div>
+    </div>
 </div>

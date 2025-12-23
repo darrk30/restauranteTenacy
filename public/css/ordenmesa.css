@@ -157,10 +157,36 @@ body {
 }
 
 .order-header {
-    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* 👈 separa izquierda / derecha */
+    padding: 8px 12px;
     font-weight: 700;
     border-bottom: 1px solid #e5e7eb;
-    flex-shrink: 0;
+}
+
+/* INFO */
+.order-info {
+    display: flex;
+    flex-direction: column; /* Mesa arriba / Pedido abajo */
+    line-height: 1.2;
+}
+
+.order-info .mesa {
+    font-size: 16px;
+}
+
+.order-info .pedido {
+    font-size: 13px;
+    font-weight: 500;
+    color: #6b7280;
+}
+
+/* ACCIONES */
+.order-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* espacio entre botones */
 }
 
 .order-items {
@@ -254,7 +280,7 @@ body {
 }
 
 
-.modal-backdrop {
+/* .modal-backdrop {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, .45);
@@ -264,7 +290,7 @@ body {
     overflow-y: auto;
     padding: 16px 0;
     z-index: 9999;
-}
+} */
 
 .stock-alert {
     background: #fee2e2;          /* rojo suave */
@@ -575,12 +601,16 @@ input:checked + .switch .switch-dot {
         height: calc(100vh - 120px);
     }
 
+    .btn-remove-pedido{
+        margin-right: 20px;
+    }
+
     /* OCULTAR CARRITO */
     .right-panel {
         position: fixed;
         inset: 0;
         background: white;
-        z-index: 9999;
+        z-index: 50;
         transform: translateX(100%);
         transition: transform 0.3s ease;
         border-radius: 0;
@@ -603,7 +633,7 @@ input:checked + .switch .switch-dot {
         height: 60px;
         font-size: 18px;
         font-weight: bold;
-        z-index: 9998;
+        z-index: 40;
         box-shadow: 0 8px 20px rgba(0,0,0,.3);
     }
 
@@ -681,6 +711,100 @@ input:checked + .switch .switch-dot {
     background: #15803d;
 }
 
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow-y: auto;
+    padding: 16px 0;
+    z-index: 100;
+}
+
+/* moda-variats */
+.moda-variats {
+    opacity: 0;
+    transition: opacity .25s ease;
+}
+
+/* ACTIVACIÓN */
+.modal-backdrop.modal-enter-active {
+    opacity: 1;
+}
+
+/* MODAL */
+.modal {
+    background: #fff;
+    border-radius: 14px;
+    max-width: 420px;
+    width: 100%;
+    transform: scale(.9);
+    opacity: 0;
+    transition: all .25s ease;
+}
+
+/* CUANDO EL BACKDROP YA ENTRÓ */
+.modal-backdrop.modal-enter-active .modal {
+    transform: scale(1);
+    opacity: 1;
+}
+
+
+.modal-confirm {
+    background: white;
+    width: 320px;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+}
+
+.modal-confirm h3 {
+    color: #111111;
+    margin: 0 0 10px;
+    font-size: 18px;
+}
+
+.modal-confirm p {
+    font-size: 14px;
+    color: #555;
+    margin-bottom: 20px;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.btn {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.btn.cancel {
+    background: #1093ff;
+    color: white;
+}
+
+.btn.cancel:hover {
+    background: #0d74c9;
+}
+
+
+.btn.danger {
+    background: #dc2626;
+    color: white;
+}
+
+.btn.danger:hover {
+    background: #b91c1c;
+}
 
 
 @media (max-width: 1200px) {

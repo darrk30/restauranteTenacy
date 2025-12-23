@@ -1,7 +1,11 @@
-function pedidoMesa(productosIniciales) {
+function pedidoMesa(productosIniciales, mesaId, pedidoId = null, carritoInicial = []) {
     return {
+        mesaId: mesaId,
+        pedidoId: pedidoId,
         loading: false,
         showSuccess: false,
+        pedidoCancelado: false,
+        detalleCancelado: false,
         productos: productosIniciales,
         categoria: 'todos',
         search: '',
@@ -12,12 +16,14 @@ function pedidoMesa(productosIniciales) {
         carritoAbierto: false,
         editando: false,
         imagenVariante: null,
-        carrito: [],
+        carrito: carritoInicial ?? [],
         esCortesia: false,
         precioBase: 0,
+        modalAnular: false,
+        modalAnularDetalle: false,
+        itemAAnular: null,
 
-
-         productosFiltrados() {
+        productosFiltrados() {
             return this.productos.filter(p => {
 
                 const matchCategoria =
@@ -39,11 +45,25 @@ function pedidoMesa(productosIniciales) {
                 .flatMap(g => g.options)
                 .find(o => o.id === this.variante)
 
-            return option ? option.stock_reserva_total_variante : 0
+            if (!option) return 0
+
+            let stock = option.stock_reserva_total_variante
+
+            // 🔥 FIX: si estoy editando este mismo item, devolver su stock
+            if (
+                this.editando &&
+                this.variante === this.varianteOriginal
+            ) {
+                stock += this.cantidadOriginal
+            }
+
+            return stock
         },
 
 
         abrirModal(producto) {
+            console.log(producto);
+            
             this.productoActual = producto
             this.cantidad = 1
             this.nota = ''
@@ -71,32 +91,29 @@ function pedidoMesa(productosIniciales) {
             const producto = this.productos.find(
                 p => p.id === Number(productoId)
             )
-
             if (!producto) return
 
             this.productoActual = producto
 
-            // 🔥 CLAVES PARA CONTROL DE STOCK
+            // 🔥 FIX PRECIO
+            this.precioBase = producto.price
+
             this.varianteOriginal = Number(varianteId)
             this.cantidadOriginal = item.cantidad
 
-            // valores editables
             this.variante = Number(varianteId)
             this.cantidad = item.cantidad
             this.nota = item.nota ?? ''
             this.esCortesia = tipo === 'cortesia'
 
             const option = producto.variant_groups
-                ?.flatMap(g => g.options)
-                ?.find(o => o.id === Number(varianteId))
+                .flatMap(g => g.options)
+                .find(o => o.id === Number(varianteId))
 
             this.imagenVariante = option?.image_path ?? producto.image_path ?? null
 
             this.modal = true
         },
-
-
-
 
         precioActual() {
             if (this.esCortesia) return 0
@@ -118,22 +135,19 @@ function pedidoMesa(productosIniciales) {
             return this.stockDisponibleVariante() >= this.cantidad
         },
 
-
-
         cerrarModal() {
             this.modal = false
-            this.productoActual = null
-            this.editando = false
-            this.editKey = null
-            this.varianteOriginal = null
-            this.cantidadOriginal = null
-            this.variante = null
-            this.cantidad = 1
-            this.nota = ''
-            this.imagenVariante = null
+
+            this.$nextTick(() => {
+                this.productoActual = null
+                this.editando = false
+                this.editKey = null
+                this.variante = null
+                this.cantidad = 1
+                this.nota = ''
+                this.imagenVariante = null
+            })
         },
-
-
 
         agregar() {
             const opciones = this.productoActual.variant_groups
@@ -202,28 +216,38 @@ function pedidoMesa(productosIniciales) {
             // =========================
             // AGREGAR NORMAL
             // =========================
-            else {
-                const existente = this.carrito.find(i => i.key === newKey)
+           else {
+            const existente = this.carrito.find(i => i.key === newKey)
 
-                if (existente) {
-                    existente.cantidad += this.cantidad
-                    existente.nota = this.nota.trim()
-                } else {
-                    this.carrito.push({
-                        key: newKey,
-                        nombre: `${this.productoActual.name} (${optionNueva.label})`,
-                        precio: this.esCortesia ? 0 : this.precioActual(),
-                        cantidad: this.cantidad,
-                        nota: this.nota.trim(),
-                        cortesia: this.esCortesia,
-                    })
-                }
+            if (existente) {
+                existente.cantidad += this.cantidad
 
-                // 🔥 DESCONTAR STOCK NORMAL
-                if (this.productoActual.control_stock && optionNueva) {
-                    optionNueva.stock_reserva_total_variante -= this.cantidad
+                if (this.nota && this.nota.trim()) {
+                    const notaNueva = this.nota.trim()
+
+                    if (!existente.nota) {
+                        existente.nota = notaNueva
+                    } else if (!existente.nota.includes(notaNueva)) {
+                        existente.nota = `${existente.nota}, ${notaNueva}`
+                    }
                 }
+            } else {
+                this.carrito.push({
+                    key: newKey,
+                    nombre: `${this.productoActual.name} (${optionNueva.label})`,
+                    precio: this.esCortesia ? 0 : this.precioActual(),
+                    cantidad: this.cantidad,
+                    nota: this.nota && this.nota.trim() ? this.nota.trim() : '',
+                    cortesia: this.esCortesia,
+                })
             }
+
+            // 🔥 DESCONTAR STOCK NORMAL
+            if (this.productoActual.control_stock && optionNueva) {
+                optionNueva.stock_reserva_total_variante -= this.cantidad
+            }
+        }
+
 
             // 🔁 RECALCULAR STOCK TOTAL DEL PRODUCTO
             this.recalcularStockProducto(this.productoActual)
@@ -235,6 +259,23 @@ function pedidoMesa(productosIniciales) {
         total() {
             return this.carrito.reduce((t, i) => t + i.precio * i.cantidad, 0);
         },
+
+        confirmarAnularDetalle() {
+            if (!this.itemAAnular) return
+
+            // 🔥 DEVOLVER STOCK EN FRONT
+            this.eliminarItem(this.itemAAnular.key)
+
+            // 🔁 BACKEND
+            if (this.itemAAnular.detail_id) {
+                this.$wire.cancelarDetalle(this.itemAAnular.detail_id)
+            }
+
+            this.cerrarModalAnularDetalle()
+        },
+
+
+
 
         eliminarItem(key) {
             const item = this.carrito.find(i => i.key === key)
@@ -299,8 +340,7 @@ function pedidoMesa(productosIniciales) {
             const existeStockPositivo = stockPorVariante.some(
                 stockVariante => stockVariante > 0
             )
-
-            // 3️⃣ Calcular el stock del producto
+            // 3️⃣ Calcular el stock total del producto según la lógica
             if (existeStockPositivo) {
                 // Sumar SOLO los stocks positivos
                 producto.stock_reserva_total = stockPorVariante
@@ -323,8 +363,9 @@ function pedidoMesa(productosIniciales) {
                 alert('El carrito está vacío')
                 return
             }
-
             const payload = {
+                mesa_id: this.mesaId,
+                pedido_id: this.pedidoId,
                 total: this.total(),
                 items: this.carrito.map(item => {
                     const [producto_id, variante_id, tipo] = item.key.split('-')
@@ -340,12 +381,36 @@ function pedidoMesa(productosIniciales) {
                     }
                 })
             }
-
             this.$wire.ordenar(payload)
-        }
+        },
+        
+
+        abrirModalAnular() {
+            this.modalAnular = true
+        },
+
+        abrirModalAnularDetalle(item) {
+            this.itemAAnular = item
+            this.modalAnularDetalle = true
+        },
 
 
+        cerrarModalAnular() {
+            this.modalAnular = false
+        },
 
+        cerrarModalAnularDetalle() {
+            this.modalAnularDetalle = false
+            this.itemAAnular = null
+        },
 
-}
+        confirmarAnular() {
+            if (!this.pedidoId) return
+
+            this.$wire.anularPedido(this.pedidoId)
+
+            this.modalAnular = false
+        },
+
+    }
 }
