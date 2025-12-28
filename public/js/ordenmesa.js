@@ -25,45 +25,26 @@ function pedidoMesa(productosIniciales, mesaId, pedidoId = null, carritoInicial 
 
         productosFiltrados() {
             return this.productos.filter(p => {
-
-                const matchCategoria =
-                    this.categoria === 'todos' ||
-                    p.categories.includes(Number(this.categoria));
-
-                const matchSearch =
-                    this.search === '' ||
-                    p.name.toLowerCase().includes(this.search.toLowerCase());
-
+                const matchCategoria = this.categoria === 'todos' || p.categories.includes(Number(this.categoria));
+                const matchSearch = this.search === '' || p.name.toLowerCase().includes(this.search.toLowerCase());
                 return matchCategoria && matchSearch;
             });
         },
 
         stockDisponibleVariante() {
             if (!this.variante) return 0
-
             const option = this.productoActual.variant_groups
                 .flatMap(g => g.options)
                 .find(o => o.id === this.variante)
-
             if (!option) return 0
-
             let stock = option.stock_reserva_total_variante
-
-            // 🔥 FIX: si estoy editando este mismo item, devolver su stock
-            if (
-                this.editando &&
-                this.variante === this.varianteOriginal
-            ) {
+            if (this.editando && this.variante === this.varianteOriginal) {
                 stock += this.cantidadOriginal
             }
-
             return stock
         },
 
-
         abrirModal(producto) {
-            console.log(producto);
-            
             this.productoActual = producto
             this.cantidad = 1
             this.nota = ''

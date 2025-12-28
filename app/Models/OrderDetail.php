@@ -18,6 +18,7 @@ class OrderDetail extends Model
         'product_name',
         'price',
         'cantidad',
+        'cortesia',
         'status',
         'notes',
         'fecha_envio_cocina',

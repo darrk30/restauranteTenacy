@@ -95,7 +95,7 @@ $wire.on('detalle-cancelado', () => {
 
                 @if ($pedido)
                     <span class="pedido">
-                        Pedido #<span x-text="pedidoId"></span>
+                        Pedido #<span>{{$pedidocompleto->code}}</span>
                     </span>
                 @endif
             </div>
@@ -154,7 +154,7 @@ $wire.on('detalle-cancelado', () => {
             <button class="order-btn flex items-center justify-center gap-2" :disabled="loading"
                 @click=" loading = true; ordenarPedido();">
                 <template x-if="!loading">
-                    <span>ORDENAR</span>
+                    <span x-text="pedidoId ? 'ACTUALIZAR' : 'ORDENAR'"></span>
                 </template>
 
                 <template x-if="loading">

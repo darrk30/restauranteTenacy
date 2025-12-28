@@ -19,6 +19,7 @@ return new class extends Migration
             $table->integer('cantidad')->default(1);
             $table->string('status')->default('pendiente');
             $table->string('notes')->nullable();
+            $table->boolean('cortesia')->default(false); 
             $table->timestamp('fecha_envio_cocina')->nullable();
             $table->timestamp('fecha_listo')->nullable();
             $table->foreignId('order_id')->constrained()->cascadeOnDelete();

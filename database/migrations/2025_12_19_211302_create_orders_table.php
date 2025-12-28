@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('orders', function (Blueprint $table) {
             $table->id();
-            $table->string('code')->unique();
+            $table->string('code');
             $table->string('status')->default('pendiente');
             $table->decimal('subtotal', 10, 2)->default(0);
             $table->decimal('igv', 10, 2)->default(0);
@@ -22,6 +22,7 @@ return new class extends Migration
             $table->foreignId('table_id')->nullable()->constrained('tables')->nullOnDelete();
             $table->foreignId('user_id')->constrained()->restrictOnDelete();
             $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
+            $table->unique(['restaurant_id', 'code']);
             $table->timestamps();
         });
     }
