@@ -15,7 +15,9 @@ use App\Models\WarehouseStock;
 use Carbon\Carbon;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Pest\Support\Str;
 
 class PedidoMesa extends Component
 {
@@ -163,7 +165,7 @@ class PedidoMesa extends Component
             return;
         }
 
-        $this->pedidocompleto = $order;  
+        $this->pedidocompleto = $order;
 
         foreach ($order->details as $detail) {
 
@@ -192,30 +194,18 @@ class PedidoMesa extends Component
     public function ordenar(array $data)
     {
         DB::transaction(function () use ($data) {
-
             $esPedidoNuevo   = false;
             $itemsParaCocina = [];
-
-            /*
-        |------------------------------------------------------------------
-        | 1️⃣ OBTENER O CREAR PEDIDO
-        |------------------------------------------------------------------
-        */
             if (!empty($data['pedido_id'])) {
-
                 $order = Order::with('table')->findOrFail($data['pedido_id']);
             } else {
-
                 $esPedidoNuevo = true;
-                $empresaId = filament()->getTenant()->id; // o como obtengas la empresa
+                $empresaId = filament()->getTenant()->id;
                 $ultimoNumero = Order::where('restaurant_id', $empresaId)
                     ->selectRaw("MAX(CAST(SUBSTRING_INDEX(code, '-', -1) AS UNSIGNED)) as max_num")
                     ->value('max_num');
-
                 $siguienteNumero = ($ultimoNumero ?? 0) + 1;
                 $codigoPedido = 'PED-' . str_pad($siguienteNumero, 6, '0', STR_PAD_LEFT);
-
-
                 $order = Order::create([
                     'table_id'     => $this->mesa,
                     'code'          => $codigoPedido,
@@ -226,63 +216,32 @@ class PedidoMesa extends Component
                     'fecha_pedido' => Carbon::now('America/Lima'),
                     'user_id'      => Auth::id(),
                 ]);
-
                 Table::where('id', $this->mesa)->update([
                     'estado_mesa' => 'ocupada',
                     'order_id'    => $order->id,
                 ]);
             }
-
-            /*
-        |------------------------------------------------------------------
-        | 2️⃣ DETALLES EXISTENTES (SOLO ACTIVOS)
-        |------------------------------------------------------------------
-        */
             $detallesExistentes = OrderDetail::with('product')
                 ->where('order_id', $order->id)
                 ->where('status', '!=', 'cancelado')
                 ->get()
                 ->keyBy(fn($d) => $d->product_id . '-' . $d->variant_id);
-
-            /*
-        |------------------------------------------------------------------
-        | 3️⃣ PROCESAR ITEMS DEL CARRITO
-        |------------------------------------------------------------------
-        */
             foreach ($data['items'] as $item) {
-
                 $key = $item['producto_id'] . '-' . $item['variante_id'];
-
-                /*
-            |--------------------------------------------------
-            | 🔁 DETALLE EXISTENTE
-            |--------------------------------------------------
-            */
                 if ($detallesExistentes->has($key)) {
-
                     $detalle = $detallesExistentes[$key];
-
                     $cantidadAnterior = (int) $detalle->cantidad;
                     $cantidadNueva    = (int) $item['cantidad'];
                     $diferencia       = $cantidadNueva - $cantidadAnterior;
-
-                    // ✅ REEMPLAZAR NOTA (NO MERGE)
                     $detalle->update([
                         'cantidad' => $cantidadNueva,
                         'price'    => $item['precio'],
                         'cortesia' => (bool) ($item['cortesia'] ?? false),
-                        'notes'    => !empty($item['nota'])
-                            ? trim($item['nota'])
-                            : null,
+                        'notes'    => !empty($item['nota']) ? trim($item['nota']) : null,
                     ]);
-
-                    // 📦 STOCK (solo si aumenta)
                     if ($diferencia > 0) {
-                        WarehouseStock::where('variant_id', $item['variante_id'])
-                            ->decrement('stock_reserva', $diferencia);
+                        WarehouseStock::where('variant_id', $item['variante_id'])->decrement('stock_reserva', $diferencia);
                     }
-
-                    // 🍳 ENVIAR A COCINA SOLO CAMBIOS
                     if ($diferencia > 0 || !empty($item['nota'])) {
                         $itemsParaCocina[] = [
                             'cantidad' => $diferencia > 0 ? $diferencia : 1,
@@ -290,14 +249,7 @@ class PedidoMesa extends Component
                             'nota'     => $item['nota'] ?? '',
                         ];
                     }
-
-                    /*
-            |--------------------------------------------------
-            | 🆕 NUEVO PRODUCTO
-            |--------------------------------------------------
-            */
                 } else {
-
                     $detalle = OrderDetail::create([
                         'order_id'            => $order->id,
                         'restaurant_id'       => $order->restaurant_id,
@@ -310,10 +262,7 @@ class PedidoMesa extends Component
                         'cortesia'           => (bool) ($item['cortesia'] ?? false),
                         'fecha_envio_cocina'  => now(),
                     ]);
-
-                    WarehouseStock::where('variant_id', $item['variante_id'])
-                        ->decrement('stock_reserva', $item['cantidad']);
-
+                    WarehouseStock::where('variant_id', $item['variante_id'])->decrement('stock_reserva', $item['cantidad']);
                     $itemsParaCocina[] = [
                         'cantidad' => $item['cantidad'],
                         'producto' => $detalle->product->name,
@@ -321,27 +270,14 @@ class PedidoMesa extends Component
                     ];
                 }
             }
-
-            /*
-        |------------------------------------------------------------------
-        | 4️⃣ CANCELAR DETALLES QUITADOS DEL CARRITO
-        |------------------------------------------------------------------
-        */
-            $keysActuales = collect($data['items'])
-                ->map(fn($i) => $i['producto_id'] . '-' . $i['variante_id'])
-                ->toArray();
+            $keysActuales = collect($data['items'])->map(fn($i) => $i['producto_id'] . '-' . $i['variante_id'])->toArray();
 
             foreach ($detallesExistentes as $key => $detalleEliminado) {
-
                 if (!in_array($key, $keysActuales)) {
-
-                    WarehouseStock::where('variant_id', $detalleEliminado->variant_id)
-                        ->increment('stock_reserva', $detalleEliminado->cantidad);
-
+                    WarehouseStock::where('variant_id', $detalleEliminado->variant_id)->increment('stock_reserva', $detalleEliminado->cantidad);
                     $detalleEliminado->update([
                         'status' => 'cancelado',
                     ]);
-
                     $itemsParaCocina[] = [
                         'cantidad' => $detalleEliminado->cantidad,
                         'producto' => $detalleEliminado->product->name,
@@ -349,30 +285,14 @@ class PedidoMesa extends Component
                     ];
                 }
             }
-
-            /*
-        |------------------------------------------------------------------
-        | 5️⃣ RECALCULAR TOTALES
-        |------------------------------------------------------------------
-        */
-            $subtotal = OrderDetail::where('order_id', $order->id)
-                ->where('status', '!=', 'cancelado')
-                ->sum(DB::raw('price * cantidad'));
-
-            $igv   = round($subtotal * 0.18, 2);
-            $total = round($subtotal + $igv, 2);
-
+            $total = $data['total'];
+            $subtotal = round($total/1.18, 2);
+            $igv   = round($total - $subtotal, 2);
             $order->update([
                 'subtotal' => $subtotal,
                 'igv'      => $igv,
                 'total'    => $total,
             ]);
-
-            /*
-        |------------------------------------------------------------------
-        | 6️⃣ ORDEN PARA COCINA
-        |------------------------------------------------------------------
-        */
             $ordenCocina = [
                 'pedido' => $order->code,
                 'mesa'   => $order->table->name ?? $this->mesa,
@@ -381,10 +301,7 @@ class PedidoMesa extends Component
                 'tipo'   => $esPedidoNuevo ? 'NUEVO PEDIDO' : 'ACTUALIZACIÓN',
                 'items'  => $itemsParaCocina,
             ];
-
-            // logger($ordenCocina);
         });
-
         $this->dispatch('pedido-guardado');
     }
 

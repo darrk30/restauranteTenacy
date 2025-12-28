@@ -17,6 +17,7 @@ return new class extends Migration
             $table->foreignId('variant_id')->nullable()->constrained()->nullOnDelete();
             $table->decimal('price', 10, 2);
             $table->integer('cantidad')->default(1);
+            $table->decimal('subTotal', 10, 2);
             $table->string('status')->default('pendiente');
             $table->string('notes')->nullable();
             $table->boolean('cortesia')->default(false); 

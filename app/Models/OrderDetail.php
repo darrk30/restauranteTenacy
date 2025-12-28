@@ -18,6 +18,7 @@ class OrderDetail extends Model
         'product_name',
         'price',
         'cantidad',
+        'subTotal',
         'cortesia',
         'status',
         'notes',
