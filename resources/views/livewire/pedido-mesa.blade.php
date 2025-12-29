@@ -2,9 +2,13 @@
 showSuccess = false;
 pedidoCancelado = false;
 detalleCancelado = false;
-$wire.on('pedido-guardado', () => {
+navegarLuego: false;
+orderId: null;
+$wire.on('pedido-guardado', (e) => {
     loading = false;
     showSuccess = true;
+    navegarLuego = e.esNuevo;
+    orderId = e.orderId;
 });
 $wire.on('pedido-anulado', () => {
     loading = false;
@@ -95,14 +99,15 @@ $wire.on('detalle-cancelado', () => {
 
                 @if ($pedido)
                     <span class="pedido">
-                        Pedido #<span>{{$pedidocompleto->code}}</span>
+                        Pedido #<span>{{ $pedidocompleto->code }}</span>
                     </span>
                 @endif
             </div>
 
             <!-- Acciones -->
             <div class="order-actions">
-                <button class="btn-remove btn-remove-pedido" title="Anular pedido" x-show="pedidoId" x-on:click="abrirModalAnular">
+                <button class="btn-remove btn-remove-pedido" title="Anular pedido" x-show="pedidoId"
+                    x-on:click="abrirModalAnular">
                     <x-heroicon-o-trash class="w-5 h-5" />
                 </button>
 
@@ -224,15 +229,11 @@ $wire.on('detalle-cancelado', () => {
 
     <!-- ================= MODAL PARA AGREGAR/EDITAR VARIANTE ================= -->
     <template x-if="modal">
-            <div class="modal-backdrop moda-variats modal-enter"
-         x-init="
-            requestAnimationFrame(() => {
-                $el.classList.add('modal-enter-active')
-            })
-         "
-         @click.self="cerrarModal()">
+        <div class="modal-backdrop moda-variats modal-enter" x-init="requestAnimationFrame(() => {
+            $el.classList.add('modal-enter-active')
+        })" @click.self="cerrarModal()">
 
-        <div class="modal modal-scale">
+            <div class="modal modal-scale">
                 <div class="modal-header" x-text="productoActual.name"></div>
                 <template x-if="imagenVariante">
                     <div class="variant-image-box">
@@ -354,12 +355,24 @@ $wire.on('detalle-cancelado', () => {
 
             <button type="button" class="success-btn"
                 @click="
-                showSuccess = false;
-                window.location.href =
-                    '/restaurants/{{ $restaurantSlug }}/point-of-sale';
-            ">
+        showSuccess = false;
+
+        if (orderId) {
+            window.open(
+                `/restaurants/{{ $restaurantSlug }}/comanda/${orderId}`,
+                '_blank'
+            );
+        }
+
+        if (navegarLuego && orderId) {
+            Livewire.navigate(
+                `/restaurants/{{ $restaurantSlug }}/orden-mesa/{{ $mesa }}/${orderId}`
+            );
+        }
+    ">
                 Aceptar
             </button>
+
 
         </div>
     </div>
@@ -403,8 +416,6 @@ $wire.on('detalle-cancelado', () => {
             <button @click="detalleCancelado = false" class="success-btn">
                 Aceptar
             </button>
-
-
         </div>
     </div>
 </div>

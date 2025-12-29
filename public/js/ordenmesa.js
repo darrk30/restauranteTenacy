@@ -3,6 +3,8 @@ function pedidoMesa(productosIniciales, mesaId, pedidoId = null, carritoInicial 
         mesaId: mesaId,
         pedidoId: pedidoId,
         loading: false,
+        navegarLuego: false,
+        orderId: null,
         showSuccess: false,
         pedidoCancelado: false,
         detalleCancelado: false,

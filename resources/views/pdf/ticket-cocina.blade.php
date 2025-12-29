@@ -2,99 +2,100 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Ticket Cocina</title>
+
     <style>
+        @page {
+            margin: 4px;
+        }
+
         body {
-            font-family: 'Courier New', Courier, monospace; /* Fuente tipo ticket */
-            font-size: 12px;
+            font-family: monospace;
+            font-size: 11px;
             margin: 0;
-            padding: 5px;
+            padding: 0;
+            line-height: 1.25;
         }
-        .header {
+
+        .center {
             text-align: center;
-            border-bottom: 2px dashed #000;
-            padding-bottom: 10px;
-            margin-bottom: 10px;
         }
-        .title {
-            font-size: 16px;
+
+        .bold {
             font-weight: bold;
-            text-transform: uppercase;
         }
-        .info {
-            margin-bottom: 5px;
+
+        .line {
+            border-bottom: 1px dashed #000;
+            margin: 6px 0;
         }
-        .mesa {
-            font-size: 18px;
-            font-weight: bold;
-            display: block;
-            margin: 5px 0;
-        }
+
         table {
             width: 100%;
             border-collapse: collapse;
         }
-        th {
-            text-align: left;
-            border-bottom: 1px solid #000;
-        }
+
         td {
-            padding: 5px 0;
+            padding: 2px 0;
             vertical-align: top;
         }
-        .qty {
-            font-weight: bold;
-            font-size: 14px;
-            width: 30px;
-        }
-        .nota {
-            display: block;
-            font-weight: bold;
-            font-style: italic;
-            margin-top: 2px;
-        }
-        .footer {
-            margin-top: 20px;
-            text-align: center;
-            border-top: 1px solid #000;
-            padding-top: 5px;
+
+        small {
             font-size: 10px;
+        }
+
+        /* 🚫 Evitar saltos de página */
+        tr, td {
+            page-break-inside: avoid;
         }
     </style>
 </head>
+
 <body>
-    <div class="header">
-        <div class="title">{{ $orden['tipo'] }}</div>
-        <span class="mesa">MESA: {{ $orden['mesa'] }}</span>
-        <div class="info">Mozo: {{ $orden['mozo'] }}</div>
-        <div class="info">Fecha: {{ $orden['fecha'] }}</div>
-        <div class="info">Pedido: #{{ $orden['pedido'] }}</div>
+
+    <div class="center bold">
+        COMANDA
     </div>
+
+    <div class="center">
+        Mesa {{ $order->table->name ?? $order->table_id }}<br>
+        Pedido {{ $order->code }}<br>
+        {{ now('America/Lima')->format('d/m/Y H:i') }}
+    </div>
+
+    <div class="line"></div>
 
     <table>
-        <thead>
+        @foreach ($order->details as $item)
             <tr>
-                <th style="width: 15%">Cant</th>
-                <th>Producto / Notas</th>
+                <td width="18%">
+                    x{{ $item->cantidad }}
+                </td>
+                <td width="82%">
+                    {{ $item->product->name }}
+
+                    @if ($item->variant && $item->variant->values->isNotEmpty())
+                        <br>
+                        <small>
+                            {{ $item->variant->values
+                                ->map(fn($v) => $v->attribute->name . ': ' . $v->name)
+                                ->implode(' / ') }}
+                        </small>
+                    @endif
+
+                    @if ($item->notes)
+                        <br>
+                        <small><strong>NOTA:</strong> {{ $item->notes }}</small>
+                    @endif
+                </td>
             </tr>
-        </thead>
-        <tbody>
-            @foreach($orden['items'] as $item)
-                <tr>
-                    <td class="qty">{{ $item['cantidad'] }}</td>
-                    <td>
-                        {{ $item['producto'] }}
-                        @if(!empty($item['nota']))
-                            <span class="nota">⚠️ {{ $item['nota'] }}</span>
-                        @endif
-                    </td>
-                </tr>
-            @endforeach
-        </tbody>
+        @endforeach
     </table>
 
-    <div class="footer">
-        --- FIN DEL TICKET ---
+    <div class="line"></div>
+
+    <div class="center">
+        {{ $order->user->name ?? '' }}
     </div>
+
 </body>
 </html>

@@ -31,6 +31,7 @@ class RestaurantsPanelProvider extends PanelProvider
             ->brandLogoHeight('55px')
             ->favicon('/img/restaurant-favicon.ico')
             ->path('restaurants')
+            // ->profile()
             ->login()
             // ->colors([
             //     'danger' => '#ED3F27',
