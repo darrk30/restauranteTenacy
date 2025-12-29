@@ -8,7 +8,5 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get(
-    '/restaurants/{tenant}/comanda/{order}',
-    [ImprimirController::class, 'show']
-)->name('comanda.pdf');
+Route::get('/restaurants/{tenant}/imprimir-ticket-generico', [ImprimirController::class, 'imprimirTicket'])
+    ->name('comanda.generica');

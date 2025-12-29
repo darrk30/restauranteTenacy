@@ -141,10 +141,9 @@ class PedidoMesa extends Component
                 $esPedidoNuevo = true;
                 $empresaId = filament()->getTenant()->id;
 
-                // Generación de código seguro
                 $ultimoNumero = Order::where('restaurant_id', $empresaId)
                     ->selectRaw("MAX(CAST(SUBSTRING_INDEX(code, '-', -1) AS UNSIGNED)) as max_num")
-                    ->lockForUpdate() // Bloqueo para evitar duplicados en concurrencia alta
+                    ->lockForUpdate()
                     ->value('max_num');
 
                 $codigoPedido = 'PED-' . str_pad(($ultimoNumero ?? 0) + 1, 6, '0', STR_PAD_LEFT);
@@ -155,7 +154,7 @@ class PedidoMesa extends Component
                     'status'       => statusPedido::Pendiente->value,
                     'fecha_pedido' => now('America/Lima'),
                     'user_id'      => Auth::id(),
-                    'subtotal'     => 0, // Se calculará al final
+                    'subtotal'     => 0,
                     'igv'          => 0,
                     'total'        => 0,
                 ]);
@@ -163,74 +162,76 @@ class PedidoMesa extends Component
                 Table::where('id', $this->mesa)->update(['estado_mesa' => 'ocupada', 'order_id' => $order->id]);
             }
 
-            $itemsParaCocina = [];
-            $totalCalculadoDelPedido = 0; // Acumulador seguro en backend
+            $itemsParaCocina = []; // Aquí guardaremos todo lo que cambió
+            $totalCalculadoDelPedido = 0;
 
-            // 2. OBTENER DETALLES EXISTENTES PARA COMPARAR
+            // 2. OBTENER DETALLES EXISTENTES
             $detallesExistentes = OrderDetail::where('order_id', $order->id)
                 ->where('status', '!=', 'cancelado')
                 ->get()
                 ->keyBy(fn($d) => $d->product_id . '-' . $d->variant_id . '-' . ($d->cortesia ? '1' : '0'));
 
-            // 3. PROCESAR ITEMS DEL CARRITO
+            // 3. PROCESAR ITEMS (AGREGAR O ACTUALIZAR)
             foreach ($data['items'] as $item) {
-                // --- SEGURIDAD: BUSCAR PRECIO REAL EN BD ---
                 $productoDB = Product::find($item['producto_id']);
-                if (!$productoDB) continue; // Si producto no existe, saltar
+                if (!$productoDB) continue;
 
                 $precioReal = $productoDB->price;
-
                 if (!empty($item['variante_id'])) {
                     $varianteDB = Variant::find($item['variante_id']);
-                    if ($varianteDB) {
-                        $precioReal += $varianteDB->extra_price;
-                    }
+                    if ($varianteDB) $precioReal += $varianteDB->extra_price;
                 }
 
-                // Verificar cortesía y asignar precio final
                 $esCortesia = (bool) ($item['cortesia'] ?? false);
                 $precioFinal = $esCortesia ? 0 : $precioReal;
                 $cantidad = (int) $item['cantidad'];
                 $subtotalItem = $precioFinal * $cantidad;
-
-                // Sumar al total global del pedido
                 $totalCalculadoDelPedido += $subtotalItem;
 
-                // --- LÓGICA DE ACTUALIZACIÓN / CREACIÓN ---
                 $key = $item['producto_id'] . '-' . $item['variante_id'] . '-' . ($esCortesia ? '1' : '0');
                 $nota = !empty($item['nota']) ? trim($item['nota']) : null;
 
                 if ($detallesExistentes->has($key)) {
-                    // == ACTUALIZAR ITEM EXISTENTE ==
+                    // == ACTUALIZAR ==
                     $detalle = $detallesExistentes[$key];
                     $diferencia = $cantidad - $detalle->cantidad;
 
                     if ($diferencia != 0) {
-                        // Actualizar Stock solo por la diferencia
                         $this->actualizarStock($item['variante_id'], $diferencia);
-
                         $detalle->update([
                             'cantidad' => $cantidad,
-                            'price'    => $precioFinal, // Precio seguro
+                            'price'    => $precioFinal,
                             'subTotal' => $subtotalItem,
                             'notes'    => $nota
                         ]);
                     } elseif ($detalle->notes !== $nota) {
-                        // Solo actualizar nota si cambió
                         $detalle->update(['notes' => $nota]);
                     }
 
-                    // Preparar comanda cocina (solo si aumentó cantidad o hay nota nueva)
                     if ($diferencia > 0) {
-                        $itemsParaCocina[] = ['cantidad' => $diferencia, 'producto' => $productoDB->name, 'nota' => $nota];
+                        // AGREGAMOS ESTADO 'NUEVO' A LA LISTA DE IMPRESIÓN
+                        $itemsParaCocina[] = [
+                            'cantidad' => $diferencia,
+                            'producto' => $productoDB->name,
+                            'nota'     => $nota,
+                            'tipo_impresion' => 'nuevo' // <--- IMPORTANTE
+                        ];
+                    } elseif ($diferencia < 0) {
+                        // CASO: SE QUITARON ITEMS (Ej: de 2 a 1 => imprimo 1 cancelado)
+                        // Usamos abs() para mostrar la cantidad positiva en el ticket (1, no -1)
+                        $itemsParaCocina[] = [
+                            'cantidad' => abs($diferencia),
+                            'producto' => $productoDB->name,
+                            'nota'     => '',
+                            'tipo_impresion' => 'cancelado' // Saldrá tachado
+                        ];
                     }
                 } else {
-                    // == CREAR NUEVO ITEM ==
+                    // == CREAR ==
                     $this->actualizarStock($item['variante_id'], $cantidad);
-
                     OrderDetail::create([
                         'order_id'           => $order->id,
-                        'restaurant_id'      => $order->restaurant_id, // Asegurar que se copie el tenant
+                        'restaurant_id'      => $order->restaurant_id,
                         'product_id'         => $item['producto_id'],
                         'variant_id'         => $item['variante_id'],
                         'price'              => $precioFinal,
@@ -242,29 +243,35 @@ class PedidoMesa extends Component
                         'fecha_envio_cocina' => now(),
                     ]);
 
-                    $itemsParaCocina[] = ['cantidad' => $cantidad, 'producto' => $productoDB->name, 'nota' => $nota];
-                }
-            }
-
-            // 4. ELIMINAR ITEMS QUE YA NO ESTÁN EN EL CARRITO
-            $keysActuales = collect($data['items'])->map(fn($i) => $i['producto_id'] . '-' . $i['variante_id'] . '-' . (($i['cortesia'] ?? false) ? '1' : '0'))->toArray();
-
-            foreach ($detallesExistentes as $key => $detalleEliminado) {
-                if (!in_array($key, $keysActuales)) {
-                    // Devolver stock
-                    $this->actualizarStock($detalleEliminado->variant_id, - ($detalleEliminado->cantidad)); // Negativo para incrementar stock
-
-                    $detalleEliminado->update(['status' => 'cancelado']);
-
+                    // AGREGAMOS ESTADO 'NUEVO'
                     $itemsParaCocina[] = [
-                        'cantidad' => $detalleEliminado->cantidad,
-                        'producto' => $detalleEliminado->product->name,
-                        'nota'     => 'ELIMINADO'
+                        'cantidad' => $cantidad,
+                        'producto' => $productoDB->name,
+                        'nota'     => $nota,
+                        'tipo_impresion' => 'nuevo' // <--- IMPORTANTE
                     ];
                 }
             }
 
-            // 5. ACTUALIZAR TOTALES DEL PEDIDO (Con cálculo backend)
+            // 4. ELIMINAR ITEMS
+            $keysActuales = collect($data['items'])->map(fn($i) => $i['producto_id'] . '-' . $i['variante_id'] . '-' . (($i['cortesia'] ?? false) ? '1' : '0'))->toArray();
+
+            foreach ($detallesExistentes as $key => $detalleEliminado) {
+                if (!in_array($key, $keysActuales)) {
+                    $this->actualizarStock($detalleEliminado->variant_id, - ($detalleEliminado->cantidad));
+                    $detalleEliminado->update(['status' => 'cancelado']);
+
+                    // AGREGAMOS ESTADO 'CANCELADO'
+                    $itemsParaCocina[] = [
+                        'cantidad' => $detalleEliminado->cantidad,
+                        'producto' => $detalleEliminado->product->name,
+                        'nota'     => '',
+                        'tipo_impresion' => 'cancelado' // <--- IMPORTANTE: ESTO DIFERENCIA EN EL PDF
+                    ];
+                }
+            }
+
+            // 5. ACTUALIZAR TOTALES
             $subtotalOrder = round($totalCalculadoDelPedido / 1.18, 2);
             $igvOrder = round($totalCalculadoDelPedido - $subtotalOrder, 2);
 
@@ -274,7 +281,21 @@ class PedidoMesa extends Component
                 'total'    => $totalCalculadoDelPedido
             ]);
 
-            // Aquí iría tu lógica de impresión ($ordenCocina) si la usas
+            // 6. IMPRESIÓN INTELIGENTE
+            if (count($itemsParaCocina) > 0) {
+                $itemsPDF = [];
+                foreach ($itemsParaCocina as $item) {
+                    $itemsPDF[] = [
+                        'cantidad' => $item['cantidad'],
+                        'producto' => $item['producto'],
+                        'nota'     => $item['nota'],
+                        'estado'   => $item['tipo_impresion']
+                    ];
+                }
+
+                $titulo = $esPedidoNuevo ? 'NUEVO PEDIDO' : 'PEDIDO ACTUALIZADO';
+                $this->enviarAImpresion($titulo, $itemsPDF);
+            }
 
             DB::commit();
         } catch (\Exception $e) {
@@ -301,16 +322,31 @@ class PedidoMesa extends Component
     {
         DB::transaction(function () use ($pedidoId) {
             $order = Order::with('details')->findOrFail($pedidoId);
+            $itemsPDF = [];
+
             foreach ($order->details as $detail) {
+                // Solo devolvemos stock si no estaba cancelado ya
                 if ($detail->status !== statusPedido::Cancelado->value) {
                     WarehouseStock::where('variant_id', $detail->variant_id)->increment('stock_reserva', $detail->cantidad);
+
+                    // Agregamos a la lista de impresión
+                    $itemsPDF[] = [
+                        'cantidad' => $detail->cantidad,
+                        'producto' => $detail->product->name,
+                        'nota'     => '',
+                        'estado'   => 'cancelado' // CSS class: tachado
+                    ];
                 }
             }
+
             $order->details()->where('status', '!=', statusPedido::Cancelado)->update(['status' => statusPedido::Cancelado]);
             $order->update(['status' => statusPedido::Cancelado]);
+
             if ($order->table_id) {
                 Table::where('id', $order->table_id)->update(['estado_mesa' => 'libre', 'order_id' => null]);
             }
+
+            $this->enviarAImpresion('PEDIDO ANULADO', $itemsPDF);
         });
 
         $this->dispatch('pedido-anulado');
@@ -318,13 +354,52 @@ class PedidoMesa extends Component
 
     public function cancelarDetalle($detailId)
     {
-        $detail = OrderDetail::find($detailId);
+        $detail = OrderDetail::with('product')->find($detailId);
         if (!$detail || $detail->status === 'cancelado') return;
+
         DB::transaction(function () use ($detail) {
             WarehouseStock::where('variant_id', $detail->variant_id)->increment('stock_reserva', $detail->cantidad);
             $detail->update(['status' => 'cancelado']);
+
+            $itemsPDF = [[
+                'cantidad' => $detail->cantidad,
+                'producto' => $detail->product->name,
+                'nota'     => '',
+                'estado'   => 'cancelado'
+            ]];
+
+            $this->enviarAImpresion('ITEM ELIMINADO', $itemsPDF);
         });
+
         $this->dispatch('detalle-cancelado');
+    }
+
+    // ==========================================
+    //  MÉTODO CORREGIDO: ENVIAR A IMPRESIÓN
+    // ==========================================
+    private function enviarAImpresion($titulo, $items)
+    {
+        if (count($items) === 0) return;
+
+        // Armamos el paquete visual (Ya no necesitamos ID de orden en URL)
+        $paquete = [
+            'titulo' => $titulo,
+            'items'  => $items,
+            'meta'   => [
+                'mesa'   => 'Mesa ' . $this->mesa,
+                'mozo'   => Auth::user()->name,
+                'fecha'  => now('America/Lima')->format('d/m/Y H:i'),
+                'codigo' => $this->pedidocompleto?->code ?? '---'
+            ]
+        ];
+
+        // Usamos PUT en lugar de FLASH para evitar condiciones de carrera (error 404)
+        session()->put('ticket_data', $paquete);
+
+        // La URL NO lleva items, solo el tenant
+        $this->dispatch('abrir-impresion', url: route('comanda.generica', [
+            'tenant' => $this->restaurantSlug
+        ]));
     }
 
     public function render()

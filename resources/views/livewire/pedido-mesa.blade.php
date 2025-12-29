@@ -27,6 +27,20 @@
             loading = false; 
             detalleCancelado = true; 
         });
+        $wire.on('abrir-impresion', (event) => {
+            const data = event[0] || event;
+            if(data.url) {
+                const w = 350; 
+                const h = 400;
+                const left = (screen.width/2)-(w/2);
+                const top = (screen.height/2)-(h/2);
+                const nombreVentana = 'Ticket_' + Date.now(); 
+                const newWin = window.open(data.url, nombreVentana, 
+                    `toolbar=no, location=no, status=no, menubar=no, scrollbars=yes, resizable=yes, width=${w}, height=${h}, top=${top}, left=${left}`
+                );
+                if (newWin) newWin.focus();
+            }
+        });
     ">
 
     {{-- Incluimos el script de lógica aquí para asegurar que cargue --}}
@@ -275,7 +289,6 @@
             <button type="button" class="success-btn"
                 @click="
                     showSuccess = false;
-                    if (orderId) window.open(`/restaurants/{{ $restaurantSlug }}/comanda/${orderId}`, '_blank');
                     if (navegarLuego && orderId) Livewire.navigate(`/restaurants/{{ $restaurantSlug }}/orden-mesa/{{ $mesa }}/${orderId}`);
                 ">
                 Aceptar

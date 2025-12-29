@@ -2,100 +2,72 @@
 <html>
 <head>
     <meta charset="utf-8">
-
     <style>
-        @page {
-            margin: 4px;
-        }
-
+        @page { margin: 0px; }
         body {
-            font-family: monospace;
+            font-family: 'Courier New', monospace;
             font-size: 11px;
-            margin: 0;
-            padding: 0;
-            line-height: 1.25;
+            margin: 5px;
+            text-transform: uppercase;
         }
-
-        .center {
-            text-align: center;
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .header-titulo { 
+            font-size: 14px; font-weight: bold; border: 2px solid #000; padding: 5px; margin-bottom: 5px; 
         }
-
-        .bold {
-            font-weight: bold;
-        }
-
-        .line {
-            border-bottom: 1px dashed #000;
-            margin: 6px 0;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        td {
-            padding: 2px 0;
-            vertical-align: top;
-        }
-
-        small {
-            font-size: 10px;
-        }
-
-        /* 🚫 Evitar saltos de página */
-        tr, td {
-            page-break-inside: avoid;
-        }
+        .line { border-bottom: 1px dashed #000; margin: 5px 0; }
+        
+        /* ESTADOS */
+        .cancelado { text-decoration: line-through; }
+        .badge-cancel { background: #000; color: #fff; font-size: 9px; padding: 1px 2px; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        td { padding: 3px 0; vertical-align: top; }
     </style>
 </head>
-
 <body>
 
-    <div class="center bold">
-        COMANDA
+    <div class="center header-titulo">
+        {{ $titulo }}
     </div>
 
     <div class="center">
-        Mesa {{ $order->table->name ?? $order->table_id }}<br>
-        Pedido {{ $order->code }}<br>
-        {{ now('America/Lima')->format('d/m/Y H:i') }}
+        <span style="font-size: 16px; font-weight: bold;">{{ $meta['mesa'] }}</span><br>
+        Mozo: {{ $meta['mozo'] }}<br>
+        Ref: {{ $meta['codigo'] }}<br>
+        {{ $meta['fecha'] }}
     </div>
 
     <div class="line"></div>
 
     <table>
-        @foreach ($order->details as $item)
+        <thead>
             <tr>
-                <td width="18%">
-                    x{{ $item->cantidad }}
-                </td>
-                <td width="82%">
-                    {{ $item->product->name }}
-
-                    @if ($item->variant && $item->variant->values->isNotEmpty())
-                        <br>
-                        <small>
-                            {{ $item->variant->values
-                                ->map(fn($v) => $v->attribute->name . ': ' . $v->name)
-                                ->implode(' / ') }}
-                        </small>
-                    @endif
-
-                    @if ($item->notes)
-                        <br>
-                        <small><strong>NOTA:</strong> {{ $item->notes }}</small>
-                    @endif
-                </td>
+                <th width="15%" align="center">Cant</th>
+                <th width="85%" align="left">Producto</th>
             </tr>
-        @endforeach
+        </thead>
+        <tbody>
+            @foreach ($items as $item)
+                <tr>
+                    <td align="center" style="font-size: 13px; font-weight: bold;">
+                        {{ $item['cantidad'] }}
+                    </td>
+                    <td>
+                        <span class="{{ $item['estado'] === 'cancelado' ? 'cancelado' : '' }}">
+                            {{ $item['producto'] }}
+                        </span>
+
+                        @if (!empty($item['nota']))
+                            <br><small style="font-weight:bold;">⚠️ {{ $item['nota'] }}</small>
+                        @endif
+                    </td>
+                </tr>
+                <tr><td colspan="2" style="border-bottom: 1px dotted #ccc;"></td></tr>
+            @endforeach
+        </tbody>
     </table>
 
     <div class="line"></div>
-
-    <div class="center">
-        {{ $order->user->name ?? '' }}
-    </div>
-
 </body>
 </html>
