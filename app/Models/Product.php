@@ -59,8 +59,12 @@ class Product extends Model
     public function attributes()
     {
         return $this->belongsToMany(Attribute::class, 'attribute_product')
+            ->using(AttributeProduct::class) // <--- AGREGA ESTA LÍNEA
             ->withPivot('values')
             ->withTimestamps();
+        // return $this->belongsToMany(Attribute::class, 'attribute_product')
+        //     ->withPivot('values')
+        //     ->withTimestamps();
     }
 
     public function promotionproducts()
@@ -96,6 +100,30 @@ class Product extends Model
     public function orderDetails()
     {
         return $this->hasMany(OrderDetail::class);
+    }
+
+    // SCOPE 1: Lógica del Buscador
+    public function scopeBuscar(Builder $query, ?string $term)
+    {
+        if ($term) {
+            return $query->where('name', 'like', '%' . $term . '%');
+        }
+    }
+
+    // SCOPE 2: Lógica de Categoría (Ya que estamos, limpiamos esto también)
+    public function scopePorCategoria(Builder $query, ?int $categoriaId)
+    {
+        if ($categoriaId) {
+            return $query->whereHas('categories', function ($q) use ($categoriaId) {
+                $q->where('categories.id', $categoriaId);
+            });
+        }
+    }
+    
+    // SCOPE 3: Status Activo (Opcional, para limpiar más)
+    public function scopeActivos(Builder $query)
+    {
+        return $query->where('status', StatusProducto::Activo);
     }
 
     protected static function booted(): void

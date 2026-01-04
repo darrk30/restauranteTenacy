@@ -56,7 +56,7 @@ class EditProduct extends EditRecord
         }
 
         $data['attribute_values'] = $product->attributes->map(function ($attr) {
-            $decoded = json_decode($attr->pivot->values ?? '[]', true);
+            $decoded = $attr->pivot->values ?? '[]';
 
             return [
                 'attribute_id' => $attr->id,
