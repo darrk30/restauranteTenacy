@@ -29,8 +29,9 @@
                     @php
                         // Calcular stock visible restando lo que hay en el carrito
                         $stockBase = $this->stockReservaVariante;
-                        $enCarrito = collect($this->carrito)->where('variant_id', $variantId)->sum('quantity');
-                        $stockModalVisible = $stockBase - $enCarrito;
+                        // $enCarrito = collect($this->carrito)->where('variant_id', $variantId)->sum('quantity');
+                        // $stockModalVisible = $stockBase - $enCarrito;
+                        $stockModalVisible = $stockBase;
                     @endphp
 
                     <div class="flex flex-col items-end text-xs font-bold text-white drop-shadow-md">
@@ -68,18 +69,9 @@
             <div class="attributes-wrapper">
                 @foreach ($product->attributes as $attribute)
                     @php
-                        // === CORRECCIÓN CRÍTICA PARA EL ERROR count() ===
-                        // 1. Obtener valor crudo
+                        // Decodificar JSON seguro
                         $rawValues = $attribute->pivot->values;
-
-                        // 2. Decodificar JSON a Array de forma segura
-                        if (is_string($rawValues)) {
-                            $valores = json_decode($rawValues, true); // true = Array asociativo
-                        } elseif (is_array($rawValues)) {
-                            $valores = $rawValues;
-                        } else {
-                            $valores = [];
-                        }
+                        $valores = is_string($rawValues) ? json_decode($rawValues, true) : $rawValues ?? [];
                     @endphp
 
                     @if (is_array($valores) && count($valores) > 0)
@@ -88,45 +80,24 @@
 
                             <div class="variants-grid">
                                 @php
-                                    // PASO 1: Calcular el precio MÍNIMO posible para esta fila de atributos
-                                    // (Manteniendo las otras selecciones fijas)
-                                    $minRowPrice = 999999;
-
-                                    // Pre-calculamos los precios simulados de todas las opciones de esta fila
-                                    $simulatedPrices = [];
-
-                                    foreach ($valores as $vInfo) {
-                                        $vIdTest = is_array($vInfo) ? $vInfo['id'] : $vInfo->id;
-
-                                        // Simulamos selección
-                                        $simulacion = $this->selectedAttributes;
-                                        $simulacion[$attribute->id] = $vIdTest;
-
-                                        // Buscamos precio extra de esta simulación
-                                        $varSim = $product->variants->first(function ($v) use ($simulacion) {
-                                            $vIds = $v->values->pluck('id')->toArray();
-                                            return count(array_intersect($simulacion, $vIds)) === count($simulacion);
-                                        });
-
-                                        $price = $varSim ? $varSim->extra_price : 0;
-                                        $simulatedPrices[$vIdTest] = $price;
-
-                                        if ($price < $minRowPrice) {
-                                            $minRowPrice = $price;
-                                        }
-                                    }
+                                    // 1. Encontrar el precio "extra" mínimo de este grupo para hacer la comparación
+                                    // (Normalmente es 0, pero por si acaso)
+                                    $minExtraInRow = collect($valores)->min('extra') ?? 0;
                                 @endphp
 
                                 @foreach ($valores as $valor)
                                     @php
+                                        // Manejo seguro de objeto/array
                                         $valId = is_array($valor) ? $valor['id'] : $valor->id;
                                         $valName = is_array($valor) ? $valor['name'] : $valor->name;
+
+                                        // AQUÍ LEEMOS EL PRECIO DEL JSON DIRECTAMENTE
+                                        $valExtra = is_array($valor) ? $valor['extra'] ?? 0 : $valor->extra ?? 0;
+
                                         $isSelected = ($this->selectedAttributes[$attribute->id] ?? null) == $valId;
 
-                                        // PASO 2: Calcular sobrecosto respecto al más barato de la fila
-                                        // Esto nos dice "cuánto más caro es esto comparado con la opción base"
-                                        $thisOptionPrice = $simulatedPrices[$valId] ?? 0;
-                                        $costoExtraVisible = $thisOptionPrice - $minRowPrice;
+                                        // Calculamos la diferencia visual para el badge
+                                        $costoExtraVisible = $valExtra - $minExtraInRow;
                                     @endphp
 
                                     <button type="button"
@@ -135,10 +106,10 @@
 
                                         <span class="variant-name">{{ $valName }}</span>
 
-                                        {{-- BADGE: Muestra el costo extra relativo a la base --}}
-                                        @if ($costoExtraVisible > 0)
+                                        {{-- BADGE: Muestra el costo extra del JSON --}}
+                                        @if ($valExtra > 0)
                                             <span class="badge-price">
-                                                + S/ {{ number_format($costoExtraVisible, 2) }}
+                                                + S/ {{ number_format($valExtra, 2) }}
                                             </span>
                                         @endif
                                     </button>
@@ -147,15 +118,6 @@
                         </div>
                     @endif
                 @endforeach
-            </div>
-        @else
-            {{-- Mensaje para productos simples --}}
-            <div class="p-3 bg-blue-50 text-blue-700 rounded-lg text-sm border border-blue-100 flex items-center gap-2">
-                <svg style="width:20px;height:20px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <span>Producto estándar (variante única).</span>
             </div>
         @endif
 

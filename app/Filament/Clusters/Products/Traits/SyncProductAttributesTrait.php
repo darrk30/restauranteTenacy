@@ -12,14 +12,35 @@ trait SyncProductAttributesTrait
         $allValueIds = collect($attributeValues)->pluck('values')->flatten()->unique()->toArray();
         $values = Value::whereIn('id', $allValueIds)->get(['id', 'name', 'value'])->keyBy('id');
 
-        $syncData = collect($attributeValues)->mapWithKeys(function ($item) use ($values) {
-            $selectedValues = collect($item['values'] ?? [])
-                ->map(fn($id) => $values->get($id))
-                ->filter()
-                ->values()
-                ->toArray();
+        // $syncData = collect($attributeValues)->mapWithKeys(function ($item) use ($values) {
+        //     $selectedValues = collect($item['values'] ?? [])
+        //         ->map(fn($id) => $values->get($id))
+        //         ->filter()
+        //         ->values()
+        //         ->toArray();
 
-            return [$item['attribute_id'] => ['values' => json_encode($selectedValues)]];
+        //     return [$item['attribute_id'] => ['values' => json_encode($selectedValues)]];
+        // })->toArray();
+        $syncData = collect($attributeValues)->mapWithKeys(function ($item) use ($values) {
+
+            $selectedIds = $item['values'] ?? [];
+            $preciosExtra = $item['extra_prices'] ?? []; // <-- Recibimos los precios del Hidden
+
+            // Construimos el array final combinando ID + Nombre + Precio
+            $finalData = collect($selectedIds)->map(function ($id) use ($values, $preciosExtra) {
+                $valueModel = $values->get($id);
+                if (!$valueModel) return null;
+
+                return [
+                    'id' => $valueModel->id,
+                    'name' => $valueModel->name,
+                    // Aquí fusionamos: si existe precio en el array oculto, lo usamos, si no 0
+                    'extra' => isset($preciosExtra[$id]) ? (float)$preciosExtra[$id] : 0,
+                ];
+            })->filter()->values()->toArray();
+
+            // Guardamos el JSON completo
+            return [$item['attribute_id'] => ['values' => json_encode($finalData)]];
         })->toArray();
 
         $product->attributes()->sync($syncData);

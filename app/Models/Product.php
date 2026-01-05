@@ -7,6 +7,10 @@ use App\Enums\TipoProducto;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 
+/**
+ * @property \Illuminate\Database\Eloquent\Collection $attributes
+ */
+
 class Product extends Model
 {
     protected $fillable = [
