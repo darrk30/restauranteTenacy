@@ -24,12 +24,12 @@
                         @foreach ($floor->tables as $table)
                             @php
                                 $raw = strtolower($table->estado_mesa ?? ($table->status ?? 'libre'));
-                                $key = ['ocupada' => 'occupied', 'pagando' => 'paying', 'libre' => 'free'][$raw] ?? 'free';
+                                $key =
+                                    ['ocupada' => 'occupied', 'pagando' => 'paying', 'libre' => 'free'][$raw] ?? 'free';
                                 $jsData = "{ id: {$table->id}, orderId: " . ($table->order_id ?? 'null') . ", status: '$key' }";
                             @endphp
 
-                            <div class="pdv-card pdv-{{ $key }}"
-                                @click="handleCardClick({{ $jsData }})"
+                            <div class="pdv-card pdv-{{ $key }}" @click="handleCardClick({{ $jsData }})"
                                 @contextmenu.prevent.stop="openMenu($event.clientX, $event.clientY, {{ $jsData }})"
                                 @touchstart="startPress($event, {{ $jsData }})" @touchend="cancelPress()"
                                 @touchmove="cancelPress()">
@@ -109,9 +109,11 @@
             </div>
             <div class="modal-footer">
                 <button @click="$store.modalPdv.open=false">Cancelar</button>
-                <button
-                    @click="window.location = '/restaurants/' + $store.modalPdv.tenant + '/orden-mesa/' + $store.modalPdv.mesaId">
-                    Continuar →
+                <button @click="$wire.iniciarAtencion($store.modalPdv.mesaId, $store.modalPdv.personas)"
+                    wire:loading.attr="disabled">
+
+                    <span wire:loading.remove>Continuar →</span>
+                    <span wire:loading>Cargando...</span>
                 </button>
             </div>
         </div>

@@ -360,7 +360,72 @@ class ProductResource extends Resource
                     })
                     ->createOptionUsing(function (array $data) {
                         return Value::create($data)->id;
-                    }),
+                    })
+                    ->hintAction(
+                        Action::make('configurar_precios')
+                            ->label('Configurar Precios Extra')
+                            ->icon('heroicon-m-currency-dollar')
+                            ->color('primary')
+                            ->modalHeading(fn(Get $get) => 'Precios para ' . Attribute::find($get('attribute_id'))?->name)
+                            ->modalSubmitActionLabel('Guardar Precios')
+                            // ESTO LLENA EL MODAL CON LA DATA
+                            ->fillForm(function (Get $get) {
+                                $selectedIds = $get('values') ?? [];
+                                $currentPrices = $get('extra_prices') ?? [];
+
+                                // Buscamos los nombres de los valores seleccionados
+                                $valuesData = Value::whereIn('id', $selectedIds)->get();
+
+                                // Preparamos los datos para el Repeater del modal
+                                return [
+                                    'precios_repeater' => $valuesData->map(function ($val) use ($currentPrices) {
+                                        return [
+                                            'value_id' => $val->id,
+                                            'name_display' => $val->name, // Solo para mostrar
+                                            'extra' => $currentPrices[$val->id] ?? 0, // Precio actual o 0
+                                        ];
+                                    })->toArray()
+                                ];
+                            })
+                            // EL FORMULARIO DENTRO DEL MODAL
+                            ->form([
+                                Repeater::make('precios_repeater')
+                                    ->hiddenLabel()
+                                    ->addable(false) // No pueden agregar filas, solo editar las existentes
+                                    ->deletable(false)
+                                    ->reorderable(false)
+                                    ->schema([
+                                        // Campo Solo Lectura para saber qué estamos editando
+                                        TextInput::make('name_display')
+                                            ->label('Opción')
+                                            ->disabled()
+                                            ->columnSpan(1),
+
+                                        // ID Oculto para referencia
+                                        Hidden::make('value_id'),
+
+                                        // El Precio Extra
+                                        TextInput::make('extra')
+                                            ->label('Precio Extra (S/)')
+                                            ->numeric()
+                                            ->default(0)
+                                            ->prefix('S/')
+                                            ->required()
+                                            ->columnSpan(1),
+                                    ])
+                                    ->columns(2)
+                            ])
+                            // AL GUARDAR EL MODAL
+                            ->action(function (array $data, Set $set) {
+                                // Convertimos el array del repeater a un formato clave => valor para guardarlo fácil
+                                // Ejemplo salida: [ '105' => 5.00, '106' => 0.00 ]
+                                $preciosMapeados = collect($data['precios_repeater'])
+                                    ->mapWithKeys(fn($item) => [$item['value_id'] => $item['extra']])
+                                    ->toArray();
+
+                                $set('extra_prices', $preciosMapeados);
+                            })
+                    ),
             ])
             ->addActionLabel('Agregar atributo');
     }

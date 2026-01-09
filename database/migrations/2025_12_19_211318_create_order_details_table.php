@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
             $table->foreignId('variant_id')->nullable()->constrained()->nullOnDelete();
+            $table->string('product_name');
             $table->decimal('price', 10, 2);
             $table->integer('cantidad')->default(1);
             $table->decimal('subTotal', 10, 2);
