@@ -25,7 +25,13 @@ class PointOfSale extends Page
         ];
     }
 
-    // 🔥 OCULTA EL TÍTULO
+    public function iniciarAtencion($mesaId, $personas)
+    {
+        session()->flash('personas_iniciales', $personas);
+        $tenantId = Filament::getTenant()->slug; 
+        return redirect()->to("/restaurants/{$tenantId}/orden-mesa/{$mesaId}");
+    }
+
     public function getHeading(): string
     {
         return '';

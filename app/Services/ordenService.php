@@ -31,4 +31,13 @@ class OrdenService
         //dd($productos);
         return $productos;
     }
+
+    public static function obtenerProductoId(int $id) : Product | null
+    {
+        $producto = Product::with(['attributes', 'variants.values', 'variants.stocks'])->find($id);
+        if(!$producto){
+            return null;
+        }
+        return $producto;
+    }
 }

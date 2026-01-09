@@ -2,27 +2,41 @@
 
 namespace App\Filament\Restaurants\Pages;
 
+use App\Enums\statusPedido;
 use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\Product;
+use App\Models\Table;
 use App\Services\OrdenService;
 use App\Models\Variant;
+use Filament\Actions\Action;
+use Filament\Actions\Concerns\InteractsWithActions;
+use Filament\Actions\Contracts\HasActions;
 use Filament\Pages\Page;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Pest\Support\Str;
 
-class OrdenMesa extends Page
+class OrdenMesa extends Page implements HasActions
 {
+    use InteractsWithActions;
     protected static string $view = 'filament.pdv.orden-mesa';
     protected static string $panel = 'restaurants';
+
+    public $subtotal = 0.00;
+    public $igv = 0.00;
+    public $total = 0.00;
+    public $carrito = [];
+    public $hayCambios = false; // Bandera para saber si el botón debe decir "Actualizar"
+    public $itemsEliminados = []; // Para guardar IDs de la BD que debemos borrar
 
     // === PROPIEDADES DE URL ===
     public int $mesa;
     public ?int $pedido = null;
-
+    public $codigoOrden = null;
+    public $personas = 1;
     // === FILTROS ===
     public $categoriaSeleccionada = null;
     public $search = '';
@@ -39,54 +53,45 @@ class OrdenMesa extends Page
     public $notaPedido = '';
 
     // Lógica de Selección
-    public $selectedAttributes = []; // [ attribute_id => value_id ]
+    public $selectedAttributes = [];
     public $precioCalculado = 0.00;
-
-    // === VARIABLES DEL CARRITO (SIDEBAR) ===
-    public $carrito = [];
-    public $subtotal = 0.00;
-    public $igv = 0.00;
-    public $total = 0.00;
 
     // === NUEVA PROPIEDAD PARA LA COMANDA ===
     public $mostrarModalComanda = false;
     public ?Order $ordenGenerada = null;
 
-    // === NUEVAS PROPIEDADES PARA EL CONTROL DE CAMBIOS ===
-    public $hayCambios = false; // Bandera para saber si el botón debe decir "Actualizar"
-    public $itemsEliminados = []; // Para guardar IDs de la BD que debemos borrar
     public $stocksProductos = [];
     public $cantidadesOriginalesPorVariante = [];
+    public $tenantSlug;
 
 
     public function mount(int $mesa, ?int $pedido = null)
     {
         $this->mesa = $mesa;
         $this->pedido = $pedido;
-        // === DETECTAR SI VENIMOS DE CREAR UNA ORDEN ===
+        $this->tenantSlug = Filament::getTenant()->slug;
+        if (session()->has('personas_iniciales')) {
+            $this->personas = session('personas_iniciales');
+        }
         if (session()->has('orden_creada_id')) {
             $idOrden = session('orden_creada_id');
             $this->ordenGenerada = Order::with(['details', 'table', 'user'])->find($idOrden);
-
             if ($this->ordenGenerada) {
-                $this->mostrarModalComanda = true; // ¡Esto abre el modal automáticamente!
+                $this->mostrarModalComanda = true;
             }
         }
-        // 2. SI HAY UN PEDIDO EN LA URL -> RECONSTRUIR EL CARRITO
         if ($this->pedido) {
             $ordenExistente = Order::with(['details'])->find($this->pedido);
-
+            if (!$ordenExistente || $ordenExistente->status === statusPedido::Cancelado) {
+                return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
+            }
             if ($ordenExistente) {
-                // Recuperamos totales
+                $this->codigoOrden = $ordenExistente->code;
                 $this->subtotal = $ordenExistente->subtotal;
                 $this->igv = $ordenExistente->igv;
                 $this->total = $ordenExistente->total;
-
                 $this->carrito = $ordenExistente->details->map(function ($detalle) {
-
-                    // AQUI GUARDAMOS LA CANTIDAD ORIGINAL EN MEMORIA
                     $this->cantidadesOriginales[$detalle->id] = $detalle->cantidad;
-
                     return [
                         'item_id'     => $detalle->id,
                         'product_id'  => $detalle->product_id,
@@ -103,32 +108,31 @@ class OrdenMesa extends Page
                 })->toArray();
             }
         }
-
         $this->hayCambios = false;
         $this->itemsEliminados = [];
     }
 
-    // =========================================================
     // NUEVO: PROCESAR LA ORDEN (ORDENAR)
-    // =========================================================
     public function procesarOrden()
     {
-        // 1. Validaciones
         if (empty($this->carrito)) {
-            \Filament\Notifications\Notification::make()->title('El carrito está vacío')->warning()->send();
+            Notification::make()->title('El carrito está vacío')->warning()->send();
             return;
         }
 
-        // 2. Iniciar Transacción (Todo o nada)
         try {
             DB::beginTransaction();
-
-            // A) CREAR CABECERA (ORDER)
+            $restaurantId = Filament::getTenant()->id;
+            $ultimoPedido = Order::where('restaurant_id', $restaurantId)->lockForUpdate()->orderBy('id', 'desc')->first();
+            $numeroSiguiente = 1;
+            if ($ultimoPedido) {
+                $numeroSiguiente = intval($ultimoPedido->code) + 1;
+            }
+            $codigoFinal = str_pad($numeroSiguiente, 8, '0', STR_PAD_LEFT);
             $order = Order::create([
-                // restaurant_id se llena solo por el boot del modelo
                 'table_id'      => $this->mesa,
-                'code'          => 'ORD-' . strtoupper(Str::random(8)), // Genera un código único
-                'status'        => 'pendiente', // O el estado inicial de tu Enum
+                'code'          => $codigoFinal,
+                'status'        => 'pendiente',
                 'subtotal'      => $this->subtotal,
                 'igv'           => $this->igv,
                 'total'         => $this->total,
@@ -140,68 +144,44 @@ class OrdenMesa extends Page
             foreach ($this->carrito as $item) {
                 OrderDetail::create([
                     'order_id'      => $order->id,
-                    // restaurant_id se llena solo
                     'product_id'    => $item['product_id'],
                     'variant_id'    => $item['variant_id'],
                     'product_name'  => $item['name'],
                     'price'         => $item['price'],
                     'cantidad'      => $item['quantity'],
-                    'subTotal'      => $item['total'], // Ojo: Tu modelo usa 'subTotal' (camelCase)
+                    'subTotal'      => $item['total'],
                     'cortesia'      => $item['is_cortesia'] ? 1 : 0,
-                    'status'        => 'pendiente', // Estado inicial del item cocina
+                    'status'        => 'pendiente',
                     'notes'         => $item['notes'],
                     'fecha_envio_cocina' => now(),
                 ]);
-
                 $this->gestionarStock($item['variant_id'], $item['quantity'], 'restar');
-                // OPCIONAL: AQUÍ DEBERÍAS DESCONTAR EL STOCK (SI APLICA)
-                // $this->descontarStock($item); 
             }
-
+            //ACTUALIZAR ESTADO DE LA MESA
+            $mesaModel = Table::where('id', $this->mesa);
+            if ($mesaModel) {
+                $mesaModel->update(['estado_mesa' => 'ocupada', 'order_id' => $order->id, 'asientos' => $this->personas]);
+            }
             DB::commit();
 
-            // 3. Limpiar Carrito Local
             $this->carrito = [];
-            $this->calcularTotales();
-
-            // 4. REDIRECCIÓN CON FLASH DATA
-            // Redirigimos a la ruta que incluye el ID del pedido
-            // Y mandamos una "flag" para que el mount() abra el modal
-            return redirect()
-                ->to("/restaurants/restaurant-central/orden-mesa/{$this->mesa}/{$order->id}")
-                ->with('orden_creada_id', $order->id);
+            // $this->calcularTotales();
+            return redirect()->to("/restaurants/restaurant-central/orden-mesa/{$this->mesa}/{$order->id}")->with('orden_creada_id', $order->id);
         } catch (\Exception $e) {
             DB::rollBack();
-            \Filament\Notifications\Notification::make()
-                ->title('Error al procesar orden')
-                ->body($e->getMessage())
-                ->danger()
-                ->send();
+            Notification::make()->title('Error al procesar orden')->body($e->getMessage())->danger()->send();
         }
     }
 
-    public function cerrarModalComanda()
-    {
-        $this->mostrarModalComanda = false;
-    }
-
-    /**
-     * Gestiona el stock (Resta o Suma) recorriendo almacenes en orden.
-     * * @param int $variantId
-     * @param float $cantidad
-     * @param string $operacion 'restar' (venta) | 'sumar' (devolución/cancelación)
-     */
     private function gestionarStock($variantId, $cantidad, $operacion = 'restar')
     {
-        // 1. Buscamos la variante con sus stocks ordenados (ej: por ID o prioridad)
         $variant = Variant::with(['stocks' => function ($q) {
-            $q->orderBy('id', 'asc'); // Prioridad al primer almacén creado
+            $q->orderBy('id', 'asc');
         }])->find($variantId);
 
         if (!$variant) return;
 
-        // Si el producto no controla stock, no hacemos nada
-        $product = $variant->product; // Asumiendo relación
+        $product = $variant->product;
         if ($product && $product->control_stock == 0) return;
 
         $pendiente = $cantidad;
@@ -210,128 +190,77 @@ class OrdenMesa extends Page
             if ($pendiente <= 0) break;
 
             if ($operacion === 'restar') {
-                // LÓGICA DE DESCUENTO (VENTA)
-
-                // Cuánto hay en este almacén?
                 $disponible = $stock->stock_reserva;
-
                 if ($disponible >= $pendiente) {
-                    // Caso A: Este almacén tiene suficiente para cubrir todo
                     $stock->decrement('stock_reserva', $pendiente);
                     $pendiente = 0;
                 } else {
-                    // Caso B: Este almacén tiene algo, pero no todo. Tomamos lo que hay.
-                    // (Solo si hay algo positivo, para no dejar negativos innecesarios si ya estaba en 0)
                     if ($disponible > 0) {
                         $stock->decrement('stock_reserva', $disponible);
                         $pendiente -= $disponible;
                     }
-                    // Si disponible es 0 o menos, pasamos al siguiente almacén sin restar nada
                 }
             } else {
-                // LÓGICA DE DEVOLUCIÓN (CANCELACIÓN)
-                // Simplemente devolvemos al primer almacén (o distribuyes si prefieres)
-                // Aquí lo devuelvo todo al primero que encuentro y rompo el ciclo
                 $stock->increment('stock_reserva', $pendiente);
                 $pendiente = 0;
             }
         }
-
-        // EDGE CASE: Si después de recorrer todos los almacenes aún falta restar (venta sin stock permitido)
-        // Descontamos el remanente del último almacén (quedará negativo)
         if ($operacion === 'restar' && $pendiente > 0 && $variant->stocks->isNotEmpty()) {
             $variant->stocks->last()->decrement('stock_reserva', $pendiente);
         }
     }
 
-    // =========================================================
-    // 1. ABRIR MODAL Y PREPARAR PRODUCTO
-    // =========================================================
+    //ABRIR MODAL Y PREPARAR PRODUCTO
     public function agregarProducto(int $productoId)
     {
-        // 1. Cargamos el producto con sus relaciones necesarias
-        // Agregamos 'variants.stocks' para tener el inventario listo sin consultas extra
-        $producto = Product::with([
-            'attributes',
-            'variants.values',
-            'variants.stocks'
-        ])->find($productoId);
-
+        $producto = OrdenService::obtenerProductoId($productoId);
         $this->productoSeleccionado = $producto;
-
-        // 2. Reseteamos variables del modal (Estado Limpio)
         $this->esCortesia = false;
         $this->notaPedido = '';
         $this->selectedAttributes = [];
         $this->variantSeleccionadaId = null;
-
-        // Precio base inicial (luego se le sumarán los extras si hay atributos)
         $this->precioCalculado = $producto->price;
-
-        // Stock inicial en 0 visualmente hasta confirmar variante
         $this->stockActualVariante = 0;
         $this->stockReservaVariante = 0;
 
-        // =========================================================
         // CASO A: PRODUCTO SIMPLE (Sin atributos)
-        // =========================================================
         if ($producto->attributes->isEmpty()) {
             $varianteUnica = $producto->variants->first();
-
             if ($varianteUnica) {
                 $this->variantSeleccionadaId = $varianteUnica->id;
-
-                // Calcular stock directamente
                 $this->stockActualVariante = $varianteUnica->stocks->sum('stock_real');
                 $this->stockReservaVariante = $varianteUnica->stocks->sum('stock_reserva');
             }
         }
-        // =========================================================
-        // CASO B: PRODUCTO CON ATRIBUTOS (Calculamos Precios JSON)
-        // =========================================================
+        // CASO B: PRODUCTO CON ATRIBUTOS
         else {
-            // 1. Pre-seleccionar la primera opción de cada atributo por defecto
+            //Pre-seleccionar la primera opción de cada atributo por defecto
             foreach ($producto->attributes as $attr) {
-                // Decodificamos el JSON de la tabla pivote de forma segura
                 $rawValues = $attr->pivot->values ?? [];
                 $values = is_string($rawValues) ? json_decode($rawValues, true) : $rawValues;
-
                 // Si hay valores configurados, tomamos el primero
                 if (is_array($values) && count($values) > 0) {
                     $primerValorId = $values[0]['id'];
-
-                    // Solo llenamos el array, NO calculamos todavía para ahorrar recursos
                     $this->selectedAttributes[$attr->id] = $primerValorId;
                 }
             }
-
-            // 2. Una vez seleccionados todos los defaults, calculamos PRECIO y STOCK una sola vez
-            // Esta función (que refactorizamos antes) leerá los 'extra' del JSON y buscará la variante de stock
+            //Una vez seleccionados todos los defaults, calculamos PRECIO y STOCK una sola vez
             $this->buscarVarianteCoincidente();
         }
-
-        // Opcional: Si usas un modal de Filament que se abre con dispatch
-        // $this->dispatch('open-modal', id: 'modal-producto');
     }
 
-    // =========================================================
-    // NUEVA FUNCIÓN: ACTUALIZAR ORDEN
-    // =========================================================
+    //ACTUALIZAR ORDEN
     public function actualizarOrden()
     {
         if (!$this->pedido) return;
-
         try {
-            // =========================================================
-            // PASO 1: CALCULAR DIFERENCIAS EXACTAS (ESTILO ODOO)
-            // =========================================================
-
+            //CALCULAR DIFERENCIAS EXACTAS
             $diffParaCocina = [
                 'nuevos' => [],
                 'cancelados' => []
             ];
 
-            // A) REVISAR EL CARRITO ACTUAL (Para nuevos, aumentos y reducciones)
+            //REVISAR EL CARRITO ACTUAL (Para nuevos, aumentos y reducciones)
             foreach ($this->carrito as $item) {
 
                 // CASO 1: ES NUEVO (No está guardado en BD)
@@ -353,7 +282,7 @@ class OrdenMesa extends Page
                         $diferencia = $cantidadActual - $cantidadOriginal;
                         $diffParaCocina['nuevos'][] = [
                             'cant' => $diferencia,
-                            'nombre' => $item['name'], // No hace falta poner "(ADICIONAL)", cocina solo ve +1
+                            'nombre' => $item['name'],
                             'nota' => $item['notes']
                         ];
                     } elseif ($cantidadActual < $cantidadOriginal) {
@@ -381,9 +310,7 @@ class OrdenMesa extends Page
                 }
             }
 
-            // =========================================================
             // PASO 2: GUARDAR EN CACHE
-            // =========================================================
             // Solo imprimimos si realmente hubo cambios
             if (!empty($diffParaCocina['nuevos']) || !empty($diffParaCocina['cancelados'])) {
                 $jobId = 'print_' . $this->pedido . '_' . time();
@@ -391,12 +318,9 @@ class OrdenMesa extends Page
                 session()->flash('print_job_id', $jobId); // Flash para el modal
             }
 
-            // =========================================================
             // PASO 3: TRANSACCIÓN DE BASE DE DATOS (UPDATE REAL)
-            // =========================================================
             DB::beginTransaction();
 
-            // 1. Cabecera
             $order = Order::find($this->pedido);
             $order->update([
                 'subtotal' => $this->subtotal,
@@ -420,14 +344,12 @@ class OrdenMesa extends Page
                         'status'        => 'pendiente',
                         'notes'         => $item['notes'],
                         'fecha_envio_cocina' => now(),
-                        // 'restaurant_id' se llena automático por tu scope
                     ]);
                     $this->gestionarStock($item['variant_id'], $item['quantity'], 'restar');
                 }
                 // Actualizar
                 else {
                     $detalle = OrderDetail::find($item['item_id']);
-
                     if ($detalle) {
                         $cantidadAnterior = $detalle->cantidad;
                         $cantidadNueva = $item['quantity'];
@@ -459,21 +381,17 @@ class OrdenMesa extends Page
             if (!empty($this->itemsEliminados)) {
                 // Recuperamos los datos ANTES de borrar para saber qué variant_id y cantidad devolver
                 $itemsABorrar = OrderDetail::whereIn('id', $this->itemsEliminados)->get();
-
                 foreach ($itemsABorrar as $borrado) {
                     // === STOCK: DEVOLVER TODO ===
                     $this->gestionarStock($borrado->variant_id, $borrado->cantidad, 'sumar');
                 }
-
                 // Ahora sí borramos
                 OrderDetail::whereIn('id', $this->itemsEliminados)->delete();
             }
 
             DB::commit();
 
-            // =========================================================
             // PASO 4: RESET Y RECARGA
-            // =========================================================
             $this->hayCambios = false;
             $this->itemsEliminados = [];
 
@@ -484,53 +402,118 @@ class OrdenMesa extends Page
             if (session()->has('print_job_id')) {
                 $this->mostrarModalComanda = true;
             }
-
-            \Filament\Notifications\Notification::make()->title('Orden actualizada')->success()->send();
-
-            // IMPORTANTE: Volver a ejecutar mount para resetear $cantidadesOriginales a los nuevos valores
+            Notification::make()->title('Orden actualizada')->success()->send();
             $this->mount($this->mesa, $this->pedido);
         } catch (\Exception $e) {
             DB::rollBack();
-            \Filament\Notifications\Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
+            Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
         }
     }
 
-    // =========================================================
-    // 2. LÓGICA INTELIGENTE DE VARIANTES
-    // =========================================================
+    //ANULAR PEDIDO
+    public function anularPedidoAction(): Action
+    {
+        return Action::make('anularPedido')
+            ->label('Anular Pedido')
+            ->icon('heroicon-o-trash') // Icono de basura estándar
+            ->color('danger') // Color Rojo
+            ->iconButton() // Estilo botón redondo pequeño
+            ->tooltip('Anular Pedido y Liberar Mesa')
+            ->extraAttributes([
+                'x-on:click' => 'mobileCartOpen = false',
+            ])
+            ->requiresConfirmation()
+            ->modalHeading('¿Anular Pedido?')
+            ->modalDescription('¿Seguro que deseas anular este pedido? Se devolverá el stock y la mesa quedará libre.')
+            ->modalSubmitActionLabel('Sí, Anular')
+            
+            // Lógica que se ejecuta al confirmar
+            ->action(function () {
+                $this->ejecutarAnulacion($this->pedido);
+            });
+    }
+
+    // 4. TU LÓGICA ORIGINAL (Refactorizada y Corregida)
+    public function ejecutarAnulacion($pedidoId)
+    {
+        if (!$pedidoId) return;
+
+        try {
+            DB::beginTransaction();
+
+            $order = \App\Models\Order::with('details')->findOrFail($pedidoId);
+            $diffParaCocina = ['nuevos' => [], 'cancelados' => []];
+
+            foreach ($order->details as $detail) {
+                if ($detail->status !== 'cancelado') {
+                    $this->gestionarStock($detail->variant_id, $detail->cantidad, 'sumar');
+                    $diffParaCocina['cancelados'][] = [
+                        'cant'   => $detail->cantidad,
+                        'nombre' => $detail->product_name,
+                        'nota'   => 'ANULACIÓN'
+                    ];
+                }
+            }
+
+            $order->details()->where('status', '!=', 'cancelado')->update(['status' => 'cancelado']);
+            $order->update(['status' => 'cancelado']);
+
+            if ($order->table_id) {
+                \App\Models\Table::where('id', $order->table_id)->update([
+                    'estado_mesa' => 'libre',
+                    'order_id'    => null,
+                    'asientos'    => 1 
+                ]);
+            }
+
+            if (!empty($diffParaCocina['cancelados'])) {
+                $jobId = 'print_anul_' . $pedidoId . '_' . time();
+                Cache::put($jobId, $diffParaCocina, now()->addMinutes(5));
+                session()->flash('print_job_id', $jobId);
+                session()->flash('print_order_id', $pedidoId);
+            }
+
+            DB::commit();
+
+            \Filament\Notifications\Notification::make()
+                ->title('Pedido anulado correctamente')
+                ->success()
+                ->send();
+
+            // CORRECCIÓN DE LA REDIRECCIÓN:
+            // Antes tenías error de sintaxis con {{ }} dentro del string.
+            return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Filament\Notifications\Notification::make()
+                ->title('Error')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    //LÓGICA INTELIGENTE DE VARIANTES
     public function seleccionarAtributo($attributeId, $valueId)
     {
-        // Guardamos la selección del usuario
         $this->selectedAttributes[$attributeId] = $valueId;
-
-        // Buscamos si existe una variante que coincida con TODAS las selecciones
         $this->buscarVarianteCoincidente();
     }
 
     public function buscarVarianteCoincidente()
     {
-        // -----------------------------------------------------
-        // PASO 1: CALCULO DE PRECIO (Independiente de la variante)
-        // -----------------------------------------------------
+        // PASO 1: CALCULO DE PRECIO
         $precioBase = $this->productoSeleccionado->price;
         $extrasAcumulados = 0;
-
-        // Recorremos los atributos que el usuario ya seleccionó
         foreach ($this->selectedAttributes as $attrId => $valIdSeleccionado) {
-
             // Buscamos el atributo en la relación cargada
             $atributo = $this->productoSeleccionado->attributes->find($attrId);
-
             if ($atributo) {
-                // Decodificamos el JSON de la tabla pivote
                 // Estructura esperada: [{"id":1, "name":"Grande", "extra": 5.00}, ...]
-                $opciones = is_string($atributo->pivot->values)
-                    ? json_decode($atributo->pivot->values, true)
-                    : $atributo->pivot->values;
-
+                $opciones = is_string($atributo->pivot->values) ? json_decode($atributo->pivot->values, true) : $atributo->pivot->values;
                 // Buscamos la opción seleccionada dentro del JSON
                 $opcion = collect($opciones)->firstWhere('id', $valIdSeleccionado);
-
                 // Si tiene precio extra, lo sumamos
                 if ($opcion) {
                     $extrasAcumulados += ($opcion['extra'] ?? 0);
@@ -538,26 +521,19 @@ class OrdenMesa extends Page
             }
         }
 
-        // Asignamos el precio calculado INMEDIATAMENTE
+        // Asignamos el precio calculado
         $this->precioCalculado = $precioBase + $extrasAcumulados;
 
-
-        // -----------------------------------------------------
-        // PASO 2: BUSQUEDA DE VARIANTE (Solo para Stock)
-        // -----------------------------------------------------
+        // PASO 2: BUSQUEDA DE VARIANTE
         if (!$this->productoSeleccionado || $this->productoSeleccionado->variants->isEmpty()) {
             return;
         }
-
         $matchVariant = null;
-
         foreach ($this->productoSeleccionado->variants as $variant) {
             $variantValueIds = $variant->values->pluck('id')->toArray();
             $seleccionados = array_values($this->selectedAttributes);
-
             // Verificamos coincidencia exacta de IDs
             $coincidencias = array_intersect($seleccionados, $variantValueIds);
-
             if (count($coincidencias) === count($this->productoSeleccionado->attributes)) {
                 $matchVariant = $variant;
                 break;
@@ -566,28 +542,20 @@ class OrdenMesa extends Page
 
         if ($matchVariant) {
             $this->variantSeleccionadaId = $matchVariant->id;
-
-            // YA NO tocamos el precio aquí. El precio viene de los atributos.
-
-            // Stock
             $this->stockActualVariante = $matchVariant->stocks->sum('stock_real');
             $this->stockReservaVariante = $matchVariant->stocks->sum('stock_reserva');
         } else {
             $this->variantSeleccionadaId = null;
-            // Si no hay variante (combinación inválida), reseteamos stock
             $this->stockActualVariante = 0;
             $this->stockReservaVariante = 0;
         }
     }
 
-    // =========================================================
-    // 3. CONFIRMAR Y AGREGAR AL CARRITO
-    // =========================================================
+    //CONFIRMAR Y AGREGAR AL CARRITO
     public function confirmarAgregado()
     {
-        // 1. Validaciones básicas
         if ($this->productoSeleccionado->variants->count() > 0 && !$this->variantSeleccionadaId) {
-            \Filament\Notifications\Notification::make()->title('Debes seleccionar una opción válida')->warning()->send();
+            Notification::make()->title('Debes seleccionar una opción válida')->warning()->send();
             return;
         }
 
@@ -595,13 +563,12 @@ class OrdenMesa extends Page
         $prodId = $this->productoSeleccionado->id;
         $varId = $this->variantSeleccionadaId;
         $esCortesia = $this->esCortesia;
-        $nuevaNota = trim($this->notaPedido); // La nota que acaba de escribir el usuario
+        $nuevaNota = trim($this->notaPedido);
 
         // 3. BUSCAR SI YA EXISTE EN EL CARRITO
         $indiceExistente = null;
 
         foreach ($this->carrito as $index => $item) {
-            // Solo nos importa si es el mismo producto, misma variante y mismo estado de cortesía.
             if (
                 $item['product_id'] == $prodId &&
                 $item['variant_id'] == $varId &&
@@ -614,19 +581,12 @@ class OrdenMesa extends Page
 
         // 4. LÓGICA DE AGREGADO O ACTUALIZACIÓN
         if ($indiceExistente !== null) {
-            // === CASO A: YA EXISTE -> INCREMENTAMOS CANTIDAD Y UNIMOS NOTAS ===
-
             // a) Validación de Stock
             if ($this->productoSeleccionado->control_stock == 1 && $this->productoSeleccionado->venta_sin_stock == 0) {
                 $stockRestante = $this->stockReservaVariante;
-
-                // Calculamos cuánto tendríamos en total considerando lo que ya está en el carrito
-                // Nota: Si quieres ser más preciso, deberías sumar todos los items del carrito con el mismo variant_id, no solo este índice.
-                // Pero para este caso simple:
                 $cantidadNueva = $this->carrito[$indiceExistente]['quantity'] + 1;
-
                 if ($cantidadNueva > $stockRestante) {
-                    \Filament\Notifications\Notification::make()->title('No hay suficiente stock para agregar más')->warning()->send();
+                    Notification::make()->title('No hay suficiente stock para agregar más')->warning()->send();
                     return;
                 }
             }
@@ -638,30 +598,22 @@ class OrdenMesa extends Page
             // c) CONCATENAR NOTAS
             if (!empty($nuevaNota)) {
                 $notaActual = $this->carrito[$indiceExistente]['notes'];
-
                 if (!empty($notaActual)) {
-                    // Si ya tenía nota, le agregamos la nueva separada por coma
                     $this->carrito[$indiceExistente]['notes'] = $notaActual . ', ' . $nuevaNota;
                 } else {
-                    // Si estaba vacía, simplemente ponemos la nueva
                     $this->carrito[$indiceExistente]['notes'] = $nuevaNota;
                 }
             }
         } else {
             // === CASO B: ES NUEVO -> CREAMOS LA LÍNEA ===
-
             $variante = Variant::with('values')->find($varId);
             $nombreItem = $this->productoSeleccionado->name;
             if ($variante && $this->productoSeleccionado->attributes->count() > 0) {
                 $nombreVariante = $variante->values->pluck('name')->join(' / ');
                 $nombreItem .= " ($nombreVariante)";
             }
-
             $precioUnitario = $esCortesia ? 0 : $this->precioCalculado;
-
-            // Generamos ID único temporal para el frontend
             $itemId = md5($prodId . $varId . $esCortesia . time());
-
             $this->carrito[] = [
                 'item_id'     => $itemId,
                 'product_id'  => $prodId,
@@ -671,22 +623,15 @@ class OrdenMesa extends Page
                 'quantity'    => 1,
                 'total'       => $precioUnitario,
                 'is_cortesia' => $esCortesia,
-                'notes'       => $nuevaNota, // Usamos la nota inicial
+                'notes'       => $nuevaNota,
                 'image'       => $this->productoSeleccionado->image_path,
-                'guardado'    => false // Marcamos explícitamente que es nuevo
+                'guardado'    => false
             ];
         }
-
-        // =========================================================
-        // ¡CAMBIO CRÍTICO AQUÍ!
-        // =========================================================
-        $this->hayCambios = true; // <--- Activamos la bandera para mostrar el botón "ACTUALIZAR"
-
-        // 5. Finalizar
+        $this->hayCambios = true;
         $this->calcularTotales();
         $this->cerrarModal();
-
-        \Filament\Notifications\Notification::make()->title('Producto agregado')->success()->send();
+        Notification::make()->title('Producto agregado')->success()->send();
     }
 
     public function cerrarModal()
@@ -694,43 +639,32 @@ class OrdenMesa extends Page
         $this->productoSeleccionado = null;
     }
 
-    // =========================================================
+    public function cerrarModalComanda()
+    {
+        $this->mostrarModalComanda = false;
+    }
+
     // 4. GESTIÓN DEL CARRITO (Sumar, Restar, Eliminar)
-    // =========================================================
-    // =========================================================
-    // 4. GESTIÓN DEL CARRITO (Sumar, Restar, Eliminar)
-    // =========================================================
     public function incrementarCantidad($index)
     {
         $item = $this->carrito[$index];
         $productoId = $item['product_id'];
         $variantId = $item['variant_id'];
 
-        // 1. Buscamos el producto para ver sus reglas
-        // Usamos find() ligero, no necesitamos cargar todo
         $producto = Product::find($productoId);
 
         // 2. VALIDACIÓN DE STOCK (El "Policía")
         if ($producto->control_stock == 1 && $producto->venta_sin_stock == 0) {
-
-            // a) Buscamos el stock real (reserva) de la variante en BD
-            // Nota: Es importante buscarlo fresco de la BD por si alguien más vendió
             $variante = Variant::with('stocks')->find($variantId);
             $stockMaximo = $variante ? $variante->stocks->sum('stock_reserva') : 0;
-
-            // b) Contamos cuántos tenemos YA en el carrito (sumando todas las líneas por si se repite)
             $cantidadEnCarrito = collect($this->carrito)
                 ->where('variant_id', $variantId)
                 ->sum('quantity');
 
             // c) Verificamos si al sumar 1 nos pasamos
             if (($cantidadEnCarrito + 1) > $stockMaximo) {
-                \Filament\Notifications\Notification::make()
-                    ->title('Stock insuficiente')
-                    ->body("Solo quedan {$stockMaximo} unidades disponibles.")
-                    ->warning()
-                    ->send();
-                return; // ¡ALTO! No sumamos nada.
+                Notification::make()->title('Stock insuficiente')->body("Solo quedan {$stockMaximo} unidades disponibles.")->warning()->send();
+                return;
             }
         }
 
@@ -757,18 +691,16 @@ class OrdenMesa extends Page
 
     public function eliminarItem($index)
     {
-        $item = $this->carrito[$index];
-
-        // SI EL ITEM YA ESTABA GUARDADO EN BD (tiene flag 'guardado'), 
-        // LO AGREGAMOS A LA LISTA DE ELIMINACIÓN
-        if (isset($item['guardado']) && $item['guardado']) {
-            $this->itemsEliminados[] = $item['item_id']; // item_id tiene el ID de la BD en este caso
+        if (!isset($this->carrito[$index])) {
+            return;
         }
-
+        $item = $this->carrito[$index];
+        if (isset($item['guardado']) && $item['guardado']) {
+            $this->itemsEliminados[] = $item['item_id'];
+        }
         unset($this->carrito[$index]);
         $this->carrito = array_values($this->carrito);
-
-        $this->hayCambios = true; // <--- SE ACTIVA LA BANDERA
+        $this->hayCambios = true;
         $this->calcularTotales();
     }
 
@@ -778,16 +710,11 @@ class OrdenMesa extends Page
         foreach ($this->carrito as $item) {
             $acumulado += $item['total'];
         }
-
-        // Lógica de Impuestos (Perú: IGV incluido en el precio)
         $this->total = $acumulado;
         $this->subtotal = $this->total / 1.18;
         $this->igv = $this->total - $this->subtotal;
     }
 
-    // =========================================================
-    // 5. CONFIGURACIÓN DE FILAMENT
-    // =========================================================
     public function getViewData(): array
     {
         $categorias = OrdenService::obtenerCategorias();
@@ -795,6 +722,31 @@ class OrdenMesa extends Page
             $this->categoriaSeleccionada,
             $this->search
         );
+        $consumoPendientePorProducto = [];
+        foreach ($this->carrito as $item) {
+            $prodId = $item['product_id'];
+            $cantidadActual = $item['quantity'];
+            $cantidadOriginal = 0;
+            if (isset($item['guardado']) && $item['guardado']) {
+                $cantidadOriginal = $this->cantidadesOriginales[$item['item_id']] ?? 0;
+            }
+            $consumoAdicional = max(0, $cantidadActual - $cantidadOriginal);
+            if (!isset($consumoPendientePorProducto[$prodId])) {
+                $consumoPendientePorProducto[$prodId] = 0;
+            }
+            $consumoPendientePorProducto[$prodId] += $consumoAdicional;
+        }
+        $productos->transform(function ($product) use ($consumoPendientePorProducto) {
+            $stockEnBaseDatos = $product->variants->flatMap->stocks->sum('stock_reserva');
+            $consumoExtra = $consumoPendientePorProducto[$product->id] ?? 0;
+            $stockVisible = $stockEnBaseDatos - $consumoExtra;
+            $product->setAttribute('stock_visible', max(0, $stockVisible));
+            $product->setAttribute(
+                'esta_agotado',
+                ($product->control_stock == 1 && $stockVisible <= 0 && $product->venta_sin_stock == 0)
+            );
+            return $product;
+        });
 
         return [
             'tenant'     => Filament::getTenant(),
@@ -803,6 +755,45 @@ class OrdenMesa extends Page
             'categorias' => $categorias,
             'productos'  => $productos,
         ];
+    }
+
+    public function actualizarCantidadManual($index, $nuevoValor)
+    {
+        $cantidad = intval($nuevoValor);
+        if ($cantidad < 1) {
+            $this->carrito[$index]['quantity'] = 1;
+            $this->calcularTotales();
+            return;
+        }
+        $item = $this->carrito[$index];
+        $productoId = $item['product_id'];
+        $variantId = $item['variant_id'];
+        $producto = Product::find($productoId);
+        if ($producto && $producto->control_stock == 1 && $producto->venta_sin_stock == 0) {
+            $variante = Variant::with('stocks')->find($variantId);
+            $stockMaximo = $variante ? $variante->stocks->sum('stock_reserva') : 0;
+            $cantidadOtrosItems = collect($this->carrito)
+                ->where('variant_id', $variantId)
+                ->except($index)
+                ->sum('quantity');
+            $totalRequerido = $cantidadOtrosItems + $cantidad;
+            if ($totalRequerido > $stockMaximo) {
+                $maximoPermitido = max(1, $stockMaximo - $cantidadOtrosItems);
+                $this->carrito[$index]['quantity'] = $maximoPermitido;
+                $this->carrito[$index]['total'] = $maximoPermitido * $this->carrito[$index]['price'];
+                $this->calcularTotales();
+                Notification::make()
+                    ->title('Stock insuficiente')
+                    ->body("Stock máximo disponible: {$stockMaximo}. Se ajustó la cantidad automáticamente.")
+                    ->warning()
+                    ->send();
+                return;
+            }
+        }
+        $this->carrito[$index]['quantity'] = $cantidad;
+        $this->carrito[$index]['total'] = $cantidad * $this->carrito[$index]['price'];
+        $this->hayCambios = true;
+        $this->calcularTotales();
     }
 
     public static function getSlug(): string
