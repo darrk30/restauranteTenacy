@@ -4,7 +4,6 @@
 
 {{-- AGREGAMOS x-data AQUÍ PARA CONTROLAR EL CARRITO MÓVIL EN TODA LA PÁGINA --}}
 <x-filament-panels::page x-data="{ mobileCartOpen: false }">
-
     <div class="pos-layout">
         <div class="pos-main-content">
             {{-- 1. CATEGORÍAS --}}
@@ -314,11 +313,9 @@
                                 ACTUALIZAR
                             </button>
                         @else
-                            {{-- BOTÓN COBRAR --}}
-                            {{-- Asegúrate de tener una función para cobrar, ej: procesarPago --}}
                             <button wire:key="btn-cobrar-pedido"
                                 class="btn-checkout bg-green-600 hover:bg-green-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg"
-                                wire:click="procesarOrden"> {{-- O la función que uses para cobrar --}}
+                                wire:click="procesarOrden">
                                 COBRAR S/ {{ number_format($total, 2) }}
                             </button>
                         @endif
@@ -436,23 +433,14 @@
                         {{-- CASO 2: PEDIDO EXISTENTE (Ya en base de datos)       --}}
                         {{-- ==================================================== --}}
 
-                        @if (count($carrito) === 0)
-                            {{-- SUB-CASO A: CARRITO VACÍO -> BOTÓN ANULAR --}}
-                            {{-- Usamos mountAction('anularPedido') para que salga el Modal de Filament --}}
-                            <button wire:key="btn-anular-pedido" type="button"
-                                wire:click="mountAction('anularPedido')" wire:loading.attr="disabled"
-                                class="btn-checkout bg-red-600 hover:bg-red-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg flex items-center justify-center gap-2">
+                        {{-- 
+             CORRECCIÓN AQUÍ: 
+             Primero preguntamos si hay cambios (aunque el carrito esté vacío visualmente, 
+             la eliminación es un cambio pendiente).
+        --}}
 
-                                {{-- Icono Basura --}}
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
-                                    viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                ANULAR PEDIDO
-                            </button>
-                        @elseif ($hayCambios)
-                            {{-- SUB-CASO B: HAY CAMBIOS -> BOTÓN ACTUALIZAR --}}
+                        @if ($hayCambios)
+                            {{-- SUB-CASO A: HAY CAMBIOS (Nuevos, Editados o Eliminados) -> BOTÓN ACTUALIZAR --}}
                             <button wire:key="btn-actualizar-pedido"
                                 class="btn-checkout bg-yellow-500 hover:bg-yellow-600 w-full py-3 rounded text-white font-bold text-lg shadow-lg animate-pulse flex items-center justify-center gap-2"
                                 wire:click="actualizarOrden" wire:loading.attr="disabled">
@@ -464,11 +452,25 @@
                                 </svg>
                                 ACTUALIZAR
                             </button>
+                        @elseif (count($carrito) === 0)
+                            {{-- SUB-CASO B: CARRITO VACÍO Y SIN CAMBIOS PENDIENTES -> BOTÓN ANULAR --}}
+                            {{-- Esto saldrá solo después de haberle dado a "Actualizar" y que la BD confirme que no hay items --}}
+                            <button wire:key="btn-anular-pedido" type="button"
+                                wire:click="mountAction('anularPedido')" wire:loading.attr="disabled"
+                                class="btn-checkout bg-red-600 hover:bg-red-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg flex items-center justify-center gap-2">
+
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+                                    viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                ANULAR PEDIDO
+                            </button>
                         @else
-                            {{-- SUB-CASO C: TODO GUARDADO -> BOTÓN COBRAR --}}
+                            {{-- SUB-CASO C: TODO GUARDADO Y HAY ITEMS -> BOTÓN COBRAR --}}
                             <button wire:key="btn-cobrar-pedido"
                                 class="btn-checkout bg-green-600 hover:bg-green-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg"
-                                {{-- Aquí puedes poner la acción de ir a pagar si la tienes --}} wire:click="procesarOrden">
+                                wire:click="procesarOrden">
                                 COBRAR S/ {{ number_format($total, 2) }}
                             </button>
                         @endif
@@ -479,11 +481,54 @@
         </div>
     </div>
 
-    {{-- MODALES EXISTENTES --}}
-    @php $jobId = session('print_job_id'); @endphp
+    {{-- ========================================================================= --}}
+    {{-- LÓGICA DE PREPARACIÓN DE PESTAÑAS Y LLAMADA AL MODAL --}}
+    {{-- ========================================================================= --}}
+    @php
+        $jobId = session('print_job_id');
+        $areasCollection = collect();
+
+        // 1. Intentamos obtener datos del Cache (Impresión Parcial/Actualización)
+        $datosCache = $jobId ? \Illuminate\Support\Facades\Cache::get($jobId) : null;
+
+        if ($datosCache) {
+            // Fusionamos 'nuevos' y 'cancelados' que vienen del cache
+            $items = array_merge($datosCache['nuevos'] ?? [], $datosCache['cancelados'] ?? []);
+            foreach ($items as $item) {
+                // Aquí usamos el 'area_id' que agregamos al backend en el paso anterior
+                $areasCollection->push([
+                    'id' => $item['area_id'] ?? 'general',
+                    'name' => $item['area_nombre'] ?? 'GENERAL'
+                ]);
+            }
+        } 
+        // 2. Si no hay cache, usamos el objeto Order completo (Impresión Total/Reimpresión)
+        elseif ($ordenGenerada) {
+            foreach ($ordenGenerada->details as $det) {
+                $prod = $det->product->production ?? null;
+                $printer = $prod?->printer ?? null;
+
+                if ($prod && $prod->status && $printer && $printer->status) {
+                    $areasCollection->push(['id' => $prod->id, 'name' => $prod->name]);
+                } else {
+                    $areasCollection->push(['id' => 'general', 'name' => 'GENERAL']);
+                }
+            }
+        }
+
+        // Filtramos para tener solo una pestaña por área
+        $areasUnicas = $areasCollection->unique('id');
+    @endphp
+
     @if ($mostrarModalComanda && $ordenGenerada)
-        <x-modal-ticket :orderId="$ordenGenerada->id" :jobId="$jobId" />
+        {{-- PASAMOS LA VARIABLE $areasUnicas AL COMPONENTE --}}
+        <x-modal-ticket 
+            :orderId="$ordenGenerada->id" 
+            :jobId="$jobId" 
+            :areas="$areasUnicas" 
+        />
     @endif
+    {{-- ========================================================================= --}}
 
     @if ($productoSeleccionado)
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -493,6 +538,7 @@
             </div>
         </div>
     @endif
+    
     @push('scripts')
         <script>
             let scrollAnimation;

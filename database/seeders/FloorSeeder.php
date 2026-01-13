@@ -23,7 +23,7 @@ class FloorSeeder extends Seeder
             ['restaurant_id' => $restaurant->id, 'name' => 'Piso 1', 'status' => true],
         );
 
-        $estados = ['libre', 'ocupada', 'pagando'];
+        $estados = ['libre'];
 
         foreach (range(1, 5) as $i) {
 
@@ -36,7 +36,7 @@ class FloorSeeder extends Seeder
                     'asientos' => 1,
                     'restaurant_id' => $restaurant->id,
                     'estado_mesa' => $estado,
-                    'ocupada_desde' => $estado === 'ocupada' ? '00:00:00' : null,
+                    'ocupada_desde' => null,
                 ]
             );
         }

@@ -78,7 +78,8 @@
                         <div class="mb-4">
                             <span class="section-label">{{ $attribute->name }}:</span>
 
-                            <div class="variants-grid">
+                            <div class="variants-grid" wire:loading.class="opacity-50 pointer-events-none cursor-wait"
+                                wire:target="seleccionarAtributo">
                                 @php
                                     // 1. Encontrar el precio "extra" mínimo de este grupo para hacer la comparación
                                     // (Normalmente es 0, pero por si acaso)
@@ -102,7 +103,7 @@
 
                                     <button type="button"
                                         class="variant-option-btn {{ $isSelected ? 'selected' : '' }}"
-                                        wire:click="seleccionarAtributo({{ $attribute->id }}, {{ $valId }})">
+                                        wire:click="seleccionarAtributo({{ $attribute->id }}, {{ $valId }})" wire:loading.attr="disabled">
 
                                         <span class="variant-name">{{ $valName }}</span>
 

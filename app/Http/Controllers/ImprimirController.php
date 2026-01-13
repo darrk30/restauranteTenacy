@@ -41,45 +41,83 @@ class ImprimirController extends Controller
 
     public function imprimirComanda(Order $order, Request $request)
     {
-        $order->load(['table', 'user']); // Ya no cargamos details obligatoriamente
+        // Cargamos relaciones profundas para determinar el área en tiempo real
+        $order->load(['table', 'user', 'details.product.production.printer']);
 
-        // 1. Verificar si hay un trabajo parcial en Cache
         $jobId = $request->get('jobId');
-        $datosParciales = $jobId ? Cache::get($jobId) : null;
+        // Recibimos el área por URL (query param). Por defecto 'general'
+        $areaSolicitada = $request->get('areaId', 'general'); 
 
-        $itemsParaImprimir = [];
+        $datosParciales = $jobId ? Cache::get($jobId) : null;
+        $itemsParaImprimir = ['nuevos' => [], 'cancelados' => []];
         $esParcial = false;
+        $nombreAreaTitulo = 'GENERAL';
 
         if ($datosParciales) {
-            // MODO PARCIAL (Solo cambios)
+            // === MODO PARCIAL (CACHE) ===
             $esParcial = true;
-            // Pasamos los datos crudos a la vista
-            $itemsParaImprimir = $datosParciales;
-
-            // Calculo de altura aproximada
-            $totalLineas = count($datosParciales['nuevos']) + count($datosParciales['cancelados']);
-        } else {
-            // MODO TOTAL (Fallback o primera orden)
-            $order->load('details');
-            $itemsParaImprimir = ['nuevos' => [], 'cancelados' => []];
-
-            // Convertimos los detalles normales al formato de impresión
-            foreach ($order->details as $det) {
-                $itemsParaImprimir['nuevos'][] = [
-                    'cant' => $det->cantidad,
-                    'nombre' => $det->product_name,
-                    'nota' => $det->notes
-                ];
+            
+            // Recorremos 'nuevos' y 'cancelados' buscando coincidencias con el área
+            foreach (['nuevos', 'cancelados'] as $tipo) {
+                if (isset($datosParciales[$tipo])) {
+                    foreach ($datosParciales[$tipo] as $item) {
+                        // El area_id ya viene guardado en el Cache gracias a tu cambio anterior en OrdenMesa.php
+                        $areaItem = $item['area_id'] ?? 'general';
+                        
+                        if ((string)$areaItem === (string)$areaSolicitada) {
+                            $itemsParaImprimir[$tipo][] = $item;
+                            // Capturamos el nombre real para el título del PDF
+                            $nombreAreaTitulo = $item['area_nombre'] ?? 'GENERAL';
+                        }
+                    }
+                }
             }
-            $totalLineas = $order->details->count();
+
+        } else {
+            // === MODO TOTAL (BASE DE DATOS) ===
+            // Aquí recalculamos las áreas porque la BD no guarda el "histórico" de a dónde se fue
+            foreach ($order->details as $det) {
+                $prod = $det->product->production ?? null;
+                $printer = $prod?->printer ?? null;
+
+                // Lógica de determinación de área
+                if ($prod && $prod->status && $printer && $printer->status) {
+                    $idArea = $prod->id;
+                    $nombreArea = $prod->name;
+                } else {
+                    $idArea = 'general';
+                    $nombreArea = 'GENERAL';
+                }
+
+                // Si coincide con el área solicitada en la URL, lo agregamos
+                if ((string)$idArea === (string)$areaSolicitada) {
+                    $itemsParaImprimir['nuevos'][] = [
+                        'cant'   => $det->cantidad,
+                        'nombre' => $det->product_name,
+                        'nota'   => $det->notes
+                    ];
+                    $nombreAreaTitulo = $nombreArea;
+                }
+            }
         }
 
-        // Calculamos altura dinámica
+        // Calculamos altura dinámica basada en los items filtrados
+        $totalLineas = count($itemsParaImprimir['nuevos']) + count($itemsParaImprimir['cancelados']);
+        
+        // Si no hay líneas para esta área, podrías retornar un PDF vacío o un mensaje, 
+        // pero el modal ya filtra las pestañas, así que siempre debería haber algo.
+        
         $height = 140 + ($totalLineas * 50) + 60;
         $customPaper = array(0, 0, 226.77, $height);
 
-        return Pdf::loadView('pdf.ticket-cocina', compact('order', 'itemsParaImprimir', 'esParcial'))
+        // Pasamos 'areaNombre' a la vista para que salga en el título del ticket (ej: "COCINA")
+        return Pdf::loadView('pdf.ticket-cocina', [
+                'order' => $order,
+                'itemsParaImprimir' => $itemsParaImprimir,
+                'esParcial' => $esParcial,
+                'areaNombre' => $nombreAreaTitulo 
+            ])
             ->setPaper($customPaper, 'portrait')
-            ->stream('comanda-' . $order->code . '.pdf');
+            ->stream('comanda-' . $order->code . '-' . $areaSolicitada . '.pdf');
     }
 }

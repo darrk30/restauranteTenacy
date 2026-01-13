@@ -29,8 +29,8 @@ class OrdenMesa extends Page implements HasActions
     public $igv = 0.00;
     public $total = 0.00;
     public $carrito = [];
-    public $hayCambios = false; // Bandera para saber si el botón debe decir "Actualizar"
-    public $itemsEliminados = []; // Para guardar IDs de la BD que debemos borrar
+    public $hayCambios = false;
+    public $itemsEliminados = [];
 
     // === PROPIEDADES DE URL ===
     public int $mesa;
@@ -41,10 +41,12 @@ class OrdenMesa extends Page implements HasActions
     public $categoriaSeleccionada = null;
     public $search = '';
 
+    // === CONTROL DE CAMBIOS ===
     public $cantidadesOriginales = [];
+    public $notasOriginales = []; // <--- NUEVO: Para evitar reimprimir notas viejas
 
-    public $stockActualVariante = 0; // Stock Real de la variante seleccionada
-    public $stockReservaVariante = 0; // Stock en Reserva
+    public $stockActualVariante = 0;
+    public $stockReservaVariante = 0;
 
     // === VARIABLES DEL MODAL (PRODUCTO SELECCIONADO) ===
     public ?Product $productoSeleccionado = null;
@@ -64,22 +66,25 @@ class OrdenMesa extends Page implements HasActions
     public $cantidadesOriginalesPorVariante = [];
     public $tenantSlug;
 
-
     public function mount(int $mesa, ?int $pedido = null)
     {
         $this->mesa = $mesa;
         $this->pedido = $pedido;
         $this->tenantSlug = Filament::getTenant()->slug;
+
         if (session()->has('personas_iniciales')) {
             $this->personas = session('personas_iniciales');
         }
+
         if (session()->has('orden_creada_id')) {
             $idOrden = session('orden_creada_id');
-            $this->ordenGenerada = Order::with(['details', 'table', 'user'])->find($idOrden);
+            // IMPORTANTE: Cargar relaciones profundas para el modal
+            $this->ordenGenerada = Order::with(['details.product.production.printer', 'table', 'user'])->find($idOrden);
             if ($this->ordenGenerada) {
                 $this->mostrarModalComanda = true;
             }
         }
+
         if ($this->pedido) {
             $ordenExistente = Order::with(['details'])->find($this->pedido);
             if (!$ordenExistente || $ordenExistente->status === statusPedido::Cancelado) {
@@ -90,8 +95,12 @@ class OrdenMesa extends Page implements HasActions
                 $this->subtotal = $ordenExistente->subtotal;
                 $this->igv = $ordenExistente->igv;
                 $this->total = $ordenExistente->total;
+                
                 $this->carrito = $ordenExistente->details->map(function ($detalle) {
+                    // Guardamos estado original para comparar después
                     $this->cantidadesOriginales[$detalle->id] = $detalle->cantidad;
+                    $this->notasOriginales[$detalle->id] = $detalle->notes; // <--- NUEVO
+
                     return [
                         'item_id'     => $detalle->id,
                         'product_id'  => $detalle->product_id,
@@ -112,7 +121,22 @@ class OrdenMesa extends Page implements HasActions
         $this->itemsEliminados = [];
     }
 
-    // NUEVO: PROCESAR LA ORDEN (ORDENAR)
+    // --- MÉTODO AUXILIAR PARA OBTENER EL ÁREA ---
+    private function obtenerDatosArea($productId)
+    {
+        $producto = Product::with('production.printer')->find($productId);
+        $prod = $producto?->production;
+        
+        // Validación flexible: Solo validamos que el área exista y esté activa
+        // Ignoramos el estado de la impresora para evitar falsos "GENERAL"
+        if ($prod && $prod->status) {
+            return ['id' => $prod->id, 'name' => $prod->name];
+        }
+
+        return ['id' => 'general', 'name' => 'GENERAL'];
+    }
+
+    // --- PROCESAR ORDEN (CREAR NUEVA) ---
     public function procesarOrden()
     {
         if (empty($this->carrito)) {
@@ -129,10 +153,12 @@ class OrdenMesa extends Page implements HasActions
                 $numeroSiguiente = intval($ultimoPedido->code) + 1;
             }
             $codigoFinal = str_pad($numeroSiguiente, 8, '0', STR_PAD_LEFT);
+            
+            // 1. Crear Orden
             $order = Order::create([
                 'table_id'      => $this->mesa,
                 'code'          => $codigoFinal,
-                'status'        => 'pendiente',
+                'status'        => statusPedido::Pendiente,
                 'subtotal'      => $this->subtotal,
                 'igv'           => $this->igv,
                 'total'         => $this->total,
@@ -140,7 +166,13 @@ class OrdenMesa extends Page implements HasActions
                 'user_id'       => Auth::id(),
             ]);
 
-            // B) CREAR DETALLES (ORDER DETAILS)
+            // Array para impresión
+            $diffParaCocina = [
+                'nuevos' => [],
+                'cancelados' => []
+            ];
+
+            // 2. Detalles y Stock
             foreach ($this->carrito as $item) {
                 OrderDetail::create([
                     'order_id'      => $order->id,
@@ -151,28 +183,225 @@ class OrdenMesa extends Page implements HasActions
                     'cantidad'      => $item['quantity'],
                     'subTotal'      => $item['total'],
                     'cortesia'      => $item['is_cortesia'] ? 1 : 0,
-                    'status'        => 'pendiente',
+                    'status'        => statusPedido::Pendiente,
                     'notes'         => $item['notes'],
                     'fecha_envio_cocina' => now(),
                 ]);
                 $this->gestionarStock($item['variant_id'], $item['quantity'], 'restar');
+
+                // --- CLASIFICACIÓN PARA EL TICKET ---
+                $areaData = $this->obtenerDatosArea($item['product_id']);
+                
+                $diffParaCocina['nuevos'][] = [
+                    'cant' => $item['quantity'],
+                    'nombre' => $item['name'],
+                    'nota' => $item['notes'],
+                    'area_id' => $areaData['id'],
+                    'area_nombre' => $areaData['name']
+                ];
             }
-            //ACTUALIZAR ESTADO DE LA MESA
+
+            // 3. Actualizar Mesa
             $mesaModel = Table::where('id', $this->mesa);
             if ($mesaModel) {
                 $mesaModel->update(['estado_mesa' => 'ocupada', 'order_id' => $order->id, 'asientos' => $this->personas]);
             }
+
+            // 4. Guardar en Cache para Imprimir (con áreas)
+            if (!empty($diffParaCocina['nuevos'])) {
+                $jobId = 'print_new_' . $order->id . '_' . time();
+                Cache::put($jobId, $diffParaCocina, now()->addMinutes(5));
+                session()->flash('print_job_id', $jobId);
+            }
+
             DB::commit();
 
             $this->carrito = [];
-            // $this->calcularTotales();
-            return redirect()->to("/restaurants/restaurant-central/orden-mesa/{$this->mesa}/{$order->id}")->with('orden_creada_id', $order->id);
+            return redirect()
+                ->to("/restaurants/{$this->tenantSlug}/orden-mesa/{$this->mesa}/{$order->id}")
+                ->with('orden_creada_id', $order->id); // Flash ID para reabrir modal si es necesario
+
         } catch (\Exception $e) {
             DB::rollBack();
             Notification::make()->title('Error al procesar orden')->body($e->getMessage())->danger()->send();
         }
     }
 
+    // --- ACTUALIZAR ORDEN (MODIFICAR) ---
+    public function actualizarOrden()
+    {
+        if (!$this->pedido) return;
+        try {
+            $diffParaCocina = [
+                'nuevos' => [],
+                'cancelados' => []
+            ];
+
+            foreach ($this->carrito as $item) {
+                // Obtenemos el área
+                $areaData = $this->obtenerDatosArea($item['product_id']);
+
+                if (!isset($item['guardado']) || !$item['guardado']) {
+                    // CASO 1: PRODUCTO NUEVO (Siempre nota completa)
+                    $diffParaCocina['nuevos'][] = [
+                        'cant' => $item['quantity'],
+                        'nombre' => $item['name'],
+                        'nota' => $item['notes'],
+                        'area_id' => $areaData['id'],
+                        'area_nombre' => $areaData['name']
+                    ];
+                } else {
+                    // CASO 2: PRODUCTO EXISTENTE
+                    $idDetalle = $item['item_id'];
+                    $cantidadOriginal = $this->cantidadesOriginales[$idDetalle] ?? 0;
+                    $cantidadActual = $item['quantity'];
+
+                    // Verificamos si la nota cambió
+                    $notaOriginal = $this->notasOriginales[$idDetalle] ?? '';
+                    $notaActual = $item['notes'];
+                    $notaParaImprimir = ($notaActual !== $notaOriginal) ? $notaActual : '';
+
+                    if ($cantidadActual > $cantidadOriginal) {
+                        $diferencia = $cantidadActual - $cantidadOriginal;
+                        $diffParaCocina['nuevos'][] = [
+                            'cant' => $diferencia,
+                            'nombre' => $item['name'],
+                            'nota' => $notaParaImprimir, // Solo si cambió
+                            'area_id' => $areaData['id'],
+                            'area_nombre' => $areaData['name']
+                        ];
+                    } elseif ($cantidadActual < $cantidadOriginal) {
+                        $diferencia = $cantidadOriginal - $cantidadActual;
+                        $diffParaCocina['cancelados'][] = [
+                            'cant' => $diferencia,
+                            'nombre' => $item['name'],
+                            'nota' => $item['notes'], // En cancelación mantenemos nota para identificar
+                            'area_id' => $areaData['id'],
+                            'area_nombre' => $areaData['name']
+                        ];
+                    } elseif ($notaParaImprimir !== '') {
+                        // CASO 3: MISMA CANTIDAD PERO CAMBIÓ LA NOTA (MODIFICACIÓN)
+                        // Enviamos como "nuevo" pero con cantidad 0 o indicativo de cambio de nota
+                        // Opcional: Podrías manejar esto como una reimpresión de nota
+                        $diffParaCocina['nuevos'][] = [
+                            'cant' => $cantidadActual, // Se reimprime todo el item con la nueva nota
+                            'nombre' => $item['name'] . ' (MODIF. NOTA)',
+                            'nota' => $notaParaImprimir,
+                            'area_id' => $areaData['id'],
+                            'area_nombre' => $areaData['name']
+                        ];
+                    }
+                }
+            }
+
+            if (!empty($this->itemsEliminados)) {
+                $itemsABorrar = OrderDetail::whereIn('id', $this->itemsEliminados)->get();
+                foreach ($itemsABorrar as $item) {
+                    $areaData = $this->obtenerDatosArea($item->product_id);
+                    $diffParaCocina['cancelados'][] = [
+                        'cant' => $item->cantidad,
+                        'nombre' => $item->product_name,
+                        'nota' => $item->notes,
+                        'area_id' => $areaData['id'],
+                        'area_nombre' => $areaData['name']
+                    ];
+                }
+            }
+
+            // Guardar Cache
+            if (!empty($diffParaCocina['nuevos']) || !empty($diffParaCocina['cancelados'])) {
+                $jobId = 'print_' . $this->pedido . '_' . time();
+                Cache::put($jobId, $diffParaCocina, now()->addMinutes(5));
+                session()->flash('print_job_id', $jobId);
+            }
+
+            DB::beginTransaction();
+
+            $order = Order::find($this->pedido);
+            $order->update([
+                'subtotal' => $this->subtotal,
+                'igv'      => $this->igv,
+                'total'    => $this->total,
+            ]);
+
+            foreach ($this->carrito as $item) {
+                if (!isset($item['guardado']) || !$item['guardado']) {
+                    OrderDetail::create([
+                        'order_id'      => $order->id,
+                        'product_id'    => $item['product_id'],
+                        'variant_id'    => $item['variant_id'],
+                        'product_name'  => $item['name'],
+                        'price'         => $item['price'],
+                        'cantidad'      => $item['quantity'],
+                        'subTotal'      => $item['total'],
+                        'cortesia'      => $item['is_cortesia'] ? 1 : 0,
+                        'status'        => statusPedido::Pendiente,
+                        'notes'         => $item['notes'],
+                        'fecha_envio_cocina' => now(),
+                    ]);
+                    $this->gestionarStock($item['variant_id'], $item['quantity'], 'restar');
+                } else {
+                    $detalle = OrderDetail::find($item['item_id']);
+                    if ($detalle) {
+                        // Actualizamos la nota en BD
+                        $detalle->notes = $item['notes'];
+                        
+                        $cantidadAnterior = $detalle->cantidad;
+                        $cantidadNueva = $item['quantity'];
+
+                        if ($cantidadNueva != $cantidadAnterior) {
+                            $detalle->update([
+                                'cantidad' => $cantidadNueva,
+                                'subTotal' => $item['total'],
+                                'notes' => $item['notes']
+                            ]);
+
+                            if ($cantidadNueva > $cantidadAnterior) {
+                                $diff = $cantidadNueva - $cantidadAnterior;
+                                $this->gestionarStock($item['variant_id'], $diff, 'restar');
+                            } else {
+                                $diff = $cantidadAnterior - $cantidadNueva;
+                                $this->gestionarStock($item['variant_id'], $diff, 'sumar');
+                            }
+                        } else {
+                            // Solo guardar si cambió la nota sin cambiar cantidad
+                            $detalle->save();
+                        }
+                    }
+                }
+            }
+
+            if (!empty($this->itemsEliminados)) {
+                $itemsABorrar = OrderDetail::whereIn('id', $this->itemsEliminados)->get();
+                foreach ($itemsABorrar as $borrado) {
+                    $this->gestionarStock($borrado->variant_id, $borrado->cantidad, 'sumar');
+                }
+                OrderDetail::whereIn('id', $this->itemsEliminados)->delete();
+            }
+
+            DB::commit();
+
+            $this->hayCambios = false;
+            $this->itemsEliminados = [];
+
+            // Refrescamos y recargamos la página (mount se ejecutará de nuevo y actualizará notasOriginales)
+            $this->ordenGenerada = $order->refresh()->load(['details.product.production.printer', 'table', 'user']);
+
+            if (session()->has('print_job_id')) {
+                $this->mostrarModalComanda = true;
+            }
+            Notification::make()->title('Orden actualizada')->success()->send();
+            
+            // Importante volver a llamar al mount para resetear originales
+            $this->mount($this->mesa, $this->pedido);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
+        }
+    }
+
+    // --- GESTIÓN DE STOCK ---
     private function gestionarStock($variantId, $cantidad, $operacion = 'restar')
     {
         $variant = Variant::with(['stocks' => function ($q) {
@@ -210,7 +439,7 @@ class OrdenMesa extends Page implements HasActions
         }
     }
 
-    //ABRIR MODAL Y PREPARAR PRODUCTO
+    // --- SELECCIÓN DE PRODUCTOS ---
     public function agregarProducto(int $productoId)
     {
         $producto = OrdenService::obtenerProductoId($productoId);
@@ -223,7 +452,6 @@ class OrdenMesa extends Page implements HasActions
         $this->stockActualVariante = 0;
         $this->stockReservaVariante = 0;
 
-        // CASO A: PRODUCTO SIMPLE (Sin atributos)
         if ($producto->attributes->isEmpty()) {
             $varianteUnica = $producto->variants->first();
             if ($varianteUnica) {
@@ -231,270 +459,19 @@ class OrdenMesa extends Page implements HasActions
                 $this->stockActualVariante = $varianteUnica->stocks->sum('stock_real');
                 $this->stockReservaVariante = $varianteUnica->stocks->sum('stock_reserva');
             }
-        }
-        // CASO B: PRODUCTO CON ATRIBUTOS
-        else {
-            //Pre-seleccionar la primera opción de cada atributo por defecto
+        } else {
             foreach ($producto->attributes as $attr) {
                 $rawValues = $attr->pivot->values ?? [];
                 $values = is_string($rawValues) ? json_decode($rawValues, true) : $rawValues;
-                // Si hay valores configurados, tomamos el primero
                 if (is_array($values) && count($values) > 0) {
                     $primerValorId = $values[0]['id'];
                     $this->selectedAttributes[$attr->id] = $primerValorId;
                 }
             }
-            //Una vez seleccionados todos los defaults, calculamos PRECIO y STOCK una sola vez
             $this->buscarVarianteCoincidente();
         }
     }
 
-    //ACTUALIZAR ORDEN
-    public function actualizarOrden()
-    {
-        if (!$this->pedido) return;
-        try {
-            //CALCULAR DIFERENCIAS EXACTAS
-            $diffParaCocina = [
-                'nuevos' => [],
-                'cancelados' => []
-            ];
-
-            //REVISAR EL CARRITO ACTUAL (Para nuevos, aumentos y reducciones)
-            foreach ($this->carrito as $item) {
-
-                // CASO 1: ES NUEVO (No está guardado en BD)
-                if (!isset($item['guardado']) || !$item['guardado']) {
-                    $diffParaCocina['nuevos'][] = [
-                        'cant' => $item['quantity'],
-                        'nombre' => $item['name'],
-                        'nota' => $item['notes']
-                    ];
-                }
-                // CASO 2: YA EXISTÍA (Comparamos con el original)
-                else {
-                    $idDetalle = $item['item_id'];
-                    $cantidadOriginal = $this->cantidadesOriginales[$idDetalle] ?? 0;
-                    $cantidadActual = $item['quantity'];
-
-                    if ($cantidadActual > $cantidadOriginal) {
-                        // AUMENTO: Imprimir solo la diferencia positiva
-                        $diferencia = $cantidadActual - $cantidadOriginal;
-                        $diffParaCocina['nuevos'][] = [
-                            'cant' => $diferencia,
-                            'nombre' => $item['name'],
-                            'nota' => $item['notes']
-                        ];
-                    } elseif ($cantidadActual < $cantidadOriginal) {
-                        // REDUCCIÓN: Imprimir la diferencia negativa como cancelado
-                        $diferencia = $cantidadOriginal - $cantidadActual;
-                        $diffParaCocina['cancelados'][] = [
-                            'cant' => $diferencia,
-                            'nombre' => $item['name'],
-                            'nota' => $item['notes']
-                        ];
-                    }
-                }
-            }
-
-            // B) REVISAR LOS ELIMINADOS TOTALES (Botón de borrar)
-            if (!empty($this->itemsEliminados)) {
-                // Buscamos info en BD antes de borrar para saber qué nombre imprimir
-                $itemsABorrar = OrderDetail::whereIn('id', $this->itemsEliminados)->get();
-                foreach ($itemsABorrar as $item) {
-                    $diffParaCocina['cancelados'][] = [
-                        'cant' => $item->cantidad, // Se cancela todo lo que había
-                        'nombre' => $item->product_name,
-                        'nota' => $item->notes
-                    ];
-                }
-            }
-
-            // PASO 2: GUARDAR EN CACHE
-            // Solo imprimimos si realmente hubo cambios
-            if (!empty($diffParaCocina['nuevos']) || !empty($diffParaCocina['cancelados'])) {
-                $jobId = 'print_' . $this->pedido . '_' . time();
-                Cache::put($jobId, $diffParaCocina, now()->addMinutes(5));
-                session()->flash('print_job_id', $jobId); // Flash para el modal
-            }
-
-            // PASO 3: TRANSACCIÓN DE BASE DE DATOS (UPDATE REAL)
-            DB::beginTransaction();
-
-            $order = Order::find($this->pedido);
-            $order->update([
-                'subtotal' => $this->subtotal,
-                'igv'      => $this->igv,
-                'total'    => $this->total,
-            ]);
-
-            // 2. Ítems (Create / Update)
-            foreach ($this->carrito as $item) {
-                // Nuevo
-                if (!isset($item['guardado']) || !$item['guardado']) {
-                    OrderDetail::create([
-                        'order_id'      => $order->id,
-                        'product_id'    => $item['product_id'],
-                        'variant_id'    => $item['variant_id'],
-                        'product_name'  => $item['name'],
-                        'price'         => $item['price'],
-                        'cantidad'      => $item['quantity'],
-                        'subTotal'      => $item['total'],
-                        'cortesia'      => $item['is_cortesia'] ? 1 : 0,
-                        'status'        => 'pendiente',
-                        'notes'         => $item['notes'],
-                        'fecha_envio_cocina' => now(),
-                    ]);
-                    $this->gestionarStock($item['variant_id'], $item['quantity'], 'restar');
-                }
-                // Actualizar
-                else {
-                    $detalle = OrderDetail::find($item['item_id']);
-                    if ($detalle) {
-                        $cantidadAnterior = $detalle->cantidad;
-                        $cantidadNueva = $item['quantity'];
-
-                        // Solo tocamos stock si la cantidad cambió
-                        if ($cantidadNueva != $cantidadAnterior) {
-
-                            $detalle->update([
-                                'cantidad' => $cantidadNueva,
-                                'subTotal' => $item['total'],
-                            ]);
-
-                            // === STOCK: CALCULAR DIFERENCIA ===
-                            if ($cantidadNueva > $cantidadAnterior) {
-                                // Aumentó el pedido -> Restar Stock (Diferencia)
-                                $diff = $cantidadNueva - $cantidadAnterior;
-                                $this->gestionarStock($item['variant_id'], $diff, 'restar');
-                            } else {
-                                // Disminuyó el pedido -> Devolver Stock (Diferencia)
-                                $diff = $cantidadAnterior - $cantidadNueva;
-                                $this->gestionarStock($item['variant_id'], $diff, 'sumar');
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 3. Procesar Eliminados
-            if (!empty($this->itemsEliminados)) {
-                // Recuperamos los datos ANTES de borrar para saber qué variant_id y cantidad devolver
-                $itemsABorrar = OrderDetail::whereIn('id', $this->itemsEliminados)->get();
-                foreach ($itemsABorrar as $borrado) {
-                    // === STOCK: DEVOLVER TODO ===
-                    $this->gestionarStock($borrado->variant_id, $borrado->cantidad, 'sumar');
-                }
-                // Ahora sí borramos
-                OrderDetail::whereIn('id', $this->itemsEliminados)->delete();
-            }
-
-            DB::commit();
-
-            // PASO 4: RESET Y RECARGA
-            $this->hayCambios = false;
-            $this->itemsEliminados = [];
-
-            // Recargamos orden para el ID
-            $this->ordenGenerada = $order->refresh();
-
-            // Abrimos modal solo si hubo algo que imprimir
-            if (session()->has('print_job_id')) {
-                $this->mostrarModalComanda = true;
-            }
-            Notification::make()->title('Orden actualizada')->success()->send();
-            $this->mount($this->mesa, $this->pedido);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
-        }
-    }
-
-    //ANULAR PEDIDO
-    public function anularPedidoAction(): Action
-    {
-        return Action::make('anularPedido')
-            ->label('Anular Pedido')
-            ->icon('heroicon-o-trash') // Icono de basura estándar
-            ->color('danger') // Color Rojo
-            ->iconButton() // Estilo botón redondo pequeño
-            ->tooltip('Anular Pedido y Liberar Mesa')
-            ->extraAttributes([
-                'x-on:click' => 'mobileCartOpen = false',
-            ])
-            ->requiresConfirmation()
-            ->modalHeading('¿Anular Pedido?')
-            ->modalDescription('¿Seguro que deseas anular este pedido? Se devolverá el stock y la mesa quedará libre.')
-            ->modalSubmitActionLabel('Sí, Anular')
-            
-            // Lógica que se ejecuta al confirmar
-            ->action(function () {
-                $this->ejecutarAnulacion($this->pedido);
-            });
-    }
-
-    // 4. TU LÓGICA ORIGINAL (Refactorizada y Corregida)
-    public function ejecutarAnulacion($pedidoId)
-    {
-        if (!$pedidoId) return;
-
-        try {
-            DB::beginTransaction();
-
-            $order = \App\Models\Order::with('details')->findOrFail($pedidoId);
-            $diffParaCocina = ['nuevos' => [], 'cancelados' => []];
-
-            foreach ($order->details as $detail) {
-                if ($detail->status !== 'cancelado') {
-                    $this->gestionarStock($detail->variant_id, $detail->cantidad, 'sumar');
-                    $diffParaCocina['cancelados'][] = [
-                        'cant'   => $detail->cantidad,
-                        'nombre' => $detail->product_name,
-                        'nota'   => 'ANULACIÓN'
-                    ];
-                }
-            }
-
-            $order->details()->where('status', '!=', 'cancelado')->update(['status' => 'cancelado']);
-            $order->update(['status' => 'cancelado']);
-
-            if ($order->table_id) {
-                \App\Models\Table::where('id', $order->table_id)->update([
-                    'estado_mesa' => 'libre',
-                    'order_id'    => null,
-                    'asientos'    => 1 
-                ]);
-            }
-
-            if (!empty($diffParaCocina['cancelados'])) {
-                $jobId = 'print_anul_' . $pedidoId . '_' . time();
-                Cache::put($jobId, $diffParaCocina, now()->addMinutes(5));
-                session()->flash('print_job_id', $jobId);
-                session()->flash('print_order_id', $pedidoId);
-            }
-
-            DB::commit();
-
-            \Filament\Notifications\Notification::make()
-                ->title('Pedido anulado correctamente')
-                ->success()
-                ->send();
-
-            // CORRECCIÓN DE LA REDIRECCIÓN:
-            // Antes tenías error de sintaxis con {{ }} dentro del string.
-            return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Filament\Notifications\Notification::make()
-                ->title('Error')
-                ->body($e->getMessage())
-                ->danger()
-                ->send();
-        }
-    }
-
-    //LÓGICA INTELIGENTE DE VARIANTES
     public function seleccionarAtributo($attributeId, $valueId)
     {
         $this->selectedAttributes[$attributeId] = $valueId;
@@ -503,28 +480,21 @@ class OrdenMesa extends Page implements HasActions
 
     public function buscarVarianteCoincidente()
     {
-        // PASO 1: CALCULO DE PRECIO
         $precioBase = $this->productoSeleccionado->price;
         $extrasAcumulados = 0;
         foreach ($this->selectedAttributes as $attrId => $valIdSeleccionado) {
-            // Buscamos el atributo en la relación cargada
             $atributo = $this->productoSeleccionado->attributes->find($attrId);
             if ($atributo) {
-                // Estructura esperada: [{"id":1, "name":"Grande", "extra": 5.00}, ...]
                 $opciones = is_string($atributo->pivot->values) ? json_decode($atributo->pivot->values, true) : $atributo->pivot->values;
-                // Buscamos la opción seleccionada dentro del JSON
                 $opcion = collect($opciones)->firstWhere('id', $valIdSeleccionado);
-                // Si tiene precio extra, lo sumamos
                 if ($opcion) {
                     $extrasAcumulados += ($opcion['extra'] ?? 0);
                 }
             }
         }
 
-        // Asignamos el precio calculado
         $this->precioCalculado = $precioBase + $extrasAcumulados;
 
-        // PASO 2: BUSQUEDA DE VARIANTE
         if (!$this->productoSeleccionado || $this->productoSeleccionado->variants->isEmpty()) {
             return;
         }
@@ -532,7 +502,6 @@ class OrdenMesa extends Page implements HasActions
         foreach ($this->productoSeleccionado->variants as $variant) {
             $variantValueIds = $variant->values->pluck('id')->toArray();
             $seleccionados = array_values($this->selectedAttributes);
-            // Verificamos coincidencia exacta de IDs
             $coincidencias = array_intersect($seleccionados, $variantValueIds);
             if (count($coincidencias) === count($this->productoSeleccionado->attributes)) {
                 $matchVariant = $variant;
@@ -551,7 +520,6 @@ class OrdenMesa extends Page implements HasActions
         }
     }
 
-    //CONFIRMAR Y AGREGAR AL CARRITO
     public function confirmarAgregado()
     {
         if ($this->productoSeleccionado->variants->count() > 0 && !$this->variantSeleccionadaId) {
@@ -559,13 +527,10 @@ class OrdenMesa extends Page implements HasActions
             return;
         }
 
-        // 2. Preparar datos para comparar
         $prodId = $this->productoSeleccionado->id;
         $varId = $this->variantSeleccionadaId;
         $esCortesia = $this->esCortesia;
         $nuevaNota = trim($this->notaPedido);
-
-        // 3. BUSCAR SI YA EXISTE EN EL CARRITO
         $indiceExistente = null;
 
         foreach ($this->carrito as $index => $item) {
@@ -579,9 +544,7 @@ class OrdenMesa extends Page implements HasActions
             }
         }
 
-        // 4. LÓGICA DE AGREGADO O ACTUALIZACIÓN
         if ($indiceExistente !== null) {
-            // a) Validación de Stock
             if ($this->productoSeleccionado->control_stock == 1 && $this->productoSeleccionado->venta_sin_stock == 0) {
                 $stockRestante = $this->stockReservaVariante;
                 $cantidadNueva = $this->carrito[$indiceExistente]['quantity'] + 1;
@@ -591,11 +554,9 @@ class OrdenMesa extends Page implements HasActions
                 }
             }
 
-            // b) Actualizamos Cantidad y Precio Total
             $this->carrito[$indiceExistente]['quantity']++;
             $this->carrito[$indiceExistente]['total'] = $this->carrito[$indiceExistente]['quantity'] * $this->carrito[$indiceExistente]['price'];
 
-            // c) CONCATENAR NOTAS
             if (!empty($nuevaNota)) {
                 $notaActual = $this->carrito[$indiceExistente]['notes'];
                 if (!empty($notaActual)) {
@@ -605,7 +566,6 @@ class OrdenMesa extends Page implements HasActions
                 }
             }
         } else {
-            // === CASO B: ES NUEVO -> CREAMOS LA LÍNEA ===
             $variante = Variant::with('values')->find($varId);
             $nombreItem = $this->productoSeleccionado->name;
             if ($variante && $this->productoSeleccionado->attributes->count() > 0) {
@@ -644,7 +604,7 @@ class OrdenMesa extends Page implements HasActions
         $this->mostrarModalComanda = false;
     }
 
-    // 4. GESTIÓN DEL CARRITO (Sumar, Restar, Eliminar)
+    // --- ACCIONES DE CARRITO ---
     public function incrementarCantidad($index)
     {
         $item = $this->carrito[$index];
@@ -653,7 +613,6 @@ class OrdenMesa extends Page implements HasActions
 
         $producto = Product::find($productoId);
 
-        // 2. VALIDACIÓN DE STOCK (El "Policía")
         if ($producto->control_stock == 1 && $producto->venta_sin_stock == 0) {
             $variante = Variant::with('stocks')->find($variantId);
             $stockMaximo = $variante ? $variante->stocks->sum('stock_reserva') : 0;
@@ -661,14 +620,12 @@ class OrdenMesa extends Page implements HasActions
                 ->where('variant_id', $variantId)
                 ->sum('quantity');
 
-            // c) Verificamos si al sumar 1 nos pasamos
             if (($cantidadEnCarrito + 1) > $stockMaximo) {
                 Notification::make()->title('Stock insuficiente')->body("Solo quedan {$stockMaximo} unidades disponibles.")->warning()->send();
                 return;
             }
         }
 
-        // 3. Si pasó la validación (o no controla stock), procedemos
         $this->carrito[$index]['quantity']++;
         $this->carrito[$index]['total'] = $this->carrito[$index]['quantity'] * $this->carrito[$index]['price'];
         $this->hayCambios = true;
@@ -681,7 +638,6 @@ class OrdenMesa extends Page implements HasActions
             $this->carrito[$index]['quantity']--;
             $this->carrito[$index]['total'] = $this->carrito[$index]['quantity'] * $this->carrito[$index]['price'];
         } else {
-            // Si baja de 1, lo eliminamos
             $this->eliminarItem($index);
             return;
         }
@@ -715,6 +671,93 @@ class OrdenMesa extends Page implements HasActions
         $this->igv = $this->total - $this->subtotal;
     }
 
+    // --- ACCIONES DE ANULACIÓN ---
+    public function anularPedidoAction(): Action
+    {
+        return Action::make('anularPedido')
+            ->label('Anular Pedido')
+            ->icon('heroicon-o-trash')
+            ->color('danger')
+            ->iconButton()
+            ->tooltip('Anular Pedido y Liberar Mesa')
+            ->extraAttributes([
+                'x-on:click' => 'mobileCartOpen = false',
+            ])
+            ->requiresConfirmation()
+            ->modalHeading('¿Anular Pedido?')
+            ->modalDescription('¿Seguro que deseas anular este pedido? Se devolverá el stock y la mesa quedará libre.')
+            ->modalSubmitActionLabel('Sí, Anular')
+            ->action(function () {
+                $this->ejecutarAnulacion($this->pedido);
+            });
+    }
+
+    public function ejecutarAnulacion($pedidoId)
+    {
+        if (!$pedidoId) return;
+
+        try {
+            DB::beginTransaction();
+
+            $order = \App\Models\Order::with('details.product.production.printer')->findOrFail($pedidoId);
+            $diffParaCocina = ['nuevos' => [], 'cancelados' => []];
+
+            foreach ($order->details as $detail) {
+                if ($detail->status !== statusPedido::Cancelado) {
+                    $this->gestionarStock($detail->variant_id, $detail->cantidad, 'sumar');
+
+                    // Lógica de Área
+                    $prod = $detail->product->production ?? null;
+                    $areaId = ($prod && $prod->status) ? $prod->id : 'general';
+                    $areaNombre = ($prod && $prod->status) ? $prod->name : 'GENERAL';
+
+                    $diffParaCocina['cancelados'][] = [
+                        'cant'   => $detail->cantidad,
+                        'nombre' => $detail->product_name,
+                        'nota'   => 'ANULACIÓN',
+                        'area_id' => $areaId,
+                        'area_nombre' => $areaNombre
+                    ];
+                }
+            }
+
+            $order->details()->where('status', '!=', statusPedido::Cancelado)->update(['status' => statusPedido::Cancelado]);
+            $order->update(['status' => statusPedido::Cancelado]);
+
+            if ($order->table_id) {
+                Table::where('id', $order->table_id)->update([
+                    'estado_mesa' => 'libre',
+                    'order_id'    => null,
+                    'asientos'    => 1
+                ]);
+            }
+
+            if (!empty($diffParaCocina['cancelados'])) {
+                $jobId = 'print_anul_' . $pedidoId . '_' . time();
+                Cache::put($jobId, $diffParaCocina, now()->addMinutes(5));
+                session()->flash('print_job_id', $jobId);
+                session()->flash('print_order_id', $pedidoId);
+            }
+
+            DB::commit();
+
+            \Filament\Notifications\Notification::make()
+                ->title('Pedido anulado correctamente')
+                ->success()
+                ->send();
+
+            return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Filament\Notifications\Notification::make()
+                ->title('Error')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    // --- CONFIGURACIÓN DE PÁGINA ---
     public function getViewData(): array
     {
         $categorias = OrdenService::obtenerCategorias();
