@@ -12,9 +12,8 @@ class Variant extends Model
 {
     protected $fillable = [
         'image_path',
-        'sku',
+        'codigo_barras',
         'internal_code',
-        'extra_price',
         'stock_inicial',
         'product_id',
         'status',

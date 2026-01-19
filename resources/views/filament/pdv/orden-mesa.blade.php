@@ -46,18 +46,46 @@
             {{-- 3. PRODUCTOS --}}
             <div class="pos-products-area" wire:loading.class="opacity-50 pointer-events-none"
                 wire:target="search, categoriaSeleccionada">
+
+
                 <div class="products-grid">
                     @forelse ($productos as $product)
-                        {{-- TARJETA DE PRODUCTO CON ALPINEJS PARA TOOLTIP Y Z-INDEX --}}
-                        <div wire:key="prod-{{ $product->id }}" class="product-card group" x-data="{ tooltipOpen: false }"
-                            :style="tooltipOpen ? 'z-index: 50;' : ''" @click.outside="tooltipOpen = false">
+                        @php
+                            // TRUCO: Normalizamos el tipo aquí mismo.
+                            // Si es un Enum, sacamos su valor ('Producto'). Si ya es texto, lo usamos directo.
+                            $tipoProducto =
+                                $product->type instanceof \App\Enums\TipoProducto
+                                    ? $product->type->value
+                                    : $product->type;
+                        @endphp
 
-                            <div class="product-image-container">
+                        {{-- USAMOS LA VARIABLE NORMALIZADA $tipoProducto PARA EL KEY --}}
+                        <div wire:key="item-{{ $tipoProducto }}-{{ $product->id }}" class="product-card group"
+                            x-data="{ tooltipOpen: false }" :style="tooltipOpen ? 'z-index: 50;' : ''"
+                            @click.outside="tooltipOpen = false">
+
+                            <div class="product-image-container relative">
+                                {{-- BADGE: COMBO (Promocion) --}}
+                                @if ($tipoProducto === 'Promocion')
+                                    <div class="pos-badge">
+                                        COMBO
+                                    </div>
+                                @endif
+
+                                {{-- BADGE: SERVICIO --}}
+                                @if ($tipoProducto === 'Servicio')
+                                    <div class="pos-badge">
+                                        SERVICIO
+                                    </div>
+                                @endif
+
+
+                                {{-- IMAGEN --}}
                                 @if ($product->image_path)
                                     <img src="{{ asset('storage/' . $product->image_path) }}" alt="{{ $product->name }}"
                                         class="product-img">
                                 @else
-                                    <div class="flex items-center justify-center h-full">
+                                    <div class="flex items-center justify-center h-full text-gray-300">
                                         <svg style="width:32px; height:32px" fill="none" stroke="currentColor"
                                             viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -67,106 +95,187 @@
                                     </div>
                                 @endif
 
+                                {{-- OVERLAY AGOTADO --}}
                                 @if ($product->esta_agotado)
                                     <div class="agotado-overlay">
                                         <span class="agotado-badge">AGOTADO</span>
                                     </div>
                                 @endif
 
+                                {{-- PRECIO --}}
                                 <div class="price-tag-overlay">
                                     <span class="text-xs font-medium">S/</span>{{ number_format($product->price, 2) }}
                                 </div>
                             </div>
 
+                            {{-- En tu archivo orden-mesa.blade.php --}}
+
                             <div class="product-info">
                                 <h3 class="product-title">{{ $product->name }}</h3>
-                                @if ($product->control_stock == 1)
+
+                                {{-- 1. STOCK DE PRODUCTO FÍSICO --}}
+                                @if ($tipoProducto === 'Producto' && $product->control_stock == 1)
                                     <p
                                         class="stock-text {{ $product->stock_visible > 0 ? 'text-gray-500' : 'text-red-500' }}">
                                         Stock: {{ $product->stock_visible }}
                                     </p>
                                 @endif
+
+                                {{-- 2. STOCK DE PROMOCIÓN (SOLO SI TIENE LÍMITE) --}}
+                                @if ($tipoProducto === 'Promocion' && $product->tiene_limite)
+                                    <p
+                                        class="stock-text {{ $product->stock_visible > 0 ? 'text-purple-600' : 'text-red-500' }}">
+                                        Restantes hoy: {{ $product->stock_visible }}
+                                    </p>
+                                @endif
+
+                                {{-- 3. TEXTO PARA PROMOCIONES ILIMITADAS (SIN STOCK) --}}
+                                @if ($tipoProducto === 'Promocion' && !$product->tiene_limite)
+                                    {{-- Aquí puedes poner un texto genérico o dejarlo vacío si prefieres no mostrar nada --}}
+                                    <p class="text-[10px] text-purple-500 font-medium italic">
+                                        Disponible
+                                    </p>
+                                @endif
+
+                                {{-- 4. SERVICIOS --}}
+                                @if ($tipoProducto === 'Servicio')
+                                    <p class="text-[10px] text-blue-500 italic">Servicio</p>
+                                @endif
                             </div>
 
                             <div class="product-footer">
                                 <div class="flex items-center gap-2 w-full">
-                                    {{-- BOTÓN AGREGAR --}}
-                                    <button
-                                        class="btn-footer-cart flex-1 {{ $product->esta_agotado ? 'opacity-50 cursor-not-allowed bg-gray-300 text-gray-500' : '' }}"
-                                        @if (!$product->esta_agotado) wire:click="agregarProducto({{ $product->id }})" @endif
-                                        @if ($product->esta_agotado) disabled @endif wire:loading.attr="disabled"
-                                        wire:target="agregarProducto({{ $product->id }})">
 
-                                        <svg wire:loading.remove wire:target="agregarProducto({{ $product->id }})"
-                                            xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-                                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                            stroke-linecap="round" stroke-linejoin="round">
-                                            <circle cx="9" cy="21" r="1"></circle>
-                                            <circle cx="20" cy="21" r="1"></circle>
-                                            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6">
-                                            </path>
-                                        </svg>
-                                        <svg wire:loading.class.remove="hidden"
-                                            wire:target="agregarProducto({{ $product->id }})"
-                                            class="animate-spin hidden" style="width:18px; height:18px;"
-                                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle class="opacity-25" cx="12" cy="12" r="10"
-                                                stroke="currentColor" stroke-width="4"></circle>
-                                            <path class="opacity-75" fill="currentColor"
-                                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
-                                            </path>
-                                        </svg>
-                                    </button>
+                                    {{-- BOTÓN: AGREGAR PROMOCIÓN --}}
+                                    @if ($tipoProducto === 'Promocion')
+                                        <button
+                                            class="btn-footer-cart flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                                            wire:click="agregarPromocion({{ $product->id }})"
+                                            wire:loading.attr="disabled"
+                                            wire:target="agregarPromocion({{ $product->id }})">
 
-                                    {{-- BOTÓN INFO (TOOLTIP) --}}
-                                    <div class="relative">
-                                        <button class="btn-footer-info" type="button"
-                                            @click="tooltipOpen = !tooltipOpen">
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none"
-                                                viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
-                                                class="w-5 h-5">
-                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                    d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.287.696.345 1.084m-.345-1.084c-.18-.324-.287-.696-.345-1.084m0 2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
+                                            {{-- Icono Loading --}}
+                                            <svg wire:loading.class.remove="hidden"
+                                                wire:target="agregarPromocion({{ $product->id }})"
+                                                class="animate-spin hidden" style="width:18px; height:18px;"
+                                                xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10"
+                                                    stroke="currentColor" stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor"
+                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                                </path>
+                                            </svg>
+
+                                            {{-- Icono Combo --}}
+                                            <svg wire:loading.remove
+                                                wire:target="agregarPromocion({{ $product->id }})"
+                                                xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M12 5v14M5 12h14" />
                                             </svg>
                                         </button>
+                                    @else
+                                        {{-- BOTÓN: AGREGAR PRODUCTO / SERVICIO --}}
+                                        <button
+                                            class="btn-footer-cart flex-1 {{ $product->esta_agotado ? 'opacity-50 cursor-not-allowed bg-gray-300 text-gray-500' : '' }}"
+                                            @if (!$product->esta_agotado) wire:click="agregarProducto({{ $product->id }})" @endif
+                                            @if ($product->esta_agotado) disabled @endif
+                                            wire:loading.attr="disabled"
+                                            wire:target="agregarProducto({{ $product->id }})">
 
-                                        <div class="attr-tooltip" :class="{ 'show-tooltip': tooltipOpen }">
-                                            <div class="attr-arrow"></div>
-                                            <h4
-                                                class="text-[10px] font-bold text-gray-400 uppercase mb-2 border-b border-gray-700 pb-1">
-                                                Detalles</h4>
-                                            @if ($product->attributes->count() > 0)
-                                                @foreach ($product->attributes as $attribute)
-                                                    @php
-                                                        $rawValues = $attribute->pivot->values;
-                                                        $listaValores = is_string($rawValues)
-                                                            ? json_decode($rawValues, true)
-                                                            : $rawValues;
-                                                    @endphp
-                                                    @if (!empty($listaValores))
-                                                        <div class="mb-2 last:mb-0">
-                                                            <span
-                                                                class="text-[0.65rem] font-bold text-gray-300 block uppercase mb-1">{{ $attribute->name }}:</span>
-                                                            <div class="flex flex-wrap gap-1 mt-1">
-                                                                @foreach ($listaValores as $valor)
+                                            <svg wire:loading.remove
+                                                wire:target="agregarProducto({{ $product->id }})"
+                                                xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <circle cx="9" cy="21" r="1"></circle>
+                                                <circle cx="20" cy="21" r="1"></circle>
+                                                <path
+                                                    d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6">
+                                                </path>
+                                            </svg>
+                                            <svg wire:loading.class.remove="hidden"
+                                                wire:target="agregarProducto({{ $product->id }})"
+                                                class="animate-spin hidden" style="width:18px; height:18px;"
+                                                xmlns="http://www.w3.org/2000/svg" fill="none"
+                                                viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10"
+                                                    stroke="currentColor" stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor"
+                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                                </path>
+                                            </svg>
+                                        </button>
+                                    @endif
+
+                                    {{-- BOTÓN INFO (TOOLTIP) --}}
+                                    @if ($tipoProducto === 'Producto' || $tipoProducto === 'Promocion')
+                                        <div class="relative">
+                                            <button class="btn-footer-info" type="button"
+                                                @click="tooltipOpen = !tooltipOpen">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none"
+                                                    viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
+                                                    class="w-5 h-5">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.287.696.345 1.084m-.345-1.084c-.18-.324-.287-.696-.345-1.084m0 2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
+                                                </svg>
+                                            </button>
+
+                                            <div class="attr-tooltip" :class="{ 'show-tooltip': tooltipOpen }">
+                                                <div class="attr-arrow"></div>
+                                                <h4
+                                                    class="text-[10px] font-bold text-gray-400 uppercase mb-2 border-b border-gray-700 pb-1">
+                                                    {{ $tipoProducto === 'Promocion' ? 'Descripción' : 'Detalles' }}
+                                                </h4>
+
+                                                {{-- CASO 1: Producto --}}
+                                                @if ($tipoProducto === 'Producto')
+                                                    @if ($product->attributes->count() > 0)
+                                                        @foreach ($product->attributes as $attribute)
+                                                            @php
+                                                                $rawValues = $attribute->pivot->values;
+                                                                $listaValores = is_string($rawValues)
+                                                                    ? json_decode($rawValues, true)
+                                                                    : $rawValues;
+                                                            @endphp
+                                                            @if (!empty($listaValores))
+                                                                <div class="mb-2 last:mb-0">
                                                                     <span
-                                                                        class="attr-tag-tooltip">{{ is_array($valor) ? $valor['name'] : $valor->name }}</span>
-                                                                @endforeach
-                                                            </div>
-                                                        </div>
+                                                                        class="text-[0.65rem] font-bold text-gray-300 block uppercase mb-1">
+                                                                        {{ $attribute->name }}:
+                                                                    </span>
+                                                                    <div class="flex flex-wrap gap-1 mt-1">
+                                                                        @foreach ($listaValores as $valor)
+                                                                            <span class="attr-tag-tooltip">
+                                                                                {{ is_array($valor) ? $valor['name'] : $valor->name }}
+                                                                            </span>
+                                                                        @endforeach
+                                                                    </div>
+                                                                </div>
+                                                            @endif
+                                                        @endforeach
+                                                    @else
+                                                        <span class="text-xs text-gray-500 italic">Sin detalles
+                                                            adicionales</span>
                                                     @endif
-                                                @endforeach
-                                            @else
-                                                <span class="text-xs text-gray-500 italic">Sin detalles
-                                                    adicionales</span>
-                                            @endif
+
+                                                    {{-- CASO 2: Promoción --}}
+                                                @elseif($tipoProducto === 'Promocion')
+                                                    <div class="text-xs text-gray-300">
+                                                        {{ $product->description ?? 'Sin descripción disponible.' }}
+                                                    </div>
+                                                @endif
+                                            </div>
                                         </div>
-                                    </div>
+                                    @endif
                                 </div>
                             </div>
                         </div>
                     @empty
-                        <div class="col-span-full py-12 text-center text-gray-500">No se encontraron productos.</div>
+                        <div class="col-span-full py-12 text-center text-gray-500">
+                            No se encontraron productos ni promociones.
+                        </div>
                     @endforelse
                 </div>
             </div>
@@ -200,7 +309,31 @@
 
             <div class="cart-items-container">
                 @forelse($carrito as $index => $item)
-                    <div class="cart-item" wire:key="cart-item-{{ $item['item_id'] }}">
+                    @php
+                        // LÓGICA DE COLORES
+                        $claseFondo = '';
+                        $esGuardado = isset($item['guardado']) && $item['guardado'];
+
+                        if (!$esGuardado) {
+                            // CASO 1: NUEVO -> VERDE
+                            $claseFondo = 'item-nuevo';
+                        } else {
+                            // CASO 2: EXISTENTE -> VERIFICAR CAMBIOS
+                            $id = $item['item_id'];
+                            $cantOrig = $this->cantidadesOriginales[$id] ?? 0;
+                            $precioOrig = $this->preciosOriginales[$id] ?? 0;
+
+                            $cambioCantidad = $item['quantity'] != $cantOrig;
+                            $cambioPrecio = abs(floatval($item['price']) - floatval($precioOrig)) > 0.001;
+
+                            if ($cambioCantidad || $cambioPrecio) {
+                                $claseFondo = 'item-actualizado'; // AMARILLO
+                            }
+                        }
+                    @endphp
+
+                    {{-- TU ESTRUCTURA ORIGINAL + CLASE DE COLOR --}}
+                    <div class="cart-item {{ $claseFondo }}" wire:key="cart-item-{{ $item['item_id'] }}">
                         <div class="cart-item-info">
                             <div class="cart-item-title">
                                 {{ $item['name'] }}
@@ -208,8 +341,11 @@
                                     <span class="text-xs text-orange-500 font-bold">(Cortesía)</span>
                                 @endif
                             </div>
+
                             <div class="cart-item-price">
+                                {{-- AQUÍ ESTÁ EL CAMBIO: INPUT SI ES NUEVO, TEXTO SI ES VIEJO --}}
                                 S/ {{ number_format($item['price'], 2) }} u.
+
                                 @if ($item['notes'])
                                     <div class="text-xs text-gray-400 italic mt-1">
                                         Nota: {{ Str::limit($item['notes'], 20) }}
@@ -217,6 +353,7 @@
                                 @endif
                             </div>
                         </div>
+
                         <div class="cart-item-actions">
                             <div class="font-bold">S/ {{ number_format($item['total'], 2) }}</div>
                             <div class="qty-control">
@@ -233,9 +370,11 @@
                                     <button class="btn-qty"
                                         wire:click="decrementarCantidad({{ $index }})">-</button>
                                 @endif
+
                                 <input type="number" min="1" class="qty-input"
                                     value="{{ $item['quantity'] }}"
                                     wire:change="actualizarCantidadManual({{ $index }}, $event.target.value)">
+
                                 <button class="btn-qty"
                                     wire:click="incrementarCantidad({{ $index }})">+</button>
                             </div>
@@ -252,7 +391,6 @@
                     </div>
                 @endforelse
             </div>
-
 
 
             <div class="cart-footer">
@@ -361,7 +499,30 @@
             {{-- REPETICIÓN DEL LOOP DEL CARRITO (PARA MÓVIL) --}}
             <div class="cart-items-container">
                 @forelse($carrito as $index => $item)
-                    <div class="cart-item" wire:key="mobile-cart-item-{{ $item['item_id'] }}">
+                    @php
+                        // LÓGICA DE COLORES
+                        $claseFondo = '';
+                        $esGuardado = isset($item['guardado']) && $item['guardado'];
+                        if (!$esGuardado) {
+                            // CASO 1: NUEVO -> VERDE
+                            $claseFondo = 'item-nuevo';
+                        } else {
+                            // CASO 2: EXISTENTE -> VERIFICAR CAMBIOS
+                            $id = $item['item_id'];
+                            $cantOrig = $this->cantidadesOriginales[$id] ?? 0;
+                            $precioOrig = $this->preciosOriginales[$id] ?? 0;
+
+                            $cambioCantidad = $item['quantity'] != $cantOrig;
+                            $cambioPrecio = abs(floatval($item['price']) - floatval($precioOrig)) > 0.001;
+
+                            if ($cambioCantidad || $cambioPrecio) {
+                                $claseFondo = 'item-actualizado'; // AMARILLO
+                            }
+                        }
+                    @endphp
+
+                    {{-- TU ESTRUCTURA ORIGINAL + CLASE DE COLOR --}}
+                    <div class="cart-item {{ $claseFondo }}" wire:key="cart-item-{{ $item['item_id'] }}">
                         <div class="cart-item-info">
                             <div class="cart-item-title">
                                 {{ $item['name'] }}
@@ -369,16 +530,24 @@
                                     <span class="text-xs text-orange-500 font-bold">(Cortesía)</span>
                                 @endif
                             </div>
+
                             <div class="cart-item-price">
+                                {{-- AQUÍ ESTÁ EL CAMBIO: INPUT SI ES NUEVO, TEXTO SI ES VIEJO --}}
                                 S/ {{ number_format($item['price'], 2) }} u.
+
+                                @if ($item['notes'])
+                                    <div class="text-xs text-gray-400 italic mt-1">
+                                        Nota: {{ Str::limit($item['notes'], 20) }}
+                                    </div>
+                                @endif
                             </div>
                         </div>
+
                         <div class="cart-item-actions">
                             <div class="font-bold">S/ {{ number_format($item['total'], 2) }}</div>
                             <div class="qty-control">
                                 @if ($item['quantity'] == 1)
-                                    <button class="btn-qty text-red-500"
-                                        wire:click="eliminarItem({{ $index }})">
+                                    <button class="btn-qty" wire:click="eliminarItem({{ $index }})">
                                         <svg style="width:14px;height:14px" fill="none" stroke="currentColor"
                                             viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -390,7 +559,11 @@
                                     <button class="btn-qty"
                                         wire:click="decrementarCantidad({{ $index }})">-</button>
                                 @endif
-                                <span class="text-xs font-bold px-2">{{ $item['quantity'] }}</span>
+
+                                <input type="number" min="1" class="qty-input"
+                                    value="{{ $item['quantity'] }}"
+                                    wire:change="actualizarCantidadManual({{ $index }}, $event.target.value)">
+
                                 <button class="btn-qty"
                                     wire:click="incrementarCantidad({{ $index }})">+</button>
                             </div>
@@ -398,6 +571,11 @@
                     </div>
                 @empty
                     <div class="text-gray-400 text-center py-10">
+                        <svg style="width:48px;height:48px;margin:0 auto 10px;opacity:0.5" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+                        </svg>
                         <span class="text-sm">La orden está vacía</span>
                     </div>
                 @endforelse
@@ -498,10 +676,10 @@
                 // Aquí usamos el 'area_id' que agregamos al backend en el paso anterior
                 $areasCollection->push([
                     'id' => $item['area_id'] ?? 'general',
-                    'name' => $item['area_nombre'] ?? 'GENERAL'
+                    'name' => $item['area_nombre'] ?? 'GENERAL',
                 ]);
             }
-        } 
+        }
         // 2. Si no hay cache, usamos el objeto Order completo (Impresión Total/Reimpresión)
         elseif ($ordenGenerada) {
             foreach ($ordenGenerada->details as $det) {
@@ -522,11 +700,7 @@
 
     @if ($mostrarModalComanda && $ordenGenerada)
         {{-- PASAMOS LA VARIABLE $areasUnicas AL COMPONENTE --}}
-        <x-modal-ticket 
-            :orderId="$ordenGenerada->id" 
-            :jobId="$jobId" 
-            :areas="$areasUnicas" 
-        />
+        <x-modal-ticket :orderId="$ordenGenerada->id" :jobId="$jobId" :areas="$areasUnicas" />
     @endif
     {{-- ========================================================================= --}}
 
@@ -538,7 +712,7 @@
             </div>
         </div>
     @endif
-    
+
     @push('scripts')
         <script>
             let scrollAnimation;

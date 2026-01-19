@@ -106,7 +106,7 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                     ->modalHeading('Editar Variante')
                     ->fillForm(fn($record) => [
                         'image' => $record->image,
-                        'sku' => $record->sku,
+                        'codigo_barras' => $record->codigo_barras,
                         'internal_code' => $record->internal_code,
                         'extra_price' => $record->extra_price,
                         'sale_without_stock' => $record->sale_without_stock,
@@ -122,7 +122,7 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                             ->disk('public')
                             ->preserveFilenames()
                             ->previewable(true),
-                        Forms\Components\TextInput::make('sku')
+                        Forms\Components\TextInput::make('codigo_barras')
                             ->label('Codigo de barras')
                             ->maxLength(100),
 

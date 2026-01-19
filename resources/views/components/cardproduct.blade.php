@@ -18,20 +18,25 @@
 
         <div class="detail-title-overlay">
             <h2 class="detail-product-name">{{ $product->name }}</h2>
-            <div class="flex justify-between items-end">
-                <div class="detail-product-price">
-                    {{-- Usamos $this para acceder a la propiedad pública del componente Livewire padre --}}
-                    Total: S/ {{ number_format($this->precioCalculado, 2) }}
+            <div class="flex justify-between items-end w-full">
+                
+                {{-- INPUT DE PRECIO EDITABLE --}}
+                <div class="price-edit-container">
+                    <span class="currency-symbol">S/</span>
+                    <input 
+                        type="number" 
+                        step="0.01" 
+                        class="price-input" 
+                        wire:model.live.debounce.500ms="precioCalculado"
+                        min="0"
+                    >
                 </div>
 
-                {{-- BADGE DE STOCK EN EL MODAL --}}
+                {{-- BADGE DE STOCK --}}
                 @if ($product->control_stock == 1 && $variantId)
                     @php
-                        // Calcular stock visible restando lo que hay en el carrito
-                        $stockBase = $this->stockReservaVariante;
-                        // $enCarrito = collect($this->carrito)->where('variant_id', $variantId)->sum('quantity');
-                        // $stockModalVisible = $stockBase - $enCarrito;
-                        $stockModalVisible = $stockBase;
+                        // Nota: Accedemos a la propiedad pública del componente padre
+                        $stockModalVisible = $this->stockReservaVariante; 
                     @endphp
 
                     <div class="flex flex-col items-end text-xs font-bold text-white drop-shadow-md">
@@ -64,12 +69,12 @@
             </div>
         @endif
 
-        {{-- 3. SELECTOR DE ATRIBUTOS --}}
-        @if ($product->attributes->count() > 0)
+        {{-- 3. SELECTOR DE ATRIBUTOS (CON CORRECCIÓN DE NULL) --}}
+        {{-- EL ERROR ESTABA AQUÍ: Usamos ?-> para evitar error si attributes es null --}}
+        @if ($product->attributes?->count())
             <div class="attributes-wrapper">
                 @foreach ($product->attributes as $attribute)
                     @php
-                        // Decodificar JSON seguro
                         $rawValues = $attribute->pivot->values;
                         $valores = is_string($rawValues) ? json_decode($rawValues, true) : $rawValues ?? [];
                     @endphp
@@ -81,33 +86,27 @@
                             <div class="variants-grid" wire:loading.class="opacity-50 pointer-events-none cursor-wait"
                                 wire:target="seleccionarAtributo">
                                 @php
-                                    // 1. Encontrar el precio "extra" mínimo de este grupo para hacer la comparación
-                                    // (Normalmente es 0, pero por si acaso)
                                     $minExtraInRow = collect($valores)->min('extra') ?? 0;
                                 @endphp
 
                                 @foreach ($valores as $valor)
                                     @php
-                                        // Manejo seguro de objeto/array
                                         $valId = is_array($valor) ? $valor['id'] : $valor->id;
                                         $valName = is_array($valor) ? $valor['name'] : $valor->name;
-
-                                        // AQUÍ LEEMOS EL PRECIO DEL JSON DIRECTAMENTE
                                         $valExtra = is_array($valor) ? $valor['extra'] ?? 0 : $valor->extra ?? 0;
-
-                                        $isSelected = ($this->selectedAttributes[$attribute->id] ?? null) == $valId;
-
-                                        // Calculamos la diferencia visual para el badge
-                                        $costoExtraVisible = $valExtra - $minExtraInRow;
+                                        
+                                        // Acceso seguro al array selectedAttributes
+                                        $selectedArr = $this->selectedAttributes ?? [];
+                                        $isSelected = ($selectedArr[$attribute->id] ?? null) == $valId;
                                     @endphp
 
                                     <button type="button"
                                         class="variant-option-btn {{ $isSelected ? 'selected' : '' }}"
-                                        wire:click="seleccionarAtributo({{ $attribute->id }}, {{ $valId }})" wire:loading.attr="disabled">
+                                        wire:click="seleccionarAtributo({{ $attribute->id }}, {{ $valId }})"
+                                        wire:loading.attr="disabled">
 
                                         <span class="variant-name">{{ $valName }}</span>
 
-                                        {{-- BADGE: Muestra el costo extra del JSON --}}
                                         @if ($valExtra > 0)
                                             <span class="badge-price">
                                                 + S/ {{ number_format($valExtra, 2) }}
@@ -136,21 +135,24 @@
             $bloquearBoton = false;
             $mensajeBoton = 'AGREGAR A LA ORDEN';
 
-            // Validar Selección
-            if ($product->attributes->count() > 0 && is_null($variantId)) {
+            // Validar Selección (Solo si hay atributos)
+            if ($product->attributes?->count() > 0 && is_null($variantId)) {
                 $bloquearBoton = true;
                 $mensajeBoton = 'SELECCIONA OPCIONES';
             }
             // Validar Stock
             elseif ($product->control_stock == 1) {
-                // Calcular stock restante considerando carrito
                 $stockRestante = $this->stockReservaVariante;
                 if ($variantId) {
-                    $enCarritoBtn = collect($this->carrito)->where('variant_id', $variantId)->sum('quantity');
-                    $stockRestante = $this->stockReservaVariante - $enCarritoBtn;
+                   $enCarritoBtn = collect($this->carrito)->where('variant_id', $variantId)->sum('quantity');
+                   $stockRestante = $this->stockReservaVariante - $enCarritoBtn;
+                }
+                // Si es promo, usamos el helper visual que ya calculamos en el backend
+                if($product instanceof \App\Models\Promotion) {
+                     // El stock se valida al confirmar, aquí visualmente no bloqueamos salvo que sea evidente
                 }
 
-                if ($stockRestante <= 0 && $product->venta_sin_stock == 0) {
+                if ($stockRestante <= 0 && $product->venta_sin_stock == 0 && !$bloquearBoton) {
                     $bloquearBoton = true;
                     $mensajeBoton = 'AGOTADO (SIN STOCK)';
                 }
@@ -159,9 +161,14 @@
 
         <button class="btn-confirm {{ $bloquearBoton ? 'opacity-50 cursor-not-allowed bg-gray-500' : '' }}"
             wire:click="confirmarAgregado" @if ($bloquearBoton) disabled @endif>
+            
             <span>{{ $mensajeBoton }}</span>
+            
             @if (!$bloquearBoton)
-                <span class="ml-2 text-sm opacity-80">S/ {{ number_format($this->precioCalculado, 2) }}</span>
+                {{-- Aquí se muestra el precio formateado correctamente --}}
+                <span class="ml-2 text-sm opacity-80">
+                    S/ {{ number_format((float)$this->precioCalculado, 2) }}
+                </span>
             @endif
         </button>
     </div>
@@ -231,11 +238,50 @@
         text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     }
 
-    .detail-product-price {
+    /* Estilos para el Input de Precio en el Header */
+    .price-edit-container {
+        display: flex;
+        align-items: center;
+        background-color: rgba(255, 255, 255, 0.2);
+        /* Fondo semitransparente */
+        backdrop-filter: blur(4px);
+        border-radius: 8px;
+        padding: 4px 8px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        margin-top: 8px;
+        width: fit-content;
+    }
+
+    .currency-symbol {
         font-size: 1.1rem;
         font-weight: 600;
         color: #fbbf24;
-        margin-top: 4px;
+        /* Color amarillo/dorado */
+        margin-right: 4px;
+    }
+
+    .price-input {
+        background: transparent;
+        border: none;
+        color: #fff;
+        font-size: 1.2rem;
+        font-weight: 700;
+        width: 100px;
+        padding: 0;
+        margin: 0;
+        outline: none;
+        /* Quitar flechas del input number en algunos navegadores */
+        -moz-appearance: textfield;
+    }
+
+    .price-input::-webkit-outer-spin-button,
+    .price-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .price-input:focus {
+        border-bottom: 1px solid #fbbf24;
     }
 
     /* Cuerpo */

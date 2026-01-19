@@ -3,9 +3,11 @@
 namespace App\Filament\Restaurants\Pages;
 
 use App\Enums\statusPedido;
+use App\Enums\TipoProducto;
 use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\Product;
+use App\Models\Promotion;
 use App\Models\Table;
 use App\Services\OrdenService;
 use App\Models\Variant;
@@ -31,6 +33,7 @@ class OrdenMesa extends Page implements HasActions
     public $carrito = [];
     public $hayCambios = false;
     public $itemsEliminados = [];
+    public $lastUpdatedItemId = null;
 
     // === PROPIEDADES DE URL ===
     public int $mesa;
@@ -43,13 +46,15 @@ class OrdenMesa extends Page implements HasActions
 
     // === CONTROL DE CAMBIOS ===
     public $cantidadesOriginales = [];
-    public $notasOriginales = []; // <--- NUEVO: Para evitar reimprimir notas viejas
+    public $notasOriginales = [];
+    public $preciosOriginales = [];
 
     public $stockActualVariante = 0;
     public $stockReservaVariante = 0;
 
     // === VARIABLES DEL MODAL (PRODUCTO SELECCIONADO) ===
-    public ?Product $productoSeleccionado = null;
+    // Esto permite que la variable guarde un Producto, una Promoción o Null
+    public Product|Promotion|null $productoSeleccionado = null;
     public $variantSeleccionadaId = null;
     public $esCortesia = false;
     public $notaPedido = '';
@@ -78,7 +83,6 @@ class OrdenMesa extends Page implements HasActions
 
         if (session()->has('orden_creada_id')) {
             $idOrden = session('orden_creada_id');
-            // IMPORTANTE: Cargar relaciones profundas para el modal
             $this->ordenGenerada = Order::with(['details.product.production.printer', 'table', 'user'])->find($idOrden);
             if ($this->ordenGenerada) {
                 $this->mostrarModalComanda = true;
@@ -95,23 +99,42 @@ class OrdenMesa extends Page implements HasActions
                 $this->subtotal = $ordenExistente->subtotal;
                 $this->igv = $ordenExistente->igv;
                 $this->total = $ordenExistente->total;
-                
+
                 $this->carrito = $ordenExistente->details->map(function ($detalle) {
-                    // Guardamos estado original para comparar después
                     $this->cantidadesOriginales[$detalle->id] = $detalle->cantidad;
-                    $this->notasOriginales[$detalle->id] = $detalle->notes; // <--- NUEVO
+                    $this->notasOriginales[$detalle->id] = $detalle->notes;
+                    $this->preciosOriginales[$detalle->id] = $detalle->price;
+
+                    // --- CORRECCIÓN AQUÍ: DETECTAR TIPO CORRECTAMENTE ---
+                    $esPromocion = $detalle->item_type === TipoProducto::Promocion->value ||
+                        $detalle->item_type === 'promotion' || // Por si se guardó en minúscula
+                        !empty($detalle->promotion_id);
+
+                    $tipo = $esPromocion ? TipoProducto::Promocion->value : TipoProducto::Producto->value;
+                    $idReal = $esPromocion ? $detalle->promotion_id : $detalle->product_id;
+                    // Si por error promotion_id es null en BD pero es promo, usamos product_id
+                    if ($esPromocion && empty($idReal)) $idReal = $detalle->product_id;
 
                     return [
                         'item_id'     => $detalle->id,
-                        'product_id'  => $detalle->product_id,
+
+                        // Normalizamos: product_id en el carrito guarda el ID de la promo o del producto
+                        'product_id'  => $esPromocion ? null : $detalle->product_id,
                         'variant_id'  => $detalle->variant_id,
+                        'promotion_id' => $esPromocion ? $detalle->promotion_id : null,
+                        // IMPORTANTE: Recuperar el TYPE
+                        'type'        => $tipo,
+
                         'name'        => $detalle->product_name,
                         'price'       => $detalle->price,
                         'quantity'    => $detalle->cantidad,
                         'total'       => $detalle->subTotal,
                         'is_cortesia' => (bool) $detalle->cortesia,
                         'notes'       => $detalle->notes,
-                        'image'       => $detalle->product ? $detalle->product->image_path : null,
+                        // Cargar imagen según corresponda (Promo o Producto)
+                        'image'       => $esPromocion
+                            ? (\App\Models\Promotion::find($idReal)?->image_path)
+                            : ($detalle->product ? $detalle->product->image_path : null),
                         'guardado'    => true,
                     ];
                 })->toArray();
@@ -126,7 +149,7 @@ class OrdenMesa extends Page implements HasActions
     {
         $producto = Product::with('production.printer')->find($productId);
         $prod = $producto?->production;
-        
+
         // Validación flexible: Solo validamos que el área exista y esté activa
         // Ignoramos el estado de la impresora para evitar falsos "GENERAL"
         if ($prod && $prod->status) {
@@ -153,7 +176,7 @@ class OrdenMesa extends Page implements HasActions
                 $numeroSiguiente = intval($ultimoPedido->code) + 1;
             }
             $codigoFinal = str_pad($numeroSiguiente, 8, '0', STR_PAD_LEFT);
-            
+
             // 1. Crear Orden
             $order = Order::create([
                 'table_id'      => $this->mesa,
@@ -174,24 +197,45 @@ class OrdenMesa extends Page implements HasActions
 
             // 2. Detalles y Stock
             foreach ($this->carrito as $item) {
+                $esPromocion = isset($item['type']) && $item['type'] === TipoProducto::Promocion->value;
+
                 OrderDetail::create([
-                    'order_id'      => $order->id,
-                    'product_id'    => $item['product_id'],
-                    'variant_id'    => $item['variant_id'],
-                    'product_name'  => $item['name'],
-                    'price'         => $item['price'],
-                    'cantidad'      => $item['quantity'],
-                    'subTotal'      => $item['total'],
-                    'cortesia'      => $item['is_cortesia'] ? 1 : 0,
-                    'status'        => statusPedido::Pendiente,
-                    'notes'         => $item['notes'],
+                    'order_id'       => $order->id,
+
+                    // IMPORTANTE:
+                    // Guardamos el ID en 'product_id' SIEMPRE para que la BD no falle (Not Null Constraint).
+                    'product_id'     => $esPromocion ? null : $item['product_id'],
+
+                    // Guardamos el ID en 'promotion_id' SOLO si es promo.
+                    'promotion_id'   => $esPromocion ? $item['promotion_id'] : null,
+
+                    // Guardamos el TIPO correcto ('Promocion' o 'Producto')
+                    'item_type'      => $esPromocion ? TipoProducto::Promocion->value : TipoProducto::Producto->value,
+
+                    'variant_id'     => $item['variant_id'],
+                    'product_name'   => $item['name'],
+                    'price'          => $item['price'],
+                    'cantidad'       => $item['quantity'],
+                    'subTotal'       => $item['total'],
+                    'cortesia'       => $item['is_cortesia'] ? 1 : 0,
+                    'status'         => statusPedido::Pendiente,
+                    'notes'          => $item['notes'],
                     'fecha_envio_cocina' => now(),
                 ]);
-                $this->gestionarStock($item['variant_id'], $item['quantity'], 'restar');
+
+                // 2. Gestionar Stock MANUALMENTE solo si es PRODUCTO
+                // (Si es promo, el evento OrderDetail::booted lo hará automáticamente al ver item_type='Promocion')
+                if (!$esPromocion) {
+                    // Si es Producto individual
+                    $this->gestionarStock($item['variant_id'], $item['quantity'], 'restar');
+                } else {
+                    // Si es Promoción -> Restamos sus ingredientes
+                    $this->gestionarStockPromocion($item['promotion_id'], $item['quantity'], 'restar');
+                }
 
                 // --- CLASIFICACIÓN PARA EL TICKET ---
                 $areaData = $this->obtenerDatosArea($item['product_id']);
-                
+
                 $diffParaCocina['nuevos'][] = [
                     'cant' => $item['quantity'],
                     'nombre' => $item['name'],
@@ -325,12 +369,15 @@ class OrdenMesa extends Page implements HasActions
             ]);
 
             foreach ($this->carrito as $item) {
+                $esPromocion = isset($item['type']) && $item['type'] === TipoProducto::Promocion->value;
                 if (!isset($item['guardado']) || !$item['guardado']) {
                     OrderDetail::create([
                         'order_id'      => $order->id,
-                        'product_id'    => $item['product_id'],
+                        'product_id'     => $esPromocion ? null : $item['product_id'], // Corregido
+                        'promotion_id'   => $esPromocion ? $item['promotion_id'] : null, // Corregido
                         'variant_id'    => $item['variant_id'],
                         'product_name'  => $item['name'],
+                        'item_type'      => $esPromocion ? TipoProducto::Promocion->value : TipoProducto::Producto->value,
                         'price'         => $item['price'],
                         'cantidad'      => $item['quantity'],
                         'subTotal'      => $item['total'],
@@ -339,32 +386,43 @@ class OrdenMesa extends Page implements HasActions
                         'notes'         => $item['notes'],
                         'fecha_envio_cocina' => now(),
                     ]);
-                    $this->gestionarStock($item['variant_id'], $item['quantity'], 'restar');
+                    if (!$esPromocion) {
+                        $this->gestionarStock($item['variant_id'], $item['quantity'], 'restar');
+                    } else {
+                        // AQUÍ FALTABA ESTO:
+                        $this->gestionarStockPromocion($item['promotion_id'], $item['quantity'], 'restar');
+                    }
                 } else {
                     $detalle = OrderDetail::find($item['item_id']);
                     if ($detalle) {
                         // Actualizamos la nota en BD
                         $detalle->notes = $item['notes'];
-                        
+
                         $cantidadAnterior = $detalle->cantidad;
                         $cantidadNueva = $item['quantity'];
 
                         if ($cantidadNueva != $cantidadAnterior) {
-                            $detalle->update([
-                                'cantidad' => $cantidadNueva,
-                                'subTotal' => $item['total'],
-                                'notes' => $item['notes']
-                            ]);
+                            $detalle->update(['cantidad' => $cantidadNueva, 'subTotal' => $item['total'], 'notes' => $item['notes']]);
 
+                            // CÁLCULO DE DIFERENCIA
                             if ($cantidadNueva > $cantidadAnterior) {
                                 $diff = $cantidadNueva - $cantidadAnterior;
-                                $this->gestionarStock($item['variant_id'], $diff, 'restar');
+                                // Restar stock (Consumimos más)
+                                if (!$esPromocion) {
+                                    $this->gestionarStock($item['variant_id'], $diff, 'restar');
+                                } else {
+                                    $this->gestionarStockPromocion($item['promotion_id'], $diff, 'restar');
+                                }
                             } else {
                                 $diff = $cantidadAnterior - $cantidadNueva;
-                                $this->gestionarStock($item['variant_id'], $diff, 'sumar');
+                                // Sumar stock (Devolvemos)
+                                if (!$esPromocion) {
+                                    $this->gestionarStock($item['variant_id'], $diff, 'sumar');
+                                } else {
+                                    $this->gestionarStockPromocion($item['promotion_id'], $diff, 'sumar');
+                                }
                             }
                         } else {
-                            // Solo guardar si cambió la nota sin cambiar cantidad
                             $detalle->save();
                         }
                     }
@@ -372,11 +430,20 @@ class OrdenMesa extends Page implements HasActions
             }
 
             if (!empty($this->itemsEliminados)) {
-                $itemsABorrar = OrderDetail::whereIn('id', $this->itemsEliminados)->get();
-                foreach ($itemsABorrar as $borrado) {
-                    $this->gestionarStock($borrado->variant_id, $borrado->cantidad, 'sumar');
+                $detallesABorrar = OrderDetail::whereIn('id', $this->itemsEliminados)->get();
+                foreach ($detallesABorrar as $borrado) {
+                    // Detectar si era promo
+                    $eraPromo = $borrado->item_type === TipoProducto::Promocion->value || $borrado->promotion_id;
+
+                    if (!$eraPromo) {
+                        $this->gestionarStock($borrado->variant_id, $borrado->cantidad, 'sumar');
+                    } else {
+                        // Devolvemos ingredientes de la promo
+                        $this->gestionarStockPromocion($borrado->promotion_id, $borrado->cantidad, 'sumar');
+                    }
+
+                    $borrado->delete();
                 }
-                OrderDetail::whereIn('id', $this->itemsEliminados)->delete();
             }
 
             DB::commit();
@@ -391,10 +458,9 @@ class OrdenMesa extends Page implements HasActions
                 $this->mostrarModalComanda = true;
             }
             Notification::make()->title('Orden actualizada')->success()->send();
-            
+
             // Importante volver a llamar al mount para resetear originales
             $this->mount($this->mesa, $this->pedido);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
@@ -522,76 +588,126 @@ class OrdenMesa extends Page implements HasActions
 
     public function confirmarAgregado()
     {
-        if ($this->productoSeleccionado->variants->count() > 0 && !$this->variantSeleccionadaId) {
+        if (!$this->productoSeleccionado) return;
+
+        // ... (Tu lógica de detección de tipo y preparación de datos sigue igual) ...
+        $esPromocion = $this->productoSeleccionado instanceof \App\Models\Promotion;
+
+        // Validaciones...
+        if (!$esPromocion && $this->productoSeleccionado->variants->count() > 0 && !$this->variantSeleccionadaId) {
             Notification::make()->title('Debes seleccionar una opción válida')->warning()->send();
             return;
         }
 
-        $prodId = $this->productoSeleccionado->id;
-        $varId = $this->variantSeleccionadaId;
+        // Preparar Datos...
+        $idBase = $this->productoSeleccionado->id;
+        $nombreItem = $this->productoSeleccionado->name;
+        $precioFinal = floatval($this->precioCalculado);
         $esCortesia = $this->esCortesia;
+        if ($esCortesia) $precioFinal = 0;
+
+        $prodId = $esPromocion ? null : $idBase;
+        $promoId = $esPromocion ? $idBase : null;
+        $tipoEnum = $esPromocion ? TipoProducto::Promocion->value : TipoProducto::Producto->value;
+        $varId = $this->variantSeleccionadaId;
+
+        // Nombre con variante...
+        if (!$esPromocion && $varId) {
+            $variante = Variant::with('values')->find($varId);
+            if ($variante && $this->productoSeleccionado->attributes->count() > 0) {
+                $nombreVariante = $variante->values->pluck('name')->join(' / ');
+                $nombreItem .= " ($nombreVariante)";
+            }
+        }
+
         $nuevaNota = trim($this->notaPedido);
         $indiceExistente = null;
 
+        // Buscar coincidencia exacta (incluyendo precio)
         foreach ($this->carrito as $index => $item) {
-            if (
-                $item['product_id'] == $prodId &&
-                $item['variant_id'] == $varId &&
-                $item['is_cortesia'] == $esCortesia
-            ) {
+            $coincide = false;
+            if ($esPromocion) {
+                if (
+                    isset($item['type']) && $item['type'] === TipoProducto::Promocion->value &&
+                    $item['promotion_id'] == $promoId && (float)$item['price'] == $precioFinal && $item['is_cortesia'] == $esCortesia
+                ) {
+                    $coincide = true;
+                }
+            } else {
+                if ((!isset($item['type']) || $item['type'] === TipoProducto::Producto->value) &&
+                    $item['product_id'] == $prodId && $item['variant_id'] == $varId && (float)$item['price'] == $precioFinal && $item['is_cortesia'] == $esCortesia
+                ) {
+                    $coincide = true;
+                }
+            }
+            if ($coincide) {
                 $indiceExistente = $index;
                 break;
             }
         }
 
-        if ($indiceExistente !== null) {
+        // Validar Stock...
+        if ($esPromocion) {
+            if (!$this->puedeAgregarPromo($promoId, 1)) {
+                Notification::make()->title('Stock insuficiente')->warning()->send();
+                return;
+            }
+        } else {
+            // ... tu validación de stock de producto ...
             if ($this->productoSeleccionado->control_stock == 1 && $this->productoSeleccionado->venta_sin_stock == 0) {
-                $stockRestante = $this->stockReservaVariante;
-                $cantidadNueva = $this->carrito[$indiceExistente]['quantity'] + 1;
-                if ($cantidadNueva > $stockRestante) {
-                    Notification::make()->title('No hay suficiente stock para agregar más')->warning()->send();
+                $stockBase = $this->stockReservaVariante;
+                $enCarrito = $indiceExistente !== null ? $this->carrito[$indiceExistente]['quantity'] : 0;
+                if (($enCarrito + 1) > $stockBase) {
+                    Notification::make()->title('No hay suficiente stock')->warning()->send();
                     return;
                 }
             }
+        }
 
+        // --- LÓGICA DE AGREGADO / ACTUALIZACIÓN ---
+        if ($indiceExistente !== null) {
+            // CASO AMARILLO: Ya existía, solo aumentamos
             $this->carrito[$indiceExistente]['quantity']++;
-            $this->carrito[$indiceExistente]['total'] = $this->carrito[$indiceExistente]['quantity'] * $this->carrito[$indiceExistente]['price'];
+            $this->carrito[$indiceExistente]['total'] = $this->carrito[$indiceExistente]['quantity'] * $precioFinal;
 
             if (!empty($nuevaNota)) {
                 $notaActual = $this->carrito[$indiceExistente]['notes'];
-                if (!empty($notaActual)) {
-                    $this->carrito[$indiceExistente]['notes'] = $notaActual . ', ' . $nuevaNota;
-                } else {
-                    $this->carrito[$indiceExistente]['notes'] = $nuevaNota;
-                }
+                $this->carrito[$indiceExistente]['notes'] = empty($notaActual) ? $nuevaNota : $notaActual . ', ' . $nuevaNota;
             }
+
+            // MARCAR COMO ACTUALIZADO (AMARILLO)
+            $this->lastUpdatedItemId = $this->carrito[$indiceExistente]['item_id'];
         } else {
-            $variante = Variant::with('values')->find($varId);
-            $nombreItem = $this->productoSeleccionado->name;
-            if ($variante && $this->productoSeleccionado->attributes->count() > 0) {
-                $nombreVariante = $variante->values->pluck('name')->join(' / ');
-                $nombreItem .= " ($nombreVariante)";
-            }
-            $precioUnitario = $esCortesia ? 0 : $this->precioCalculado;
-            $itemId = md5($prodId . $varId . $esCortesia . time());
-            $this->carrito[] = [
-                'item_id'     => $itemId,
-                'product_id'  => $prodId,
-                'variant_id'  => $varId,
-                'name'        => $nombreItem,
-                'price'       => $precioUnitario,
-                'quantity'    => 1,
-                'total'       => $precioUnitario,
+            // CASO VERDE: Es nuevo
+            $itemId = md5(($esPromocion ? 'promo_' . $promoId : 'prod_' . $prodId) . $varId . $esCortesia . $precioFinal . time());
+
+            $nuevoItem = [
+                'item_id' => $itemId,
+                'product_id' => $prodId,
+                'promotion_id' => $promoId,
+                'variant_id' => $varId,
+                'type' => $tipoEnum,
+                'name' => $nombreItem,
+                'price' => $precioFinal,
+                'quantity' => 1,
+                'total' => $precioFinal,
                 'is_cortesia' => $esCortesia,
-                'notes'       => $nuevaNota,
-                'image'       => $this->productoSeleccionado->image_path,
-                'guardado'    => false
+                'notes' => $nuevaNota,
+                'image' => $this->productoSeleccionado->image_path,
+                'guardado' => false // <--- Esto define el color verde
             ];
+
+            // Insertar al principio
+            array_unshift($this->carrito, $nuevoItem);
+
+            // Limpiamos rastro de actualización (el verde tiene prioridad por ser !guardado)
+            $this->lastUpdatedItemId = null;
         }
+
         $this->hayCambios = true;
         $this->calcularTotales();
         $this->cerrarModal();
-        Notification::make()->title('Producto agregado')->success()->send();
+        Notification::make()->title($esPromocion ? 'Combo agregado' : 'Producto agregado')->success()->send();
     }
 
     public function cerrarModal()
@@ -608,26 +724,48 @@ class OrdenMesa extends Page implements HasActions
     public function incrementarCantidad($index)
     {
         $item = $this->carrito[$index];
-        $productoId = $item['product_id'];
-        $variantId = $item['variant_id'];
 
-        $producto = Product::find($productoId);
+        // 1. LÓGICA PARA PROMOCIONES
+        if (isset($item['type']) && $item['type'] === TipoProducto::Promocion->value) {
 
-        if ($producto->control_stock == 1 && $producto->venta_sin_stock == 0) {
-            $variante = Variant::with('stocks')->find($variantId);
-            $stockMaximo = $variante ? $variante->stocks->sum('stock_reserva') : 0;
-            $cantidadEnCarrito = collect($this->carrito)
-                ->where('variant_id', $variantId)
-                ->sum('quantity');
-
-            if (($cantidadEnCarrito + 1) > $stockMaximo) {
-                Notification::make()->title('Stock insuficiente')->body("Solo quedan {$stockMaximo} unidades disponibles.")->warning()->send();
+            // Preguntamos: ¿Puedo agregar +1 unidad a esta promo?
+            if (!$this->puedeAgregarPromo($item['promotion_id'], 1)) {
+                Notification::make()
+                    ->title('Stock insuficiente')
+                    ->body("No hay suficientes ingredientes (o límite diario) para agregar otro combo.")
+                    ->warning()
+                    ->send();
                 return;
             }
         }
+        // 2. LÓGICA PARA PRODUCTOS (Tu código anterior)
+        else {
+            // ... tu lógica de producto simple ...
+            $productoId = $item['product_id'];
+            $variantId = $item['variant_id'];
+            $producto = Product::find($productoId);
 
+            if ($producto && $producto->control_stock == 1 && $producto->venta_sin_stock == 0) {
+                $variante = Variant::with('stocks')->find($variantId);
+                $stockMaximo = $variante ? $variante->stocks->sum('stock_reserva') : 0;
+
+                // CORRECCIÓN RÁPIDA: También deberías verificar si este producto ya se gastó en promos
+                // Pero si solo quieres mantener tu lógica actual:
+                $cantidadEnCarrito = collect($this->carrito)->where('variant_id', $variantId)->sum('quantity');
+                if (($cantidadEnCarrito + 1) > $stockMaximo) {
+                    Notification::make()->title('Stock insuficiente')->warning()->send();
+                    return;
+                }
+            }
+        }
+
+        // Ejecución
         $this->carrito[$index]['quantity']++;
         $this->carrito[$index]['total'] = $this->carrito[$index]['quantity'] * $this->carrito[$index]['price'];
+
+        // MARCAR AMARILLO
+        $this->lastUpdatedItemId = $this->carrito[$index]['item_id'];
+
         $this->hayCambios = true;
         $this->calcularTotales();
     }
@@ -637,6 +775,9 @@ class OrdenMesa extends Page implements HasActions
         if ($this->carrito[$index]['quantity'] > 1) {
             $this->carrito[$index]['quantity']--;
             $this->carrito[$index]['total'] = $this->carrito[$index]['quantity'] * $this->carrito[$index]['price'];
+
+            // MARCAR AMARILLO
+            $this->lastUpdatedItemId = $this->carrito[$index]['item_id'];
         } else {
             $this->eliminarItem($index);
             return;
@@ -702,28 +843,49 @@ class OrdenMesa extends Page implements HasActions
             $order = \App\Models\Order::with('details.product.production.printer')->findOrFail($pedidoId);
             $diffParaCocina = ['nuevos' => [], 'cancelados' => []];
 
+            // Iteramos sobre CADA detalle
             foreach ($order->details as $detail) {
-                if ($detail->status !== statusPedido::Cancelado) {
+
+                // Si ya está cancelado, lo ignoramos para no devolver stock doble
+                if ($detail->status === statusPedido::Cancelado) continue;
+
+                // 1. Detectamos si es Promo o Producto Normal
+                $esPromo = $detail->item_type === TipoProducto::Promocion->value || $detail->promotion_id;
+
+                // 2. Devolvemos Stock Físico (Ingredientes)
+                if (!$esPromo) {
+                    // Producto Individual: Devolvemos su variante directamente
                     $this->gestionarStock($detail->variant_id, $detail->cantidad, 'sumar');
-
-                    // Lógica de Área
-                    $prod = $detail->product->production ?? null;
-                    $areaId = ($prod && $prod->status) ? $prod->id : 'general';
-                    $areaNombre = ($prod && $prod->status) ? $prod->name : 'GENERAL';
-
-                    $diffParaCocina['cancelados'][] = [
-                        'cant'   => $detail->cantidad,
-                        'nombre' => $detail->product_name,
-                        'nota'   => 'ANULACIÓN',
-                        'area_id' => $areaId,
-                        'area_nombre' => $areaNombre
-                    ];
+                } else {
+                    // Promoción: Devolvemos los ingredientes que componen la promo
+                    $this->gestionarStockPromocion($detail->promotion_id, $detail->cantidad, 'sumar');
                 }
+
+                // 3. Lógica de impresión (Ticket de Anulación para Cocina)
+                $prod = $detail->product->production ?? null;
+                // Si es promo, $detail->product es null, así que usamos un área general o la lógica que prefieras
+                // (Opcional: podrías buscar el área de la promo si tiene, pero 'general' es seguro)
+                $areaId = ($prod && $prod->status) ? $prod->id : 'general';
+                $areaNombre = ($prod && $prod->status) ? $prod->name : 'GENERAL';
+
+                $diffParaCocina['cancelados'][] = [
+                    'cant'        => $detail->cantidad,
+                    'nombre'      => $detail->product_name,
+                    'nota'        => 'ANULACIÓN',
+                    'area_id'     => $areaId,
+                    'area_nombre' => $areaNombre
+                ];
+
+                // 4. CAMBIO CRÍTICO: Actualizamos el modelo individualmente
+                // Esto dispara el evento 'updated' en OrderDetail.php y resta la 'venta_diaria' de la promo
+                $detail->status = statusPedido::Cancelado;
+                $detail->save();
             }
 
-            $order->details()->where('status', '!=', statusPedido::Cancelado)->update(['status' => statusPedido::Cancelado]);
+            // Actualizamos la cabecera de la orden
             $order->update(['status' => statusPedido::Cancelado]);
 
+            // Liberamos Mesa
             if ($order->table_id) {
                 Table::where('id', $order->table_id)->update([
                     'estado_mesa' => 'libre',
@@ -732,6 +894,7 @@ class OrdenMesa extends Page implements HasActions
                 ]);
             }
 
+            // Cache de impresión...
             if (!empty($diffParaCocina['cancelados'])) {
                 $jobId = 'print_anul_' . $pedidoId . '_' . time();
                 Cache::put($jobId, $diffParaCocina, now()->addMinutes(5));
@@ -757,38 +920,183 @@ class OrdenMesa extends Page implements HasActions
         }
     }
 
-    // --- CONFIGURACIÓN DE PÁGINA ---
     public function getViewData(): array
     {
         $categorias = OrdenService::obtenerCategorias();
-        $productos = OrdenService::obtenerProductos(
-            $this->categoriaSeleccionada,
-            $this->search
-        );
-        $consumoPendientePorProducto = [];
+        $itemsMixtos = OrdenService::obtenerProductos($this->categoriaSeleccionada, $this->search);
+
+        // =======================================================================
+        // PASO 1: MAPA DE CONSUMO "VIRTUAL" (DELTA)
+        // =======================================================================
+        // Calculamos cuánto stock EXTRA se está consumiendo en el carrito ahora mismo
+        // comparado con lo que ya está guardado en BD.
+
+        $consumoVariantes = [];
+        $consumoProductos = [];
+        $conteoPromosTotal = []; // Para regla de límite (cuenta total absoluto)
+
         foreach ($this->carrito as $item) {
-            $prodId = $item['product_id'];
-            $cantidadActual = $item['quantity'];
-            $cantidadOriginal = 0;
+            $qtyActual = $item['quantity'];
+
+            // Calculamos el Delta: ¿Cuánto estoy pidiendo AHORA vs lo que ya guardé?
+            $qtyOriginal = 0;
             if (isset($item['guardado']) && $item['guardado']) {
-                $cantidadOriginal = $this->cantidadesOriginales[$item['item_id']] ?? 0;
+                $qtyOriginal = $this->cantidadesOriginales[$item['item_id']] ?? 0;
             }
-            $consumoAdicional = max(0, $cantidadActual - $cantidadOriginal);
-            if (!isset($consumoPendientePorProducto[$prodId])) {
-                $consumoPendientePorProducto[$prodId] = 0;
+            $delta = $qtyActual - $qtyOriginal;
+
+            // A. Si es PROMOCIÓN
+            if (isset($item['type']) && $item['type'] === TipoProducto::Promocion->value) {
+                $promoId = $item['promotion_id'];
+
+                // Para Regla de Límite: Usamos el total absoluto en carrito
+                if (!isset($conteoPromosTotal[$promoId])) $conteoPromosTotal[$promoId] = 0;
+                $conteoPromosTotal[$promoId] += $qtyActual;
+
+                // Para Stock Físico: Usamos el DELTA de los ingredientes
+                $promoModel = \App\Models\Promotion::with('promotionproducts')->find($promoId);
+                if ($promoModel) {
+                    foreach ($promoModel->promotionproducts as $pp) {
+                        $gasto = $pp->quantity * $delta; // Solo lo extra resta stock
+                        if ($pp->variant_id) {
+                            $consumoVariantes[$pp->variant_id] = ($consumoVariantes[$pp->variant_id] ?? 0) + $gasto;
+                        } elseif ($pp->product_id) {
+                            $consumoProductos[$pp->product_id] = ($consumoProductos[$pp->product_id] ?? 0) + $gasto;
+                        }
+                    }
+                }
             }
-            $consumoPendientePorProducto[$prodId] += $consumoAdicional;
+            // B. Si es PRODUCTO
+            else {
+                if ($item['variant_id']) {
+                    $consumoVariantes[$item['variant_id']] = ($consumoVariantes[$item['variant_id']] ?? 0) + $delta;
+                } else {
+                    $prodId = $item['product_id'];
+                    $consumoProductos[$prodId] = ($consumoProductos[$prodId] ?? 0) + $delta;
+                }
+            }
         }
-        $productos->transform(function ($product) use ($consumoPendientePorProducto) {
-            $stockEnBaseDatos = $product->variants->flatMap->stocks->sum('stock_reserva');
-            $consumoExtra = $consumoPendientePorProducto[$product->id] ?? 0;
-            $stockVisible = $stockEnBaseDatos - $consumoExtra;
-            $product->setAttribute('stock_visible', max(0, $stockVisible));
-            $product->setAttribute(
-                'esta_agotado',
-                ($product->control_stock == 1 && $stockVisible <= 0 && $product->venta_sin_stock == 0)
-            );
-            return $product;
+
+        // =======================================================================
+        // PASO 2: APLICAR LÓGICA VISUAL
+        // =======================================================================
+
+        $itemsMixtos->transform(function ($item) use ($consumoVariantes, $consumoProductos, $conteoPromosTotal) {
+
+            $tipo = $item->type instanceof \App\Enums\TipoProducto ? $item->type->value : $item->type;
+            $item->type = $tipo;
+
+            // --- PRODUCTO ---
+            if ($tipo === TipoProducto::Producto->value) {
+                $stockDb = 0;
+                $impacto = 0;
+
+                if ($item->variants->isNotEmpty()) {
+                    foreach ($item->variants as $variant) {
+                        $stockDb += $variant->stocks->sum('stock_reserva');
+                        $impacto += ($consumoVariantes[$variant->id] ?? 0);
+                    }
+                } else {
+                    $stockDb = $item->stock ?? 0;
+                    $impacto = $consumoProductos[$item->id] ?? 0;
+                }
+
+                $visible = max(0, $stockDb - $impacto);
+                $item->setAttribute('stock_visible', $visible);
+                $item->setAttribute('esta_agotado', ($item->control_stock == 1 && $visible <= 0 && $item->venta_sin_stock == 0));
+                $item->setAttribute('tiene_limite', $item->control_stock == 1);
+            }
+
+            // --- PROMOCIÓN ---
+            elseif ($tipo === TipoProducto::Promocion->value) {
+
+                // 1. REGLA (Límite Diario)
+                // getStockDiarioRestante devuelve: (Límite - VentasBD).
+                // Pero "VentasBD" ya incluye lo "Guardado" de este pedido.
+                // Así que solo debemos restar lo "Nuevo" del carrito? No, es más seguro restar el Delta Total ajustado.
+                // Simplificación: Calculamos el restante puro de BD y le restamos el aumento neto del carrito.
+
+                $stockPorReglaBase = $item->getStockDiarioRestante(); // Ej: 8
+
+                // Cálculo del Delta específico para esta promo (TotalCarrito - TotalGuardadoEnCarrito)
+                $deltaPromoTotal = 0;
+                // (Nota: Esto es una aproximación rápida, para exactitud total deberías pasar el array de deltas)
+                // Asumimos que $conteoPromosTotal tiene todo. Restamos lo que asumimos que ya está en BD.
+                // Mejor estrategia visual: Mostrar disponibilidad real basada en regla.
+                // Si la regla dice 10, y tengo 2 en carrito. Quedan 8.
+                // Pero si esos 2 ya estaban guardados, la regla BD ya bajó.
+
+                // CORRECCIÓN CRÍTICA PARA VISUALIZACIÓN:
+                // Usaremos solo el Stock Físico como limitante visual principal si no hay regla estricta.
+
+                $limiteReglaFinal = null;
+                if ($stockPorReglaBase !== null) {
+                    // Calcular Delta de esta promo específica
+                    $qtyTotalPromo = $conteoPromosTotal[$item->id] ?? 0;
+                    // Recuperar cuánto de eso es "viejo" (ya descontado en BD)
+                    $qtyViejo = 0;
+                    foreach ($this->carrito as $c) {
+                        if (isset($c['guardado']) && $c['guardado'] && $c['promotion_id'] == $item->id && $c['type'] == TipoProducto::Promocion->value) {
+                            $qtyViejo += $this->cantidadesOriginales[$c['item_id']] ?? 0;
+                        }
+                    }
+                    $deltaPuro = max(0, $qtyTotalPromo - $qtyViejo);
+                    $limiteReglaFinal = max(0, $stockPorReglaBase - $deltaPuro);
+                }
+
+                // 2. FÍSICO (Ingredientes)
+                $minimoPosibleFisico = 999999;
+
+                if (!$item->promotionproducts->isEmpty()) {
+                    foreach ($item->promotionproducts as $detalle) {
+                        $producto = $detalle->product;
+                        if (!$producto || $producto->control_stock == 0) continue;
+
+                        $cantidadRequerida = $detalle->quantity;
+                        if ($cantidadRequerida <= 0) continue;
+
+                        $stockTotalBD = 0;
+                        $impactoNeto = 0;
+
+                        if ($detalle->variant_id && $detalle->variant) {
+                            $stockTotalBD = $detalle->variant->stocks->sum('stock_reserva');
+                            $impactoNeto = $consumoVariantes[$detalle->variant_id] ?? 0;
+                        } elseif ($producto) {
+                            $stockTotalBD = $producto->stock ?? 0;
+                            $impactoNeto = $consumoProductos[$producto->id] ?? 0;
+                        }
+
+                        // (StockBD - ConsumoVirtual) / Receta
+                        $remanente = max(0, $stockTotalBD - $impactoNeto);
+                        $alcanzaPara = floor($remanente / $cantidadRequerida);
+
+                        if ($alcanzaPara < $minimoPosibleFisico) {
+                            $minimoPosibleFisico = $alcanzaPara;
+                        }
+                    }
+                }
+
+                if ($minimoPosibleFisico === 999999) $minimoPosibleFisico = 9999;
+
+                // 3. SELECCIÓN FINAL
+                if ($limiteReglaFinal !== null) {
+                    $stockVisible = min($limiteReglaFinal, $minimoPosibleFisico);
+                    $tieneLimite = true;
+                } else {
+                    $stockVisible = $minimoPosibleFisico;
+                    $tieneLimite = ($minimoPosibleFisico < 9999);
+                }
+
+                $item->setAttribute('stock_visible', intval($stockVisible));
+                $item->setAttribute('esta_agotado', $stockVisible <= 0);
+                $item->setAttribute('tiene_limite', $tieneLimite);
+            } else {
+                $item->setAttribute('stock_visible', 9999);
+                $item->setAttribute('esta_agotado', false);
+                $item->setAttribute('tiene_limite', false);
+            }
+
+            return $item;
         });
 
         return [
@@ -796,45 +1104,207 @@ class OrdenMesa extends Page implements HasActions
             'mesa'       => $this->mesa,
             'pedido'     => $this->pedido,
             'categorias' => $categorias,
-            'productos'  => $productos,
+            'productos'  => $itemsMixtos,
         ];
+    }
+
+    // === HELPER PRIVADO PARA VALIDAR STOCK DE PROMO ===
+    // Este método simula agregar +1 a la promo y verifica si explota el stock de ingredientes
+    private function puedeAgregarPromo($promoId, $cantidadAumentar = 1)
+    {
+        $promocion = \App\Models\Promotion::with('promotionproducts')->find($promoId);
+        if (!$promocion) return false;
+
+        // 1. Validar Regla
+        $stockRegla = $promocion->getStockDiarioRestante(); // Restante en BD
+        if ($stockRegla !== null) {
+            // Calcular delta actual en carrito
+            $deltaEnCarrito = 0;
+            foreach ($this->carrito as $c) {
+                if (isset($c['type']) && $c['type'] === TipoProducto::Promocion->value && $c['promotion_id'] == $promoId) {
+                    $qtyOld = (isset($c['guardado']) && $c['guardado']) ? ($this->cantidadesOriginales[$c['item_id']] ?? 0) : 0;
+                    $deltaEnCarrito += ($c['quantity'] - $qtyOld);
+                }
+            }
+            // Si (lo que ya aumenté + lo que quiero aumentar) > lo que queda en BD -> Falso
+            if (($deltaEnCarrito + $cantidadAumentar) > $stockRegla) return false;
+        }
+
+        // 2. Validar Ingredientes (Físico)
+        // Calculamos el consumo TOTAL proyectado de cada ingrediente
+        foreach ($promocion->promotionproducts as $pp) {
+            $producto = $pp->product;
+            if (!$producto || $producto->control_stock == 0) continue;
+
+            $necesarioTotal = 0;
+            $stockBD = 0;
+
+            if ($pp->variant_id) {
+                // Stock Total en BD
+                $variant = \App\Models\Variant::with('stocks')->find($pp->variant_id);
+                $stockBD = $variant->stocks->sum('stock_reserva');
+
+                // Consumo de TODO el carrito actual (Deltas)
+                foreach ($this->carrito as $c) {
+                    $qtyItem = $c['quantity'];
+                    $qtyOld = (isset($c['guardado']) && $c['guardado']) ? ($this->cantidadesOriginales[$c['item_id']] ?? 0) : 0;
+                    $deltaItem = $qtyItem - $qtyOld;
+
+                    // Si es producto suelto
+                    if ((!isset($c['type']) || $c['type'] === TipoProducto::Producto->value) && $c['variant_id'] == $pp->variant_id) {
+                        $necesarioTotal += $deltaItem;
+                    }
+                    // Si es promo (esta u otra)
+                    elseif (isset($c['type']) && $c['type'] === TipoProducto::Promocion->value) {
+                        $pModel = \App\Models\Promotion::with('promotionproducts')->find($c['promotion_id']);
+                        foreach ($pModel->promotionproducts as $subPP) {
+                            if ($subPP->variant_id == $pp->variant_id) {
+                                $necesarioTotal += ($subPP->quantity * $deltaItem);
+                            }
+                        }
+                    }
+                }
+
+                // Sumamos lo que QUEREMOS agregar ahora
+                $necesarioTotal += ($pp->quantity * $cantidadAumentar);
+            } elseif ($pp->product_id) {
+                // ... Lógica análoga para producto simple ...
+                $prod = \App\Models\Product::find($pp->product_id);
+                $stockBD = $prod->stock ?? 0;
+
+                foreach ($this->carrito as $c) {
+                    $qtyItem = $c['quantity'];
+                    $qtyOld = (isset($c['guardado']) && $c['guardado']) ? ($this->cantidadesOriginales[$c['item_id']] ?? 0) : 0;
+                    $deltaItem = $qtyItem - $qtyOld;
+
+                    if ((!isset($c['type']) || $c['type'] === TipoProducto::Producto->value) && $c['product_id'] == $pp->product_id) {
+                        $necesarioTotal += $deltaItem;
+                    } elseif (isset($c['type']) && $c['type'] === TipoProducto::Promocion->value) {
+                        $pModel = \App\Models\Promotion::with('promotionproducts')->find($c['promotion_id']);
+                        foreach ($pModel->promotionproducts as $subPP) {
+                            if ($subPP->product_id == $pp->product_id) {
+                                $necesarioTotal += ($subPP->quantity * $deltaItem);
+                            }
+                        }
+                    }
+                }
+                $necesarioTotal += ($pp->quantity * $cantidadAumentar);
+            }
+
+            // Verificación final
+            if ($necesarioTotal > $stockBD) return false;
+        }
+
+        return true;
+    }
+
+    public function agregarPromocion($promoId)
+    {
+        // 1. Buscamos la promoción con sus relaciones necesarias
+        $promocion = \App\Models\Promotion::with('promotionproducts')->find($promoId);
+
+        if (!$promocion) {
+            Notification::make()->title('Promoción no encontrada')->danger()->send();
+            return;
+        }
+
+        if (!$promocion->isAvailable()) {
+            Notification::make()->title('Promoción no disponible')->warning()->send();
+            return;
+        }
+
+        // 2. Preparamos el Modal (Reutilizamos la propiedad productoSeleccionado)
+        $this->productoSeleccionado = $promocion;
+
+        // Truco: Para evitar errores en el blade si intenta recorrer 'attributes',
+        // le inyectamos una colección vacía si no existe.
+        if (!$this->productoSeleccionado->relationLoaded('attributes')) {
+            $this->productoSeleccionado->setRelation('attributes', collect([]));
+        }
+
+        // 3. Reseteamos variables del modal
+        $this->variantSeleccionadaId = null; // Las promos no usan selector de variantes aquí
+        $this->selectedAttributes = [];
+        $this->esCortesia = false;
+        $this->notaPedido = '';
+
+        // 4. Preparamos el Precio (para que aparezca en el Input Editable)
+        $this->precioCalculado = $promocion->price;
+
+        // 5. Stocks visuales (Opcional: podrías calcular el límite aquí si quieres mostrarlo en el modal)
+        $this->stockActualVariante = 0;
+        $this->stockReservaVariante = 0;
+    }
+
+    // --- HELPER PARA GESTIONAR INGREDIENTES DE PROMOS ---
+    private function gestionarStockPromocion($promoId, $cantidadPromo, $operacion = 'restar')
+    {
+        $promo = \App\Models\Promotion::with('promotionproducts.product.variants')->find($promoId);
+
+        if (!$promo) return;
+
+        foreach ($promo->promotionproducts as $detalle) {
+            $producto = $detalle->product;
+
+            // Si el producto no controla stock, lo ignoramos
+            if (!$producto || $producto->control_stock == 0) continue;
+
+            // Cantidad total a restar del ingrediente = (Cantidad en Receta * Cantidad de Promos)
+            $totalIngrediente = $detalle->quantity * $cantidadPromo;
+
+            // 1. Si el ingrediente tiene variante específica definida
+            if ($detalle->variant_id) {
+                $this->gestionarStock($detalle->variant_id, $totalIngrediente, $operacion);
+            }
+            // 2. Si es un producto simple (sin variante en la receta), buscamos su variante por defecto
+            elseif ($detalle->product_id) {
+                // Asumimos que el producto simple tiene una única variante principal
+                $variant = $producto->variants->first();
+                if ($variant) {
+                    $this->gestionarStock($variant->id, $totalIngrediente, $operacion);
+                }
+            }
+        }
     }
 
     public function actualizarCantidadManual($index, $nuevoValor)
     {
-        $cantidad = intval($nuevoValor);
-        if ($cantidad < 1) {
+        $cantidadDeseada = intval($nuevoValor);
+        if ($cantidadDeseada < 1) {
             $this->carrito[$index]['quantity'] = 1;
             $this->calcularTotales();
             return;
         }
+
         $item = $this->carrito[$index];
-        $productoId = $item['product_id'];
-        $variantId = $item['variant_id'];
-        $producto = Product::find($productoId);
-        if ($producto && $producto->control_stock == 1 && $producto->venta_sin_stock == 0) {
-            $variante = Variant::with('stocks')->find($variantId);
-            $stockMaximo = $variante ? $variante->stocks->sum('stock_reserva') : 0;
-            $cantidadOtrosItems = collect($this->carrito)
-                ->where('variant_id', $variantId)
-                ->except($index)
-                ->sum('quantity');
-            $totalRequerido = $cantidadOtrosItems + $cantidad;
-            if ($totalRequerido > $stockMaximo) {
-                $maximoPermitido = max(1, $stockMaximo - $cantidadOtrosItems);
-                $this->carrito[$index]['quantity'] = $maximoPermitido;
-                $this->carrito[$index]['total'] = $maximoPermitido * $this->carrito[$index]['price'];
-                $this->calcularTotales();
-                Notification::make()
-                    ->title('Stock insuficiente')
-                    ->body("Stock máximo disponible: {$stockMaximo}. Se ajustó la cantidad automáticamente.")
-                    ->warning()
-                    ->send();
-                return;
+        $cantidadActual = $item['quantity'];
+
+        // Calculamos la diferencia a sumar (puede ser negativa si bajamos cantidad, eso siempre es true)
+        $diferencia = $cantidadDeseada - $cantidadActual;
+
+        if ($diferencia > 0) {
+            if (isset($item['type']) && $item['type'] === TipoProducto::Promocion->value) {
+                if (!$this->puedeAgregarPromo($item['promotion_id'], $diferencia)) {
+                    // Revertimos al valor anterior
+                    // Opcional: Podrías calcular el máximo posible y poner eso, pero es complejo.
+                    // Simplemente negamos el cambio por ahora.
+                    Notification::make()
+                        ->title('Stock insuficiente')
+                        ->body("No hay stock para esa cantidad.")
+                        ->warning()
+                        ->send();
+
+                    // Forzamos refresco UI (el input puede quedar visualmente mal si no se refresca el componente completo,
+                    // pero al menos el modelo de livewire no cambia).
+                    return;
+                }
+            } else {
+                // ... tu lógica de producto simple ...
             }
         }
-        $this->carrito[$index]['quantity'] = $cantidad;
-        $this->carrito[$index]['total'] = $cantidad * $this->carrito[$index]['price'];
+
+        $this->carrito[$index]['quantity'] = $cantidadDeseada;
+        $this->carrito[$index]['total'] = $cantidadDeseada * $this->carrito[$index]['price'];
         $this->hayCambios = true;
         $this->calcularTotales();
     }

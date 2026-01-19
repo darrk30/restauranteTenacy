@@ -20,6 +20,11 @@ class Category extends Model
         return $this->belongsToMany(Product::class, 'category_product');
     }
 
+    public function promotion()
+    {
+        return $this->belongsTo(Promotion::class);
+    }
+
     protected static function booted(): void
     {
         static::addGlobalScope('restaurant', function (Builder $query) {

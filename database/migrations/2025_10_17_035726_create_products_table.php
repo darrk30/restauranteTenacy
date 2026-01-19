@@ -14,9 +14,11 @@ return new class extends Migration
         Schema::create('products', function (Blueprint $table) {
             $table->id();
             $table->string('name');                      // Nombre del producto
+            $table->string('code')->nullable();
             $table->string('slug');            // Slug para rutas
             $table->string('image_path')->nullable();            // Ruta de la imagen
             $table->string('type'); // Tipo de producto
+            $table->text('description')->nullable();
             $table->foreignId('production_id')->nullable()->constrained()->onDelete('restrict'); // Área de producción
             $table->foreignId('brand_id')->nullable()->constrained()->onDelete('restrict'); // Marca
             $table->foreignId('unit_id')->nullable()->constrained()->onDelete('restrict'); // Marca
@@ -28,6 +30,7 @@ return new class extends Migration
             $table->integer('order')->nullable();          // Orden de aparición
             $table->boolean('venta_sin_stock')->default(false);  // Permitir pedidos sin stock
             $table->foreignId('restaurant_id')->constrained('restaurants')->onDelete('cascade'); // Restaurante
+            $table->unique(['restaurant_id', 'code']);
             $table->timestamps();
         });
     }

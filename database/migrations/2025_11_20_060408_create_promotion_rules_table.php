@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('operator')->nullable(); // =, >, >=, in, between, etc.
             $table->json('value')->nullable();    // string, number, json, etc.
             $table->foreignId('promotion_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
+            // $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
             $table->timestamps();
         });
     }

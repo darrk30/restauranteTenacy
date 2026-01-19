@@ -226,7 +226,7 @@
 }
 .cart-items-container {
     flex: 1; overflow-y: auto; padding: 10px;
-    display: flex; flex-direction: column; gap: 10px;
+    display: flex; flex-direction: column; gap: 2px;
 }
 .cart-item {
     display: flex; gap: 10px; padding: 10px; background-color: var(--secondary-bg);
@@ -282,6 +282,45 @@
     width: 100%; background-color: var(--primary-color); color: var(--primary-text);
     border: none; padding: 14px; border-radius: 8px; font-size: 1.1rem;
     font-weight: bold; cursor: pointer;
+}
+
+/* 2. Estilos Base para todos los Badges */
+.pos-badge {
+    position: absolute;
+    z-index: 20;    /* Equivalente a z-20 */
+    color: var( --secondary-bg);
+    font-size: 13px;
+    font-weight: 700; /* Bold */
+    text-transform: uppercase;
+    
+    padding: 4px 8px; /* Vertical 4px, Horizontal 8px */
+    border-radius: 4px; /* Bordes redondeados */
+    
+    background-color: var(--primary-color); /* Purple 600 */
+    /* Sombra suave (shadow-md) */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 
+                0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Nuevo ítem (Verde suave) */
+.cart-item.item-nuevo {
+    background-color: #ecfdf5 !important;
+    border-left: 3px solid #10b981;
+}
+
+/* Ítem actualizado (Amarillo suave) */
+.cart-item.item-actualizado {
+    background-color: #fffbeb !important;
+    border-left: 3px solid #f59e0b;
+}
+
+/* Ajustes generales */
+.cart-item {
+    background-color: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
 }
 
 /* =========================================

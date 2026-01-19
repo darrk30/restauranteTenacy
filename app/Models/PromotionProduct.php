@@ -11,15 +11,9 @@ class PromotionProduct extends Model
         'promotion_id',
         'product_id',
         'variant_id',
-        'restaurant_id',
+        // 'restaurant_id',
         'quantity',
     ];
-
-    /*
-    |--------------------------------------------------------------------------
-    | Relaciones
-    |--------------------------------------------------------------------------
-    */
 
     public function promotion()
     {
@@ -41,24 +35,19 @@ class PromotionProduct extends Model
         return $this->belongsTo(Restaurant::class);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Global Scope multi-tenant
-    |--------------------------------------------------------------------------
-    */
-    protected static function booted(): void
-    {
-        static::addGlobalScope('restaurant', function (Builder $query) {
-            if (filament()->getTenant()) {
-                $query->where('restaurant_id', filament()->getTenant()->id);
-            }
-        });
+    // protected static function booted(): void
+    // {
+    //     static::addGlobalScope('restaurant', function (Builder $query) {
+    //         if (filament()->getTenant()) {
+    //             $query->where('restaurant_id', filament()->getTenant()->id);
+    //         }
+    //     });
 
-        static::creating(function ($model) {
-            if (filament()->getTenant()) {
-                $model->restaurant_id = filament()->getTenant()->id;
-            }
-        });
-    }
+    //     static::creating(function ($model) {
+    //         if (filament()->getTenant()) {
+    //             $model->restaurant_id = filament()->getTenant()->id;
+    //         }
+    //     });
+    // }
 }
 
