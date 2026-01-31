@@ -5,35 +5,27 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
-class PaymentMethod extends Model
+class CashRegister extends Model
 {
     protected $fillable = [
-        'name',
-        'image_path',
-        'payment_condition',
-        'requiere_referencia',
         'restaurant_id',
-        'status',
+        'name',
+        'code',
     ];
-
-    public function paymentPurchases()
-    {
-        return $this->hasMany(PaymentMethodPurchase::class);
-    }
 
     public function restaurant()
     {
         return $this->belongsTo(Restaurant::class);
     }
 
-    public function cashRegisterMovements()
+    public function users()
     {
-        return $this->hasMany(CashRegisterMovement::class);
+        return $this->belongsToMany(User::class);
     }
 
-    public function cierreCajaDetalles()
+    public function sesionCashRegisters()
     {
-        return $this->hasMany(CierreCajaDetalle::class);
+        return $this->hasMany(SessionCashRegister::class);
     }
 
     protected static function booted(): void
@@ -44,10 +36,11 @@ class PaymentMethod extends Model
             }
         });
 
-        static::creating(function ($paymentMethod) {
+        static::creating(function ($cashregister) {
             if (filament()->getTenant()) {
-                $paymentMethod->restaurant_id = filament()->getTenant()->id;
+                $cashregister->restaurant_id = filament()->getTenant()->id;
             }
         });
     }
 }
+

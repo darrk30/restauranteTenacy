@@ -80,17 +80,17 @@ class PromotionResource extends Resource
                                         ->createOptionForm([TextInput::make('name')->required()]),
 
                                     // 1. El componente original (Solo visible si hay datos)
-        ToggleButtons::make('production_id')
-            ->label('Área de Producción')
-            ->options(fn() => Production::pluck('name', 'id'))
-            ->inline(true)
-            ->visible(fn () => Production::exists()), // Ocultar si la tabla está vacía
+                                    ToggleButtons::make('production_id')
+                                        ->label('Área de Producción')
+                                        ->options(fn() => Production::pluck('name', 'id'))
+                                        ->inline(true)
+                                        ->visible(fn() => Production::exists()), // Ocultar si la tabla está vacía
 
-        // 2. El mensaje de error/aviso (Solo visible si NO hay datos)
-        Placeholder::make('no_production_alert')
-            ->label('Área de Producción')
-            ->content(new HtmlString('<span class="text-gray-500 italic">⚠ Sin datos encontrados. Crea una área de producción primero.</span>'))
-            ->hidden(fn () => Production::exists()),
+                                    // 2. El mensaje de error/aviso (Solo visible si NO hay datos)
+                                    Placeholder::make('no_production_alert')
+                                        ->label('Área de Producción')
+                                        ->content(new HtmlString('<span class="text-gray-500 italic">⚠ Sin datos encontrados. Crea una área de producción primero.</span>'))
+                                        ->hidden(fn() => Production::exists()),
 
                                     Grid::make(3) // <--- Esto divide el espacio en 3 columnas iguales
                                         ->schema([

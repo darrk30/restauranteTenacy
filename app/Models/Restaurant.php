@@ -121,4 +121,24 @@ class Restaurant extends Model
     {
         return $this->hasMany(OrderDetail::class);
     }
+
+    public function cashRegisters()
+    {
+        return $this->hasMany(CashRegister::class);
+    }
+
+    public function sessionCashRegisters()
+    {
+        return $this->hasMany(SessionCashRegister::class);
+    }
+    
+    public function kardexes()
+    {
+        return $this->hasMany(Kardex::class);
+    }
+
+    public function conceptoCajas()
+    {
+        return $this->hasMany(ConceptoCaja::class);
+    }
 }
