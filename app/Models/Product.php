@@ -108,6 +108,11 @@ class Product extends Model
         return $this->hasMany(OrderDetail::class);
     }
 
+    public function saleDetails()
+    {
+        return $this->hasMany(SaleDetail::class);
+    }
+
     // SCOPE 1: Lógica del Buscador
     public function scopeBuscar(Builder $query, ?string $term)
     {

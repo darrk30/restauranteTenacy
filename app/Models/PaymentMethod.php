@@ -45,6 +45,9 @@ class PaymentMethod extends Model
         });
 
         static::creating(function ($paymentMethod) {
+            if (app()->has('bypass_tenant_scope')) {
+                return; // omitir asignación
+            }
             if (filament()->getTenant()) {
                 $paymentMethod->restaurant_id = filament()->getTenant()->id;
             }

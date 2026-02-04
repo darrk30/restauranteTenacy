@@ -453,7 +453,7 @@
                         @else
                             <button wire:key="btn-cobrar-pedido"
                                 class="btn-checkout bg-green-600 hover:bg-green-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg"
-                                wire:click="procesarOrden">
+                                wire:click="pagarOrden" wire:loading.attr="disabled">
                                 COBRAR S/ {{ number_format($total, 2) }}
                             </button>
                         @endif

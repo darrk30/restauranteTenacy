@@ -65,6 +65,12 @@ class Variant extends Model
         return $this->hasMany(OrderDetail::class);
     }
 
+    public function saleDetails()
+    {
+        return $this->hasMany(SaleDetail::class);
+    }
+
+
     public function getFullNameAttribute()
     {
         $values = $this->values->map(function ($value) {

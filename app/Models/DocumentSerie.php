@@ -2,22 +2,23 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Enums\DocumentSeriesType;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
-class Table extends Model
+class DocumentSerie extends Model
 {
-    protected $fillable = ['name', 'estado_mesa', 'status', 'asientos', 'floor_id', 'restaurant_id', 'order_id'];
+    protected $fillable = ['type_documento', 'serie', 'current_number', 'is_active', 'restaurant_id'];
+
+    protected $casts = [
+        'type_documento' => DocumentSeriesType::class,
+    ];
 
     public function restaurant()
     {
         return $this->belongsTo(Restaurant::class);
     }
 
-    public function orders()
-    {
-        return $this->hasMany(Order::class);
-    }
 
     protected static function booted(): void
     {
@@ -27,12 +28,12 @@ class Table extends Model
             }
         });
 
-        static::creating(function ($table) {
+        static::creating(function ($documentSerie) {
             if (app()->has('bypass_tenant_scope')) {
-                return; // omitir asignación
+                return;
             }
             if (filament()->getTenant()) {
-                $table->restaurant_id = filament()->getTenant()->id;
+                $documentSerie->restaurant_id = filament()->getTenant()->id;
             }
         });
     }

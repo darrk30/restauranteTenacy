@@ -61,7 +61,7 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                             'StockAdjustmentItem' => 'Ajuste de stock',
                             'ProductVariants' => 'Productos',
                             'PurchaseDetail'      => 'Compra',
-                            'SaleItem'            => 'Venta',
+                            'SaleDetail'            => 'Venta',
                         ][$type] ?? $type;  // fallback por si aparece otro
                     })
                     ->badge()
@@ -73,7 +73,7 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                             'StockAdjustmentItem' => 'warning',
                             'PurchaseDetail'      => 'success',
                             'ProductVariants'      => 'success',
-                            'SaleItem'            => 'danger',
+                            'SaleDetail'            => 'danger',
                             default               => 'gray',
                         };
                     }),

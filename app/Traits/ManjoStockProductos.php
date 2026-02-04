@@ -4,6 +4,7 @@ namespace App\Traits;
 
 use App\Models\Unit;
 use App\Models\WarehouseStock;
+use Illuminate\Support\Facades\Log;
 
 trait ManjoStockProductos
 {
@@ -24,6 +25,16 @@ trait ManjoStockProductos
     {
         foreach ($adjustment->items as $item) {
             $this->reverseItem($item, $adjustment->tipo);
+        }
+    }
+
+    /**
+     * Procesa el stock de múltiples ítems de venta en un solo paso.
+     */
+    public function applyVentaMasiva($items, string $tipo, ?string $comprobante = null, ?string $movimiento = null): void
+    {
+        foreach ($items as $item) {
+            $this->processItem($item, $tipo, $comprobante, $movimiento);
         }
     }
 
@@ -56,22 +67,30 @@ trait ManjoStockProductos
     private function processItem($item, string $tipo, ?string $comprobante = null, ?string $movimiento = null): void
     {
         $warehouse = $item->warehouse;
-        if (! $warehouse) return;
+        if (!$warehouse) return;
         $variant = $item->variant;
         $unitProduct = $item->product->unit;
-        $unitSelected = $item->unit;
+        $unitSelected = $item->unit ?? $unitProduct;
+
         $cantidadFinal = $this->convertirCantidad($unitSelected, $unitProduct, $item->cantidad);
-        $stock = WarehouseStock::firstOrCreate(
-            [
+
+        // BLOQUEO PESIMISTA: Espera a que termine cualquier otra actualización de este stock
+        $stock = WarehouseStock::where('variant_id', $variant->id)
+            ->where('warehouse_id', $warehouse->id)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$stock) {
+            $stock = WarehouseStock::create([
                 'variant_id' => $variant->id,
                 'warehouse_id' => $warehouse->id,
-            ],
-            ['stock_real' => 0]
-        );
+                'stock_real' => 0,
+                'stock_reserva' => 0,
+            ]);
+        }
 
-        /*** ACTUALIZAR STOCK REAL ***/
         if ($tipo === 'entrada') {
-            if (! $variant->stock_inicial) {
+            if (!$variant->stock_inicial) {
                 $variant->update(['stock_inicial' => true]);
             }
             $stock->increment('stock_real', $cantidadFinal);
@@ -79,23 +98,33 @@ trait ManjoStockProductos
         }
 
         if ($tipo === 'salida') {
-            $nuevo = max(0, $stock->stock_real - $cantidadFinal);
-            $stock->update(['stock_real' => $nuevo]);
-            $stock->update(['stock_reserva' => $nuevo]);
+            // Permitir negativos si el producto está configurado para ello
+            if ($item->product->venta_sin_stock) {
+                $nuevoStock = $stock->stock_real - $cantidadFinal;
+            } else {
+                $nuevoStock = max(0, $stock->stock_real - $cantidadFinal);
+            }
+
+            $stock->update(['stock_real' => $nuevoStock]);
+
+            // Solo actualizar reserva si NO es una venta final (para otros movimientos)
+            if ($movimiento !== 'Venta') {
+                $stock->update(['stock_reserva' => $nuevoStock]);
+            }
         }
 
-        /*** REGISTRO DE KARDEX ***/
+        // REGISTRO DE KARDEX: Ahora con el stock_real bloqueado y exacto
         $variant->kardexes()->create([
-            'product_id'     => $variant->product_id,
-            'variant_id'     => $variant->id,
-            'restaurant_id'  => filament()->getTenant()->id,
-            'warehouse_id'   =>  $warehouse->id,
+            'product_id'      => $variant->product_id,
+            'variant_id'      => $variant->id,
+            'restaurant_id'   => filament()->getTenant()->id,
+            'warehouse_id'    => $warehouse->id,
             'tipo_movimiento' => $movimiento ?? $tipo,
             'comprobante'     => $comprobante,
-            'cantidad'       => $cantidadFinal,
-            'stock_restante' => $stock->stock_real,
-            'modelo_type'    => get_class($item->modelo ?? $item),
-            'modelo_id'      => $item->modelo->id ?? $item->id,
+            'cantidad'        => $tipo === 'salida' ? -$cantidadFinal : $cantidadFinal,
+            'stock_restante'  => $stock->stock_real,
+            'modelo_type'     => get_class($item),
+            'modelo_id'       => $item->id,
         ]);
     }
 

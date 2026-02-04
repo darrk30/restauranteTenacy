@@ -1309,6 +1309,25 @@ class OrdenMesa extends Page implements HasActions
         $this->calcularTotales();
     }
 
+    // En tu componente OrdenMesa.php
+
+    public function pagarOrden()
+    {
+        // 1. Si no hay pedido creado (es nuevo), lo creamos primero
+        if (!$this->pedido) {
+            $this->guardarOrdenEnBaseDeDatos(); // Tu lógica actual que crea el Order y OrderItems
+        } else {
+            // Si ya existe y hay cambios, actualizamos
+            if ($this->hayCambios) {
+                $this->actualizarOrden();
+            }
+        }
+
+        // 2. AQUI ES EL CAMBIO: Redirigir a la nueva página de pago
+        // Usamos el helper de ruta de Filament, pasando el ID del pedido
+        return redirect()->to(PagarOrden::getUrl(['record' => $this->pedido]));
+    }
+
     public static function getSlug(): string
     {
         return 'orden-mesa/{mesa}/{pedido?}';

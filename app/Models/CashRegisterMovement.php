@@ -13,7 +13,7 @@ class CashRegisterMovement extends Model
         'session_cash_register_id',
         'payment_method_id',
         'usuario_id',
-        'tipo',
+        'tipo', //Ingreso, Salida
         'motivo',
         'monto',
         'observacion',

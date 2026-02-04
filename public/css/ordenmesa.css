@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Vend+Sans:ital,wght@0,300..700;1,300..700&display=swap');
 :root {
     /* Fondos y Estructura */
     --pos-text: #1f2937;
@@ -49,7 +50,7 @@
     overflow: hidden; 
     background-color: var(--pos-bg);
     color: var(--pos-text);
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: "Vend Sans", sans-serif;
 }
 
 .pos-main-content {
