@@ -4,6 +4,8 @@
     --pos-text: #1f2937;
     --card-bg: #ffffff;
     --card-border: #e5e7eb;
+    --card-product-1: #fffbeb;
+    --card-product-2: #ecfdf5;
     
     /* Colores de Acción */
     --primary-color: #d97706;
@@ -26,14 +28,15 @@
 /* MODO OSCURO */
 .dark{
     /* --pos-bg: #111827; */
-    --pos-text: #f9fafb;
+    --pos-text: #ffffff;
     --card-bg: #1f2937;
+    --card-product-1: #1f2937;
+    --card-product-2: #1f2937;
     --card-border: #374151;
     --primary-color: #fbbf24;
-    --primary-text: #111827;
+    /* --primary-text: #111827; */
     --secondary-bg: #111827;
     --hover-bg: #374151;
-    
     --tag-bg: #431407;
     --tag-text: #fdba74;
     --tag-border: #7c2d12;
@@ -280,9 +283,43 @@
 .cart-total-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.9rem; }
 .cart-total-final { font-size: 1.5rem; font-weight: 800; margin-top: 10px; margin-bottom: 15px; }
 .btn-checkout {
-    width: 100%; background-color: var(--primary-color); color: var(--primary-text);
-    border: none; padding: 14px; border-radius: 8px; font-size: 1.1rem;
-    font-weight: bold; cursor: pointer;
+    width: 100%;
+    background-color: var(--primary-color);
+    color: var(--primary-text);
+    border: none;
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    flex-direction: row;    /* Fuerza una sola línea */
+    align-items: center;    /* Centra verticalmente */
+    justify-content: center;/* Centra horizontalmente */
+    gap: 10px;
+}
+
+/* Colores manuales (ya que no usas Tailwind) */
+.bg-blue { background-color: #2563eb; }
+.bg-yellow { background-color: #f59e0b; }
+.bg-red { background-color: #ef4444; }
+.bg-green { background-color: #16a34a; }
+
+/* Estado Deshabilitado / Cargando */
+.btn-checkout:disabled {
+    background-color: #9ca3af !important; /* Gris */
+    cursor: not-allowed;
+    opacity: 0.8;
+}
+
+/* ANIMACIÓN DEL SPINNER */
+.spinner-giro {
+    animation: girar-lento 1s linear infinite;
+}
+
+@keyframes girar-lento {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 /* 2. Estilos Base para todos los Badges */
@@ -305,19 +342,18 @@
 
 /* Nuevo ítem (Verde suave) */
 .cart-item.item-nuevo {
-    background-color: #ecfdf5 !important;
+    background-color: var(--card-product-2) !important;
     border-left: 3px solid #10b981;
 }
 
 /* Ítem actualizado (Amarillo suave) */
 .cart-item.item-actualizado {
-    background-color: #fffbeb !important;
+    background-color:   var(--card-product-1) !important;
     border-left: 3px solid #f59e0b;
 }
 
 /* Ajustes generales */
 .cart-item {
-    background-color: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
     padding: 10px;

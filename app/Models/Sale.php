@@ -27,6 +27,10 @@ class Sale extends Model
         'fecha_emision',
     ];
 
+    protected $casts = [
+        'fecha_emision' => 'datetime',
+    ];
+
     public function order()
     {
         return $this->belongsTo(Order::class);

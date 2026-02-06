@@ -13,3 +13,6 @@ Route::get('/restaurants/{tenant}/imprimir-ticket-generico', [ImprimirController
 
 Route::get('/imprimir/comanda/{order}', [ImprimirController::class, 'imprimirComanda'])
     ->name('imprimir.comanda');
+
+Route::get('/sales/print-ticket/{sale}', [ImprimirController::class, 'printTicket'])
+    ->name('sales.print.ticket');

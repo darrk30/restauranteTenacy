@@ -8,13 +8,6 @@
         metodosBackend: {{ $metodos_pago->toJson() }}
     })">
 
-        {{-- HEADER --}}
-        <div class="header-nav">
-            <a href="#" class="back-link" style="text-decoration: none; color: inherit;">
-                ← VOLVER A MESAS
-            </a>
-        </div>
-
         {{-- LAYOUT PRINCIPAL: 2 COLUMNAS --}}
         <div class="layout-grid">
 
@@ -98,8 +91,6 @@
 
                 {{-- COMPROBANTE SECTION --}}
                 <div class="card-section">
-                    <h3 class="section-title">Comprobante</h3>
-
                     <div class="tabs-inline">
                         @foreach ($series as $serie)
                             <button type="button" class="tab-btn"
@@ -123,12 +114,20 @@
 
 
                 {{-- MÉTODOS DE PAGO --}}
-                <div class="card-section">
+                <div class="card-section" x-data="{
+                    requiereReferencia: false,
+                    handleSelect(metodo) {
+                        this.selectMethod(metodo);
+                        this.requiereReferencia = metodo.requiere_referencia;
+                        if (!this.requiereReferencia) $wire.referencia_pago = '';
+                    }
+                }">
                     <h3 class="section-title" style="margin-bottom: 12px;">MÉTODO DE PAGO</h3>
+
                     <div class="payment-grid">
                         <template x-for="metodo in metodosDisponibles" :key="metodo.id">
                             <button class="payment-btn" :class="{ 'active': currentMethodId == metodo.id }"
-                                @click="selectMethod(metodo)">
+                                @click="handleSelect(metodo)">
                                 <div class="payment-icon">
                                     <template x-if="metodo.image_path">
                                         <img :src="'/storage/' + metodo.image_path">
@@ -145,11 +144,26 @@
                         </template>
                     </div>
 
-                    <div class="amount-input-container">
-                        <input type="number" class="amount-input" x-model="currentAmount" @keydown.enter="addPayment()"
-                            placeholder="S/ 0.00" onfocus="this.select()">
-                        <button class="btn-agregar" @click="addPayment()" :disabled="!canAddPayment">+
-                            AGREGAR</button>
+                    <div class="responsive-payment-row">
+
+                        <div class="flex-1">
+                            <input type="number" class="amount-input" x-model="currentAmount"
+                                @keydown.enter="addPayment()" placeholder="S/ 0.00" onfocus="this.select()">
+                        </div>
+
+                        <template x-if="requiereReferencia">
+                            <div class="flex-1" style="animation: fadeIn 0.3s;">
+                                <input type="text" x-model="$wire.referencia_pago" class="amount-input"
+                                    style="border-color: #f59e0b;" placeholder="N° Operación...">
+                            </div>
+                        </template>
+
+                        <div class="flex-btn">
+                            <button class="btn-agregar" @click="addPayment(); requiereReferencia = false;"
+                                :disabled="!canAddPayment" style="width: 100%; margin: 0;">
+                                + AGREGAR
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -158,10 +172,30 @@
                     <h3 class="section-title-modern">PAGOS REGISTRADOS</h3>
                     <div class="pagos-grid-modern">
                         <template x-for="(pago, index) in pagos" :key="index">
-                            <div class="pago-card">
+                            <div class="pago-card" style="position: relative; overflow: hidden;">
+                                {{-- ICONO DE MARCA DE AGUA (BILLETE) --}}
+                                <div class="pago-watermark">
+                                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path
+                                            d="M17 9V7C17 5.89543 16.1046 5 15 5H3C1.89543 5 1 5.89543 1 7V15C1 16.1046 1.89543 17 3 17H5M9 9H21C22.1046 9 23 9.89543 23 11V19C23 20.1046 22.1046 21 21 21H9C7.89543 21 7 20.1046 7 19V11C7 9.89543 7.89543 9 9 9ZM15 17C16.1046 17 17 16.1046 17 15C17 13.8954 16.1046 13 15 13C13.8954 13 13 13.8954 13 15C13 16.1046 13.8954 17 15 17Z"
+                                            stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                                            stroke-linejoin="round" />
+                                    </svg>
+                                </div>
                                 <div class="pago-card-content">
                                     <div class="pago-details">
-                                        <span class="pago-name-tag" x-text="pago.name"></span>
+                                        <div style="display: flex; flex-direction: column;">
+                                            <span class="pago-name-tag" x-text="pago.name"></span>
+
+                                            <template x-if="pago.referencia">
+                                                <span
+                                                    style="font-size: 10px; color: #f59e0b; font-weight: bold; margin-top: 2px;">
+                                                    <span style="opacity: 0.7;">Ref:</span> <span
+                                                        x-text="pago.referencia"></span>
+                                                </span>
+                                            </template>
+                                        </div>
+
                                         <div class="pago-amount-display">
                                             <span class="pago-currency">S/</span>
                                             <span class="pago-value"
@@ -218,7 +252,7 @@
                     </div>
                 </div>
 
-                <div class="dark-card">
+                <div class="card-section white-bg">
                     <div class="dark-row"><span>SALDO</span><span>PAGADO</span></div>
                     <div class="dark-amount">
                         <span class="amount-pending" x-text="'S/ ' + (faltante > 0 ? faltante : '0.00')"></span>
@@ -241,6 +275,68 @@
         </div>
     </div>
 
+    {{-- PANTALLA COMPLETA DE VENTA EXITOSA --}}
+    <div id="contenedor-pantalla-exito">
+        @if ($mostrarPantallaExito && $ventaExitosaId)
+            <div class="pantalla-exito-overlay">
+                <div class="modal-exito-contenedor animate-zoom-in">
+
+                    <div class="modal-exito-header">
+                        <div class="icono-check-circulo">
+                            <x-heroicon-o-check-badge style="width: 40px; height: 40px; color: white;" />
+                        </div>
+                        <h2 class="titulo-exito" style="font-size: 1.5rem; font-weight: bold; margin:0;">¡Venta
+                            Exitosa!</h2>
+                        <p style="margin: 5px 0 0 0; opacity: 0.9;">Comprobante generado correctamente</p>
+                    </div>
+
+                    <div class="modal-exito-body">
+                        <div class="ticket-wrapper">
+                            <iframe src="{{ route('sales.print.ticket', ['sale' => $ventaExitosaId]) }}"
+                                class="ticket-iframe"></iframe>
+                        </div>
+
+                        <div class="grupo-botones-exito">
+                            <button onclick="ejecutarReimpresion(this)" class="btn-exito btn-reimprimir">
+                                <x-heroicon-o-printer class="btn-icon" style="width: 20px; height: 20px;" />
+
+                                <svg class="btn-loader hidden animate-spin" style="width: 20px; height: 20px;"
+                                    viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10"
+                                        stroke="currentColor" stroke-width="4" fill="none"></circle>
+                                    <path class="opacity-75" fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                    </path>
+                                </svg>
+
+                                <span>Reimprimir</span>
+                            </button>
+
+                            <button wire:click="terminarProcesoVenta" wire:loading.attr="disabled"
+                                class="btn-exito btn-nueva-venta">
+                                {{-- Estado Normal --}}
+                                <div wire:loading.remove class="flex items-center gap-2">
+                                    <span>Nueva Venta</span>
+                                    <x-heroicon-o-arrow-right style="width: 20px; height: 20px;" />
+                                </div>
+
+                                {{-- Estado Cargando --}}
+                                <div wire:loading class="flex items-center gap-2">
+                                    <svg class="animate-spin" style="width: 20px; height: 20px;" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10"
+                                            stroke="currentColor" stroke-width="4" fill="none"></circle>
+                                        <path class="opacity-75" fill="currentColor"
+                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                        </path>
+                                    </svg>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
+    </div>
     <x-filament-actions::modals />
 
     <script>
@@ -261,11 +357,15 @@
                 currentMethodId: metodosBackend.length > 0 ? metodosBackend[0].id : null,
                 currentMethodName: metodosBackend.length > 0 ? metodosBackend[0].name : '',
                 currentAmount: '',
+                requiereReferencia: false,
 
                 init() {
                     this.$nextTick(() => {
                         this.currentAmount = this.totalFinal.toFixed(2);
                     });
+                    this.$watch('pagos', value => {
+                        $wire.set('pagos_agregados', value);
+                    })
 
                     // ✅ Escuchar cambios desde Livewire
                     Livewire.on('cliente-seleccionado', ({
@@ -312,6 +412,7 @@
                 selectMethod(metodo) {
                     this.currentMethodId = metodo.id;
                     this.currentMethodName = metodo.name;
+                    this.requiereReferencia = metodo.requiere_referencia;
                     this.updateCurrentAmount();
                 },
 
@@ -322,9 +423,16 @@
 
                 addPayment() {
                     if (!this.canAddPayment) return;
+
                     let amountToAdd = parseFloat(this.currentAmount);
 
-                    let existingIndex = this.pagos.findIndex(p => p.id == this.currentMethodId);
+                    // CORRECCIÓN: Acceder a Livewire correctamente
+                    let referenciaActual = this.$wire.referencia_pago || '';
+
+                    let existingIndex = this.pagos.findIndex(p =>
+                        p.id == this.currentMethodId && p.referencia == referenciaActual
+                    );
+
                     if (existingIndex !== -1) {
                         this.pagos[existingIndex].amount = (parseFloat(this.pagos[existingIndex]
                             .amount) + amountToAdd);
@@ -332,10 +440,14 @@
                         this.pagos.push({
                             id: this.currentMethodId,
                             name: this.currentMethodName,
-                            amount: amountToAdd
+                            amount: amountToAdd,
+                            referencia: referenciaActual
                         });
                     }
+
                     this.updateCurrentAmount();
+                    this.$wire.set('referencia_pago', ''); // Limpiar en el backend
+                    this.requiereReferencia = false; // Ahora sí funcionará
                 },
 
                 removePayment(index) {
@@ -344,5 +456,37 @@
                 }
             }));
         });
+
+        function ejecutarReimpresion(btn) {
+            const icon = btn.querySelector('.btn-icon');
+            const loader = btn.querySelector('.btn-loader');
+            const frame = document.querySelector('.ticket-iframe');
+
+            // Escuchamos el evento de finalización dentro del IFRAME
+            frame.contentWindow.onafterprint = () => {
+                icon.classList.remove('hidden');
+                loader.classList.add('hidden');
+                btn.style.pointerEvents = 'auto';
+                console.log("Impresión finalizada o cancelada");
+            };
+
+            // Estado cargando
+            btn.style.pointerEvents = 'none';
+            icon.classList.add('hidden');
+            loader.classList.remove('hidden');
+
+            // Ejecutar impresión
+            frame.contentWindow.focus();
+            frame.contentWindow.print();
+
+            // Fallback: Si por alguna razón el navegador no dispara onafterprint
+            setTimeout(() => {
+                if (icon.classList.contains('hidden')) {
+                    icon.classList.remove('hidden');
+                    loader.classList.add('hidden');
+                    btn.style.pointerEvents = 'auto';
+                }
+            }, 5000);
+        }
     </script>
 </x-filament-panels::page>

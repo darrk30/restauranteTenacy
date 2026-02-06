@@ -409,55 +409,56 @@
 
                 <div class="mt-4">
                     @if (!$pedido)
-                        {{-- ==================================================== --}}
-                        {{-- CASO 1: PEDIDO NUEVO (Aún no guardado)               --}}
-                        {{-- ==================================================== --}}
-                        <button wire:key="btn-ordenar-nuevo"
-                            class="btn-checkout bg-blue-600 hover:bg-blue-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg"
-                            wire:click="procesarOrden" wire:loading.attr="disabled"
-                            @if (count($carrito) == 0) disabled style="opacity:0.5; cursor: not-allowed;" @endif>
-                            ORDENAR (S/ {{ number_format($total, 2) }})
+                        {{-- CASO 1: ORDENAR NUEVO --}}
+                        <button wire:key="btn-ordenar-nuevo" class="btn-checkout bg-blue" wire:click="procesarOrden"
+                            wire:loading.attr="disabled" @if (count($carrito) == 0) disabled @endif>
+
+                            <span wire:loading.remove wire:target="procesarOrden">
+                                ORDENAR (S/ {{ number_format($total, 2) }})
+                            </span>
+
+                            <div wire:loading wire:target="procesarOrden">
+                                <x-spiner-text>PROCESANDO...</x-spiner-text>
+                            </div>
                         </button>
                     @else
-                        {{-- ==================================================== --}}
-                        {{-- CASO 2: PEDIDO EXISTENTE                             --}}
-                        {{-- ==================================================== --}}
-
-                        @if (count($carrito) === 0)
-                            {{-- BOTÓN ANULAR (Usa el Modal de Filament) --}}
-                            {{-- Usamos mountAction('nombre_accion') para abrir el modal --}}
-                            <button wire:key="btn-anular-pedido" type="button"
-                                wire:click="mountAction('anularPedido')" wire:loading.attr="disabled"
-                                class="btn-checkout bg-red-600 hover:bg-red-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg flex items-center justify-center gap-2">
-
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
-                                    viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                ANULAR PEDIDO
-                            </button>
-                        @elseif ($hayCambios)
-                            {{-- BOTÓN ACTUALIZAR --}}
-                            <button wire:key="btn-actualizar-pedido"
-                                class="btn-checkout bg-yellow-500 hover:bg-yellow-600 w-full py-3 rounded text-white font-bold text-lg shadow-lg animate-pulse flex items-center justify-center gap-2"
+                        @if ($hayCambios)
+                            {{-- SUB-CASO A: ACTUALIZAR --}}
+                            <button wire:key="btn-actualizar-pedido" class="btn-checkout bg-yellow"
                                 wire:click="actualizarOrden" wire:loading.attr="disabled">
 
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
-                                    viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                                ACTUALIZAR
+                                <span wire:loading.remove wire:target="actualizarOrden">ACTUALIZAR</span>
+
+                                <div wire:loading wire:target="actualizarOrden">
+                                    <x-spiner-text>GUARDANDO...</x-spiner-text>
+                                </div>
+                            </button>
+                        @elseif (count($carrito) === 0)
+                            {{-- SUB-CASO B: ANULAR --}}
+                            <button wire:key="btn-anular-pedido" class="btn-checkout bg-red"
+                                wire:click="mountAction('anularPedido')" wire:loading.attr="disabled">
+
+                                <span wire:loading.remove wire:target="mountAction('anularPedido')">ANULAR
+                                    PEDIDO</span>
+
+                                <div wire:loading wire:target="mountAction('anularPedido')">
+                                    <x-spiner-text>ANULANDO...</x-spiner-text>
+                                </div>
                             </button>
                         @else
-                            <button wire:key="btn-cobrar-pedido"
-                                class="btn-checkout bg-green-600 hover:bg-green-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg"
+                            {{-- SUB-CASO C: COBRAR --}}
+                            <button wire:key="btn-cobrar-pedido" class="btn-checkout bg-green"
                                 wire:click="pagarOrden" wire:loading.attr="disabled">
-                                COBRAR S/ {{ number_format($total, 2) }}
+
+                                <span wire:loading.remove wire:target="pagarOrden">
+                                    COBRAR S/ {{ number_format($total, 2) }}
+                                </span>
+
+                                <div wire:loading wire:target="pagarOrden">
+                                    <x-spiner-text>COBRANDO...</x-spiner-text>
+                                </div>
                             </button>
                         @endif
-
                     @endif
                 </div>
             </div>
@@ -597,62 +598,56 @@
 
                 <div class="mt-4">
                     @if (!$pedido)
-                        {{-- ==================================================== --}}
-                        {{-- CASO 1: PEDIDO NUEVO (Aún no guardado)               --}}
-                        {{-- ==================================================== --}}
-                        <button wire:key="btn-ordenar-nuevo"
-                            class="btn-checkout bg-blue-600 hover:bg-blue-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                            wire:click="procesarOrden" wire:loading.attr="disabled"
-                            @if (count($carrito) == 0) disabled @endif>
-                            ORDENAR (S/ {{ number_format($total, 2) }})
+                        {{-- CASO 1: ORDENAR NUEVO --}}
+                        <button wire:key="btn-ordenar-nuevo" class="btn-checkout bg-blue" wire:click="procesarOrden"
+                            wire:loading.attr="disabled" @if (count($carrito) == 0) disabled @endif>
+
+                            <span wire:loading.remove wire:target="procesarOrden">
+                                ORDENAR (S/ {{ number_format($total, 2) }})
+                            </span>
+
+                            <div wire:loading wire:target="procesarOrden">
+                                <x-spiner-text>PROCESANDO...</x-spiner-text>
+                            </div>
                         </button>
                     @else
-                        {{-- ==================================================== --}}
-                        {{-- CASO 2: PEDIDO EXISTENTE (Ya en base de datos)       --}}
-                        {{-- ==================================================== --}}
-
-                        {{-- 
-             CORRECCIÓN AQUÍ: 
-             Primero preguntamos si hay cambios (aunque el carrito esté vacío visualmente, 
-             la eliminación es un cambio pendiente).
-        --}}
-
                         @if ($hayCambios)
-                            {{-- SUB-CASO A: HAY CAMBIOS (Nuevos, Editados o Eliminados) -> BOTÓN ACTUALIZAR --}}
-                            <button wire:key="btn-actualizar-pedido"
-                                class="btn-checkout bg-yellow-500 hover:bg-yellow-600 w-full py-3 rounded text-white font-bold text-lg shadow-lg animate-pulse flex items-center justify-center gap-2"
+                            {{-- SUB-CASO A: ACTUALIZAR --}}
+                            <button wire:key="btn-actualizar-pedido" class="btn-checkout bg-yellow"
                                 wire:click="actualizarOrden" wire:loading.attr="disabled">
 
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
-                                    viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                                ACTUALIZAR
+                                <span wire:loading.remove wire:target="actualizarOrden">ACTUALIZAR</span>
+
+                                <div wire:loading wire:target="actualizarOrden">
+                                    <x-spiner-text>GUARDANDO...</x-spiner-text>
+                                </div>
                             </button>
                         @elseif (count($carrito) === 0)
-                            {{-- SUB-CASO B: CARRITO VACÍO Y SIN CAMBIOS PENDIENTES -> BOTÓN ANULAR --}}
-                            {{-- Esto saldrá solo después de haberle dado a "Actualizar" y que la BD confirme que no hay items --}}
-                            <button wire:key="btn-anular-pedido" type="button"
-                                wire:click="mountAction('anularPedido')" wire:loading.attr="disabled"
-                                class="btn-checkout bg-red-600 hover:bg-red-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg flex items-center justify-center gap-2">
+                            {{-- SUB-CASO B: ANULAR --}}
+                            <button wire:key="btn-anular-pedido" class="btn-checkout bg-red"
+                                wire:click="mountAction('anularPedido')" wire:loading.attr="disabled">
 
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
-                                    viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                ANULAR PEDIDO
+                                <span wire:loading.remove wire:target="mountAction('anularPedido')">ANULAR
+                                    PEDIDO</span>
+
+                                <div wire:loading wire:target="mountAction('anularPedido')">
+                                    <x-spiner-text>ANULANDO...</x-spiner-text>
+                                </div>
                             </button>
                         @else
-                            {{-- SUB-CASO C: TODO GUARDADO Y HAY ITEMS -> BOTÓN COBRAR --}}
-                            <button wire:key="btn-cobrar-pedido"
-                                class="btn-checkout bg-green-600 hover:bg-green-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg"
-                                wire:click="procesarOrden">
-                                COBRAR S/ {{ number_format($total, 2) }}
+                            {{-- SUB-CASO C: COBRAR --}}
+                            <button wire:key="btn-cobrar-pedido" class="btn-checkout bg-green"
+                                wire:click="pagarOrden" wire:loading.attr="disabled">
+
+                                <span wire:loading.remove wire:target="pagarOrden">
+                                    COBRAR S/ {{ number_format($total, 2) }}
+                                </span>
+
+                                <div wire:loading wire:target="pagarOrden">
+                                    <x-spiner-text>COBRANDO...</x-spiner-text>
+                                </div>
                             </button>
                         @endif
-
                     @endif
                 </div>
             </div>

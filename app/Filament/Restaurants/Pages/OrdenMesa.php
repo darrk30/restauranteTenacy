@@ -1001,7 +1001,7 @@ class OrdenMesa extends Page implements HasActions
                     $impacto = $consumoProductos[$item->id] ?? 0;
                 }
 
-                $visible = max(0, $stockDb - $impacto);
+                $visible = $stockDb - $impacto;
                 $item->setAttribute('stock_visible', $visible);
                 $item->setAttribute('esta_agotado', ($item->control_stock == 1 && $visible <= 0 && $item->venta_sin_stock == 0));
                 $item->setAttribute('tiene_limite', $item->control_stock == 1);

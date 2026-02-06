@@ -57,6 +57,7 @@ class PagarOrden extends Page implements HasForms, HasActions
     public $serie_id;
     public $notas_pago = '';
     public bool $cliente_tiene_ruc = false;
+    public $referencia_pago = '';
 
     /** @var mixed */
     public $series;
@@ -67,6 +68,9 @@ class PagarOrden extends Page implements HasForms, HasActions
     public $resultados_clientes = [];
     public $tenantSlug;
 
+    public $ventaExitosaId = null; // ID de la venta recién creada
+    public $mostrarPantallaExito = false;
+
     public function mount($record)
     {
         $this->tenantSlug = Filament::getTenant()->slug;
@@ -75,7 +79,8 @@ class PagarOrden extends Page implements HasForms, HasActions
 
         $this->cargarSeries();
         $this->serie_id = $this->series->firstWhere('type_documento', $this->tipo_comprobante)?->id;
-        $this->metodos_pago = PaymentMethod::where('status', true)->get();
+        $this->metodos_pago = PaymentMethod::where('status', true)
+            ->get(['id', 'name', 'image_path', 'requiere_referencia']);
 
         $this->order->client_id ? $this->seleccionarCliente($this->order->client_id) : $this->setClienteVarios();
 
@@ -345,8 +350,6 @@ class PagarOrden extends Page implements HasForms, HasActions
                     'cantidad'        => $item->cantidad,
                     'precio_unitario' => $item->price,
                     'subtotal'        => $item->subTotal,
-                    'created_at'      => now(),
-                    'updated_at'      => now(),
                 ];
 
                 // Preparar para actualización de stock (Trait)
@@ -369,20 +372,30 @@ class PagarOrden extends Page implements HasForms, HasActions
             }
 
             // 5. REGISTRAR PAGOS EN CAJA (Batch)
-            $movimientosCaja = collect($this->pagos_agregados)->map(fn($pago) => [
-                'session_cash_register_id' => $sesionCaja->id,
-                'payment_method_id'        => $pago['id'],
-                'usuario_id'               => $userId,
-                'tipo'                     => 'Ingreso',
-                'motivo'                   => "Venta: {$sale->serie}-{$sale->correlativo}",
-                'monto'                    => $pago['amount'],
-                'referencia_type'          => Sale::class,
-                'referencia_id'            => $sale->id,
-                'created_at'               => now(),
-                'updated_at'               => now(),
-            ])->toArray();
+            // 5. REGISTRAR PAGOS EN CAJA (Batch)
+            $movimientosCaja = collect($this->pagos_agregados)->map(function ($pago) use ($sale, $userId) {
 
-            DB::table('cash_register_movements')->insert($movimientosCaja);
+                // Si hay una referencia guardada en la propiedad del componente
+                $referenciaStr = !empty($this->referencia_pago)
+                    ? " | Ref: " . $this->referencia_pago
+                    : "";
+
+                return [
+                    'payment_method_id' => $pago['id'],
+                    'usuario_id'        => $userId,
+                    'tipo'              => 'Ingreso',
+                    // Concatenamos la referencia al motivo original
+                    'motivo'            => "Venta: {$sale->serie}-{$sale->correlativo}" . $referenciaStr,
+                    'monto'             => $pago['amount'],
+                    'referencia_type'   => Sale::class,
+                    'referencia_id'     => $sale->id,
+                    'created_at'        => now(),
+                    'updated_at'        => now(),
+                ];
+            })->toArray();
+
+            $sesionCaja->cashRegisterMovements()->createMany($movimientosCaja);
+            $this->referencia_pago = '';
 
             // 6. CIERRE DE ESTADOS
             $order->update(['status' => 'pagado']);
@@ -396,11 +409,18 @@ class PagarOrden extends Page implements HasForms, HasActions
 
             DB::commit();
             Notification::make()->title('Venta exitosa')->success()->send();
-            return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
+            $this->ventaExitosaId = $sale->id;
+            $this->mostrarPantallaExito = true;
+            // return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
         } catch (\Exception $e) {
             DB::rollBack();
             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
         }
+    }
+
+    public function terminarProcesoVenta()
+    {
+        return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
     }
 
     public function getHeading(): string
