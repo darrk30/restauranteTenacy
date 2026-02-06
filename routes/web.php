@@ -11,5 +11,8 @@ Route::get('/', function () {
 Route::get('/restaurants/{tenant}/imprimir-ticket-generico', [ImprimirController::class, 'imprimirTicket'])
     ->name('comanda.generica');
 
-    Route::get('/imprimir/comanda/{order}', [ImprimirController::class, 'imprimirComanda'])
+Route::get('/imprimir/comanda/{order}', [ImprimirController::class, 'imprimirComanda'])
     ->name('imprimir.comanda');
+
+Route::get('/sales/print-ticket/{sale}', [ImprimirController::class, 'printTicket'])
+    ->name('sales.print.ticket');

@@ -62,12 +62,6 @@ class PromotionProductRelationManager extends RelationManager
                     ->preload()
                     ->required(),
 
-
-
-
-
-
-
                 Forms\Components\TextInput::make('quantity')
                     ->label('Cantidad')
                     ->numeric()

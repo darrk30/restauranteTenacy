@@ -1,64 +1,207 @@
-@props(['orderId', 'jobId' => null])
-
-<div class="ticket-modal-overlay">
-
-    {{-- Contenedor del Modal --}}
-    <div class="ticket-modal-content">
+<div class="ticket-modal-overlay" wire:key="modal-comanda-{{ $orderId }}">
+    <div class="ticket-modal-content" x-data="{
+        activeTab: '{{ $areas->first()['id'] ?? 'general' }}',
+        isPrinting: false,
+        imprimir() {
+            this.isPrinting = true;
+            const frame = document.getElementById('pdf-frame-' + this.activeTab);
+            if (frame) {
+                frame.contentWindow.focus();
+                frame.contentWindow.print();
+                frame.contentWindow.onafterprint = () => { this.isPrinting = false; };
+                setTimeout(() => { this.isPrinting = false; }, 1000);
+            }
+        }
+    }">
 
         {{-- Cabecera --}}
         <div class="ticket-modal-header">
             <h3 class="ticket-modal-title">
-                {{-- Icono Impresora SVG --}}
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                Imprimir Comanda #{{ $orderId }}
+                <x-heroicon-o-printer class="w-5 h-5" />
+                Comanda #{{ $orderId }}
             </h3>
-
-            {{-- Botón X (Cerrar) --}}
-            <button wire:click="cerrarModalComanda" class="ticket-modal-close-icon" title="Cerrar">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+            <button wire:click="cerrarModalComanda" class="ticket-modal-close-icon">
+                <x-heroicon-o-x-mark class="w-6 h-6" />
             </button>
         </div>
 
-        {{-- Cuerpo: IFRAME PDF --}}
-        {{-- wire:ignore evita recargas innecesarias --}}
-        <div class="ticket-modal-body" wire:ignore>
-            <iframe id="pdf-frame-{{ $orderId }}" {{-- Agregamos el parámetro jobId a la URL --}}
-                src="{{ route('imprimir.comanda', ['order' => $orderId, 'jobId' => $jobId]) }}"
-                class="w-full h-full border-0" title="Comanda PDF">
-            </iframe>
+        {{-- Pestañas --}}
+        <div class="flex border-b border-gray-200 bg-white overflow-x-auto scrollbar-hide">
+            @foreach ($areas as $area)
+                <button @click="activeTab = '{{ $area['id'] }}'"
+                    :class="activeTab === '{{ $area['id'] }}'
+                        ?
+                        'border-b-2 border-blue-600 text-blue-600' :
+                        'text-gray-500 hover:text-gray-700'"
+                    class="px-6 py-4 text-xs font-bold uppercase transition-all whitespace-nowrap focus:outline-none">
+                    {{ $area['name'] }}
+                </button>
+            @endforeach
         </div>
 
-        {{-- Footer: Botones --}}
+        {{-- Cuerpo: Solo el iframe --}}
+        <div class="ticket-modal-body relative bg-gray-50"> {{-- Un gris muy tenue de fondo general --}}
+            @foreach ($areas as $area)
+                <div x-show="activeTab === '{{ $area['id'] }}'"
+                    x-transition:enter="transition opacity ease-out duration-300" x-transition:enter-start="opacity-0"
+                    x-transition:enter-end="opacity-100"
+                    class="w-full h-full absolute inset-0 flex justify-center overflow-y-auto">
+
+                    <iframe id="pdf-frame-{{ $area['id'] }}"
+                        src="{{ route('imprimir.comanda', ['order' => $orderId, 'jobId' => $jobId, 'areaId' => $area['id']]) }}"
+                        class="w-full h-full border-none" title="Comanda {{ $area['name'] }}">
+                    </iframe>
+                </div>
+            @endforeach
+        </div>
+
+        {{-- Footer --}}
         <div class="ticket-modal-footer">
-
-            <button wire:click="cerrarModalComanda" class="ticket-btn ticket-btn-secondary">
-                Cerrar
+            <button wire:click="cerrarModalComanda" wire:loading.attr="disabled"
+                class="ticket-btn ticket-btn-secondary">
+                <span wire:loading.remove wire:target="cerrarModalComanda">CERRAR</span>
+                <span wire:loading wire:target="cerrarModalComanda" class="animate-spin">
+                    <x-heroicon-o-arrow-path class="w-5 h-5" />
+                </span>
             </button>
 
-            {{-- Botón IMPRIMIR (JS Puro) --}}
-            <button onclick="document.getElementById('pdf-frame-{{ $orderId }}').contentWindow.print()"
-                class="ticket-btn ticket-btn-primary">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                IMPRIMIR
+            <button @click="imprimir()" :disabled="isPrinting"
+                :class="isPrinting ? 'ticket-btn-disabled' : 'ticket-btn-primary'" class="ticket-btn">
+
+                <template x-if="isPrinting">
+                    <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                            stroke-width="4" fill="none"></circle>
+                        <path class="opacity-75" fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                        </path>
+                    </svg>
+                </template>
+
+                <template x-if="!isPrinting">
+                    <x-heroicon-o-printer class="w-5 h-5" />
+                </template>
+
+                <span x-text="isPrinting ? 'PROCESANDO...' : 'IMPRIMIR ' + activeTab.toUpperCase()"></span>
             </button>
         </div>
-
     </div>
 </div>
-
 <style>
-    /* Animación de entrada */
+    .ticket-modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(17, 24, 39, 0.8);
+        /* Gris azulado oscuro */
+        backdrop-filter: blur(4px);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .ticket-modal-content {
+        background-color: white;
+        width: 100%;
+        max-width: 400px;
+        height: 60vh;
+        border-radius: 16px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        animation: modalZoomIn 0.3s ease-out;
+    }
+
+    .ticket-modal-header {
+        background-color: #111827;
+        color: white;
+        padding: 16px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .ticket-modal-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0;
+    }
+
+    .ticket-modal-close-icon {
+        color: #9ca3af;
+        transition: color 0.2s;
+        border: none;
+        background: none;
+        cursor: pointer;
+    }
+
+    .ticket-modal-close-icon:hover {
+        color: white;
+    }
+
+    /* Eliminamos el padding y permitimos que el iframe llene el espacio */
+    .ticket-modal-body {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .ticket-modal-footer {
+        padding: 20px;
+        border-top: 1px solid #f3f4f6;
+        display: flex;
+        gap: 12px;
+        background-color: white;
+    }
+
+    .ticket-btn {
+        flex: 1;
+        padding: 12px;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: all 0.2s;
+        border: none;
+        text-transform: uppercase;
+    }
+
+    .ticket-btn-primary {
+        background-color: #2563eb;
+        color: white;
+    }
+
+    .ticket-btn-primary:hover {
+        background-color: #1d4ed8;
+    }
+
+    .ticket-btn-secondary {
+        background-color: #f3f4f6;
+        color: #4b5563;
+    }
+
+    .ticket-btn-secondary:hover {
+        background-color: #e5e7eb;
+    }
+
+    .ticket-btn-disabled {
+        background-color: #d1d5db;
+        color: #9ca3af;
+        cursor: not-allowed;
+    }
+
     @keyframes modalZoomIn {
         from {
             opacity: 0;
@@ -69,146 +212,5 @@
             opacity: 1;
             transform: scale(1);
         }
-    }
-
-    /* Fondo oscuro (Overlay) */
-    .ticket-modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.7);
-        /* Oscuro con transparencia */
-        backdrop-filter: blur(4px);
-        /* Efecto borroso */
-        z-index: 9999;
-        /* Muy alto para estar encima de todo */
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 16px;
-        box-sizing: border-box;
-    }
-
-    /* Contenedor Principal del Modal */
-    .ticket-modal-content {
-        background-color: white;
-        width: 100%;
-        max-width: 450px;
-        height: 60vh;
-        /* 80% del alto de la pantalla */
-        border-radius: 8px;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        animation: modalZoomIn 0.3s ease-out;
-        position: relative;
-    }
-
-    /* Cabecera */
-    .ticket-modal-header {
-        background-color: #1f2937;
-        /* Gris oscuro */
-        color: white;
-        padding: 12px 16px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-shrink: 0;
-        /* No encoger */
-    }
-
-    .ticket-modal-title {
-        margin: 0;
-        font-size: 16px;
-        font-weight: bold;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .ticket-modal-close-icon {
-        background: none;
-        border: none;
-        color: #9ca3af;
-        cursor: pointer;
-        padding: 4px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: color 0.2s;
-    }
-
-    .ticket-modal-close-icon:hover {
-        color: white;
-    }
-
-    /* Cuerpo (Iframe) */
-    .ticket-modal-body {
-        flex: 1;
-        /* Ocupa el espacio restante */
-        background-color: #f3f4f6;
-        position: relative;
-        width: 100%;
-    }
-
-    .ticket-modal-body iframe {
-        width: 100%;
-        height: 100%;
-        border: none;
-        display: block;
-    }
-
-    /* Footer */
-    .ticket-modal-footer {
-        background-color: white;
-        padding: 16px;
-        border-top: 1px solid #e5e7eb;
-        display: flex;
-        gap: 12px;
-        flex-shrink: 0;
-    }
-
-    /* Botones Generales */
-    .ticket-btn {
-        flex: 1;
-        padding: 12px;
-        border-radius: 6px;
-        font-weight: bold;
-        font-size: 14px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        transition: background-color 0.2s;
-        border: none;
-        text-transform: uppercase;
-    }
-
-    /* Botón Cerrar (Secundario) */
-    .ticket-btn-secondary {
-        background-color: #e5e7eb;
-        color: #1f2937;
-    }
-
-    .ticket-btn-secondary:hover {
-        background-color: #d1d5db;
-    }
-
-    /* Botón Imprimir (Primario) */
-    .ticket-btn-primary {
-        background-color: #2563eb;
-        /* Azul */
-        color: white;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
-
-    .ticket-btn-primary:hover {
-        background-color: #1d4ed8;
-        /* Azul más oscuro */
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     }
 </style>

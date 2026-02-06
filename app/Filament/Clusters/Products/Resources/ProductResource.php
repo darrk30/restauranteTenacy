@@ -217,10 +217,9 @@ class ProductResource extends Resource
                                                 fn(Get $get) =>
                                                 $get('type') !== TipoProducto::Insumo->value
                                             )
-                                            ->hintAction(
-                                                Action::make('info')
-                                                    ->icon('heroicon-m-information-circle')
-                                                    ->tooltip('Para productos obsequiados al cliente. En el POS podrás marcarlos como cortesía y su precio será S/ 0.')
+                                            ->hintIcon(
+                                                'heroicon-m-information-circle',
+                                                tooltip: 'Para productos obsequiados al cliente. En el POS podrás marcarlos como cortesía y su precio será S/ 0.'
                                             ),
 
                                         Toggle::make('visible')
@@ -233,10 +232,9 @@ class ProductResource extends Resource
                                                 fn(Get $get) =>
                                                 $get('type') !== TipoProducto::Insumo->value
                                             )
-                                            ->hintAction(
-                                                Action::make('info')
-                                                    ->icon('heroicon-m-information-circle')
-                                                    ->tooltip('Habilita que el producto aparezca en la carta digital para pedidos.')
+                                            ->hintIcon(
+                                                'heroicon-m-information-circle',
+                                                tooltip: 'Habilita que el producto aparezca en la carta digital para pedidos.'
                                             ),
 
                                         Toggle::make('control_stock')
@@ -257,10 +255,9 @@ class ProductResource extends Resource
                                                     TipoProducto::Servicio->value,
                                                 ])
                                             )
-                                            ->hintAction(
-                                                Action::make('info')
-                                                    ->icon('heroicon-m-information-circle')
-                                                    ->tooltip('Controla salidas, ingresos y traslados del producto. Evita ventas sin stock.')
+                                            ->hintIcon(
+                                                'heroicon-m-information-circle',
+                                                tooltip: 'Controla salidas, ingresos y traslados del producto. Evita ventas sin stock.'
                                             ),
 
                                         Toggle::make('venta_sin_stock')

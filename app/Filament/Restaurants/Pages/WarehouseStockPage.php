@@ -27,17 +27,6 @@ class WarehouseStockPage extends Page implements Tables\Contracts\HasTable
     {
         return $table
             ->query(
-                // Variant::query()
-                //     ->with([
-                //         'product',
-                //         'values.attribute',
-                //         'stocks.warehouse',
-                //     ])
-                //     ->where('status', 'activo')
-                //     ->whereHas('product', function ($q) {
-                //         $q->where('control_stock', true);
-                //     })
-                //     ->whereHas('stocks')
                 Variant::query()
                     ->with([
                         'product',

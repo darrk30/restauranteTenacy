@@ -4,7 +4,6 @@
 
 {{-- AGREGAMOS x-data AQUÍ PARA CONTROLAR EL CARRITO MÓVIL EN TODA LA PÁGINA --}}
 <x-filament-panels::page x-data="{ mobileCartOpen: false }">
-
     <div class="pos-layout">
         <div class="pos-main-content">
             {{-- 1. CATEGORÍAS --}}
@@ -47,18 +46,46 @@
             {{-- 3. PRODUCTOS --}}
             <div class="pos-products-area" wire:loading.class="opacity-50 pointer-events-none"
                 wire:target="search, categoriaSeleccionada">
+
+
                 <div class="products-grid">
                     @forelse ($productos as $product)
-                        {{-- TARJETA DE PRODUCTO CON ALPINEJS PARA TOOLTIP Y Z-INDEX --}}
-                        <div wire:key="prod-{{ $product->id }}" class="product-card group" x-data="{ tooltipOpen: false }"
-                            :style="tooltipOpen ? 'z-index: 50;' : ''" @click.outside="tooltipOpen = false">
+                        @php
+                            // TRUCO: Normalizamos el tipo aquí mismo.
+                            // Si es un Enum, sacamos su valor ('Producto'). Si ya es texto, lo usamos directo.
+                            $tipoProducto =
+                                $product->type instanceof \App\Enums\TipoProducto
+                                    ? $product->type->value
+                                    : $product->type;
+                        @endphp
 
-                            <div class="product-image-container">
+                        {{-- USAMOS LA VARIABLE NORMALIZADA $tipoProducto PARA EL KEY --}}
+                        <div wire:key="item-{{ $tipoProducto }}-{{ $product->id }}" class="product-card group"
+                            x-data="{ tooltipOpen: false }" :style="tooltipOpen ? 'z-index: 50;' : ''"
+                            @click.outside="tooltipOpen = false">
+
+                            <div class="product-image-container relative">
+                                {{-- BADGE: COMBO (Promocion) --}}
+                                @if ($tipoProducto === 'Promocion')
+                                    <div class="pos-badge">
+                                        COMBO
+                                    </div>
+                                @endif
+
+                                {{-- BADGE: SERVICIO --}}
+                                @if ($tipoProducto === 'Servicio')
+                                    <div class="pos-badge">
+                                        SERVICIO
+                                    </div>
+                                @endif
+
+
+                                {{-- IMAGEN --}}
                                 @if ($product->image_path)
                                     <img src="{{ asset('storage/' . $product->image_path) }}" alt="{{ $product->name }}"
                                         class="product-img">
                                 @else
-                                    <div class="flex items-center justify-center h-full">
+                                    <div class="flex items-center justify-center h-full text-gray-300">
                                         <svg style="width:32px; height:32px" fill="none" stroke="currentColor"
                                             viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -68,106 +95,187 @@
                                     </div>
                                 @endif
 
+                                {{-- OVERLAY AGOTADO --}}
                                 @if ($product->esta_agotado)
                                     <div class="agotado-overlay">
                                         <span class="agotado-badge">AGOTADO</span>
                                     </div>
                                 @endif
 
+                                {{-- PRECIO --}}
                                 <div class="price-tag-overlay">
                                     <span class="text-xs font-medium">S/</span>{{ number_format($product->price, 2) }}
                                 </div>
                             </div>
 
+                            {{-- En tu archivo orden-mesa.blade.php --}}
+
                             <div class="product-info">
                                 <h3 class="product-title">{{ $product->name }}</h3>
-                                @if ($product->control_stock == 1)
+
+                                {{-- 1. STOCK DE PRODUCTO FÍSICO --}}
+                                @if ($tipoProducto === 'Producto' && $product->control_stock == 1)
                                     <p
                                         class="stock-text {{ $product->stock_visible > 0 ? 'text-gray-500' : 'text-red-500' }}">
                                         Stock: {{ $product->stock_visible }}
                                     </p>
                                 @endif
+
+                                {{-- 2. STOCK DE PROMOCIÓN (SOLO SI TIENE LÍMITE) --}}
+                                @if ($tipoProducto === 'Promocion' && $product->tiene_limite)
+                                    <p
+                                        class="stock-text {{ $product->stock_visible > 0 ? 'text-purple-600' : 'text-red-500' }}">
+                                        Restantes hoy: {{ $product->stock_visible }}
+                                    </p>
+                                @endif
+
+                                {{-- 3. TEXTO PARA PROMOCIONES ILIMITADAS (SIN STOCK) --}}
+                                @if ($tipoProducto === 'Promocion' && !$product->tiene_limite)
+                                    {{-- Aquí puedes poner un texto genérico o dejarlo vacío si prefieres no mostrar nada --}}
+                                    <p class="text-[10px] text-purple-500 font-medium italic">
+                                        Disponible
+                                    </p>
+                                @endif
+
+                                {{-- 4. SERVICIOS --}}
+                                @if ($tipoProducto === 'Servicio')
+                                    <p class="text-[10px] text-blue-500 italic">Servicio</p>
+                                @endif
                             </div>
 
                             <div class="product-footer">
                                 <div class="flex items-center gap-2 w-full">
-                                    {{-- BOTÓN AGREGAR --}}
-                                    <button
-                                        class="btn-footer-cart flex-1 {{ $product->esta_agotado ? 'opacity-50 cursor-not-allowed bg-gray-300 text-gray-500' : '' }}"
-                                        @if (!$product->esta_agotado) wire:click="agregarProducto({{ $product->id }})" @endif
-                                        @if ($product->esta_agotado) disabled @endif wire:loading.attr="disabled"
-                                        wire:target="agregarProducto({{ $product->id }})">
 
-                                        <svg wire:loading.remove wire:target="agregarProducto({{ $product->id }})"
-                                            xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-                                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                            stroke-linecap="round" stroke-linejoin="round">
-                                            <circle cx="9" cy="21" r="1"></circle>
-                                            <circle cx="20" cy="21" r="1"></circle>
-                                            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6">
-                                            </path>
-                                        </svg>
-                                        <svg wire:loading.class.remove="hidden"
-                                            wire:target="agregarProducto({{ $product->id }})"
-                                            class="animate-spin hidden" style="width:18px; height:18px;"
-                                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle class="opacity-25" cx="12" cy="12" r="10"
-                                                stroke="currentColor" stroke-width="4"></circle>
-                                            <path class="opacity-75" fill="currentColor"
-                                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
-                                            </path>
-                                        </svg>
-                                    </button>
+                                    {{-- BOTÓN: AGREGAR PROMOCIÓN --}}
+                                    @if ($tipoProducto === 'Promocion')
+                                        <button
+                                            class="btn-footer-cart flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                                            wire:click="agregarPromocion({{ $product->id }})"
+                                            wire:loading.attr="disabled"
+                                            wire:target="agregarPromocion({{ $product->id }})">
 
-                                    {{-- BOTÓN INFO (TOOLTIP) --}}
-                                    <div class="relative">
-                                        <button class="btn-footer-info" type="button"
-                                            @click="tooltipOpen = !tooltipOpen">
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none"
-                                                viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
-                                                class="w-5 h-5">
-                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                    d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.287.696.345 1.084m-.345-1.084c-.18-.324-.287-.696-.345-1.084m0 2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
+                                            {{-- Icono Loading --}}
+                                            <svg wire:loading.class.remove="hidden"
+                                                wire:target="agregarPromocion({{ $product->id }})"
+                                                class="animate-spin hidden" style="width:18px; height:18px;"
+                                                xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10"
+                                                    stroke="currentColor" stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor"
+                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                                </path>
+                                            </svg>
+
+                                            {{-- Icono Combo --}}
+                                            <svg wire:loading.remove
+                                                wire:target="agregarPromocion({{ $product->id }})"
+                                                xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M12 5v14M5 12h14" />
                                             </svg>
                                         </button>
+                                    @else
+                                        {{-- BOTÓN: AGREGAR PRODUCTO / SERVICIO --}}
+                                        <button
+                                            class="btn-footer-cart flex-1 {{ $product->esta_agotado ? 'opacity-50 cursor-not-allowed bg-gray-300 text-gray-500' : '' }}"
+                                            @if (!$product->esta_agotado) wire:click="agregarProducto({{ $product->id }})" @endif
+                                            @if ($product->esta_agotado) disabled @endif
+                                            wire:loading.attr="disabled"
+                                            wire:target="agregarProducto({{ $product->id }})">
 
-                                        <div class="attr-tooltip" :class="{ 'show-tooltip': tooltipOpen }">
-                                            <div class="attr-arrow"></div>
-                                            <h4
-                                                class="text-[10px] font-bold text-gray-400 uppercase mb-2 border-b border-gray-700 pb-1">
-                                                Detalles</h4>
-                                            @if ($product->attributes->count() > 0)
-                                                @foreach ($product->attributes as $attribute)
-                                                    @php
-                                                        $rawValues = $attribute->pivot->values;
-                                                        $listaValores = is_string($rawValues)
-                                                            ? json_decode($rawValues, true)
-                                                            : $rawValues;
-                                                    @endphp
-                                                    @if (!empty($listaValores))
-                                                        <div class="mb-2 last:mb-0">
-                                                            <span
-                                                                class="text-[0.65rem] font-bold text-gray-300 block uppercase mb-1">{{ $attribute->name }}:</span>
-                                                            <div class="flex flex-wrap gap-1 mt-1">
-                                                                @foreach ($listaValores as $valor)
+                                            <svg wire:loading.remove
+                                                wire:target="agregarProducto({{ $product->id }})"
+                                                xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <circle cx="9" cy="21" r="1"></circle>
+                                                <circle cx="20" cy="21" r="1"></circle>
+                                                <path
+                                                    d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6">
+                                                </path>
+                                            </svg>
+                                            <svg wire:loading.class.remove="hidden"
+                                                wire:target="agregarProducto({{ $product->id }})"
+                                                class="animate-spin hidden" style="width:18px; height:18px;"
+                                                xmlns="http://www.w3.org/2000/svg" fill="none"
+                                                viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10"
+                                                    stroke="currentColor" stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor"
+                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                                </path>
+                                            </svg>
+                                        </button>
+                                    @endif
+
+                                    {{-- BOTÓN INFO (TOOLTIP) --}}
+                                    @if ($tipoProducto === 'Producto' || $tipoProducto === 'Promocion')
+                                        <div class="relative">
+                                            <button class="btn-footer-info" type="button"
+                                                @click="tooltipOpen = !tooltipOpen">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none"
+                                                    viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
+                                                    class="w-5 h-5">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.287.696.345 1.084m-.345-1.084c-.18-.324-.287-.696-.345-1.084m0 2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
+                                                </svg>
+                                            </button>
+
+                                            <div class="attr-tooltip" :class="{ 'show-tooltip': tooltipOpen }">
+                                                <div class="attr-arrow"></div>
+                                                <h4
+                                                    class="text-[10px] font-bold text-gray-400 uppercase mb-2 border-b border-gray-700 pb-1">
+                                                    {{ $tipoProducto === 'Promocion' ? 'Descripción' : 'Detalles' }}
+                                                </h4>
+
+                                                {{-- CASO 1: Producto --}}
+                                                @if ($tipoProducto === 'Producto')
+                                                    @if ($product->attributes->count() > 0)
+                                                        @foreach ($product->attributes as $attribute)
+                                                            @php
+                                                                $rawValues = $attribute->pivot->values;
+                                                                $listaValores = is_string($rawValues)
+                                                                    ? json_decode($rawValues, true)
+                                                                    : $rawValues;
+                                                            @endphp
+                                                            @if (!empty($listaValores))
+                                                                <div class="mb-2 last:mb-0">
                                                                     <span
-                                                                        class="attr-tag-tooltip">{{ is_array($valor) ? $valor['name'] : $valor->name }}</span>
-                                                                @endforeach
-                                                            </div>
-                                                        </div>
+                                                                        class="text-[0.65rem] font-bold text-gray-300 block uppercase mb-1">
+                                                                        {{ $attribute->name }}:
+                                                                    </span>
+                                                                    <div class="flex flex-wrap gap-1 mt-1">
+                                                                        @foreach ($listaValores as $valor)
+                                                                            <span class="attr-tag-tooltip">
+                                                                                {{ is_array($valor) ? $valor['name'] : $valor->name }}
+                                                                            </span>
+                                                                        @endforeach
+                                                                    </div>
+                                                                </div>
+                                                            @endif
+                                                        @endforeach
+                                                    @else
+                                                        <span class="text-xs text-gray-500 italic">Sin detalles
+                                                            adicionales</span>
                                                     @endif
-                                                @endforeach
-                                            @else
-                                                <span class="text-xs text-gray-500 italic">Sin detalles
-                                                    adicionales</span>
-                                            @endif
+
+                                                    {{-- CASO 2: Promoción --}}
+                                                @elseif($tipoProducto === 'Promocion')
+                                                    <div class="text-xs text-gray-300">
+                                                        {{ $product->description ?? 'Sin descripción disponible.' }}
+                                                    </div>
+                                                @endif
+                                            </div>
                                         </div>
-                                    </div>
+                                    @endif
                                 </div>
                             </div>
                         </div>
                     @empty
-                        <div class="col-span-full py-12 text-center text-gray-500">No se encontraron productos.</div>
+                        <div class="col-span-full py-12 text-center text-gray-500">
+                            No se encontraron productos ni promociones.
+                        </div>
                     @endforelse
                 </div>
             </div>
@@ -201,7 +309,31 @@
 
             <div class="cart-items-container">
                 @forelse($carrito as $index => $item)
-                    <div class="cart-item" wire:key="cart-item-{{ $item['item_id'] }}">
+                    @php
+                        // LÓGICA DE COLORES
+                        $claseFondo = '';
+                        $esGuardado = isset($item['guardado']) && $item['guardado'];
+
+                        if (!$esGuardado) {
+                            // CASO 1: NUEVO -> VERDE
+                            $claseFondo = 'item-nuevo';
+                        } else {
+                            // CASO 2: EXISTENTE -> VERIFICAR CAMBIOS
+                            $id = $item['item_id'];
+                            $cantOrig = $this->cantidadesOriginales[$id] ?? 0;
+                            $precioOrig = $this->preciosOriginales[$id] ?? 0;
+
+                            $cambioCantidad = $item['quantity'] != $cantOrig;
+                            $cambioPrecio = abs(floatval($item['price']) - floatval($precioOrig)) > 0.001;
+
+                            if ($cambioCantidad || $cambioPrecio) {
+                                $claseFondo = 'item-actualizado'; // AMARILLO
+                            }
+                        }
+                    @endphp
+
+                    {{-- TU ESTRUCTURA ORIGINAL + CLASE DE COLOR --}}
+                    <div class="cart-item {{ $claseFondo }}" wire:key="cart-item-{{ $item['item_id'] }}">
                         <div class="cart-item-info">
                             <div class="cart-item-title">
                                 {{ $item['name'] }}
@@ -209,8 +341,11 @@
                                     <span class="text-xs text-orange-500 font-bold">(Cortesía)</span>
                                 @endif
                             </div>
+
                             <div class="cart-item-price">
+                                {{-- AQUÍ ESTÁ EL CAMBIO: INPUT SI ES NUEVO, TEXTO SI ES VIEJO --}}
                                 S/ {{ number_format($item['price'], 2) }} u.
+
                                 @if ($item['notes'])
                                     <div class="text-xs text-gray-400 italic mt-1">
                                         Nota: {{ Str::limit($item['notes'], 20) }}
@@ -218,6 +353,7 @@
                                 @endif
                             </div>
                         </div>
+
                         <div class="cart-item-actions">
                             <div class="font-bold">S/ {{ number_format($item['total'], 2) }}</div>
                             <div class="qty-control">
@@ -234,9 +370,11 @@
                                     <button class="btn-qty"
                                         wire:click="decrementarCantidad({{ $index }})">-</button>
                                 @endif
+
                                 <input type="number" min="1" class="qty-input"
                                     value="{{ $item['quantity'] }}"
                                     wire:change="actualizarCantidadManual({{ $index }}, $event.target.value)">
+
                                 <button class="btn-qty"
                                     wire:click="incrementarCantidad({{ $index }})">+</button>
                             </div>
@@ -255,7 +393,6 @@
             </div>
 
 
-
             <div class="cart-footer">
                 <div class="cart-total-row">
                     <span class="text-gray-500">Subtotal</span>
@@ -272,57 +409,56 @@
 
                 <div class="mt-4">
                     @if (!$pedido)
-                        {{-- ==================================================== --}}
-                        {{-- CASO 1: PEDIDO NUEVO (Aún no guardado)               --}}
-                        {{-- ==================================================== --}}
-                        <button wire:key="btn-ordenar-nuevo"
-                            class="btn-checkout bg-blue-600 hover:bg-blue-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg"
-                            wire:click="procesarOrden" wire:loading.attr="disabled"
-                            @if (count($carrito) == 0) disabled style="opacity:0.5; cursor: not-allowed;" @endif>
-                            ORDENAR (S/ {{ number_format($total, 2) }})
+                        {{-- CASO 1: ORDENAR NUEVO --}}
+                        <button wire:key="btn-ordenar-nuevo" class="btn-checkout bg-blue" wire:click="procesarOrden"
+                            wire:loading.attr="disabled" @if (count($carrito) == 0) disabled @endif>
+
+                            <span wire:loading.remove wire:target="procesarOrden">
+                                ORDENAR (S/ {{ number_format($total, 2) }})
+                            </span>
+
+                            <div wire:loading wire:target="procesarOrden">
+                                <x-spiner-text>PROCESANDO...</x-spiner-text>
+                            </div>
                         </button>
                     @else
-                        {{-- ==================================================== --}}
-                        {{-- CASO 2: PEDIDO EXISTENTE                             --}}
-                        {{-- ==================================================== --}}
-
-                        @if (count($carrito) === 0)
-                            {{-- BOTÓN ANULAR (Usa el Modal de Filament) --}}
-                            {{-- Usamos mountAction('nombre_accion') para abrir el modal --}}
-                            <button wire:key="btn-anular-pedido" type="button"
-                                wire:click="mountAction('anularPedido')" wire:loading.attr="disabled"
-                                class="btn-checkout bg-red-600 hover:bg-red-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg flex items-center justify-center gap-2">
-
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
-                                    viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                ANULAR PEDIDO
-                            </button>
-                        @elseif ($hayCambios)
-                            {{-- BOTÓN ACTUALIZAR --}}
-                            <button wire:key="btn-actualizar-pedido"
-                                class="btn-checkout bg-yellow-500 hover:bg-yellow-600 w-full py-3 rounded text-white font-bold text-lg shadow-lg animate-pulse flex items-center justify-center gap-2"
+                        @if ($hayCambios)
+                            {{-- SUB-CASO A: ACTUALIZAR --}}
+                            <button wire:key="btn-actualizar-pedido" class="btn-checkout bg-yellow"
                                 wire:click="actualizarOrden" wire:loading.attr="disabled">
 
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
-                                    viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                                ACTUALIZAR
+                                <span wire:loading.remove wire:target="actualizarOrden">ACTUALIZAR</span>
+
+                                <div wire:loading wire:target="actualizarOrden">
+                                    <x-spiner-text>GUARDANDO...</x-spiner-text>
+                                </div>
+                            </button>
+                        @elseif (count($carrito) === 0)
+                            {{-- SUB-CASO B: ANULAR --}}
+                            <button wire:key="btn-anular-pedido" class="btn-checkout bg-red"
+                                wire:click="mountAction('anularPedido')" wire:loading.attr="disabled">
+
+                                <span wire:loading.remove wire:target="mountAction('anularPedido')">ANULAR
+                                    PEDIDO</span>
+
+                                <div wire:loading wire:target="mountAction('anularPedido')">
+                                    <x-spiner-text>ANULANDO...</x-spiner-text>
+                                </div>
                             </button>
                         @else
-                            {{-- BOTÓN COBRAR --}}
-                            {{-- Asegúrate de tener una función para cobrar, ej: procesarPago --}}
-                            <button wire:key="btn-cobrar-pedido"
-                                class="btn-checkout bg-green-600 hover:bg-green-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg"
-                                wire:click="procesarOrden"> {{-- O la función que uses para cobrar --}}
-                                COBRAR S/ {{ number_format($total, 2) }}
+                            {{-- SUB-CASO C: COBRAR --}}
+                            <button wire:key="btn-cobrar-pedido" class="btn-checkout bg-green"
+                                wire:click="pagarOrden" wire:loading.attr="disabled">
+
+                                <span wire:loading.remove wire:target="pagarOrden">
+                                    COBRAR S/ {{ number_format($total, 2) }}
+                                </span>
+
+                                <div wire:loading wire:target="pagarOrden">
+                                    <x-spiner-text>COBRANDO...</x-spiner-text>
+                                </div>
                             </button>
                         @endif
-
                     @endif
                 </div>
             </div>
@@ -364,7 +500,30 @@
             {{-- REPETICIÓN DEL LOOP DEL CARRITO (PARA MÓVIL) --}}
             <div class="cart-items-container">
                 @forelse($carrito as $index => $item)
-                    <div class="cart-item" wire:key="mobile-cart-item-{{ $item['item_id'] }}">
+                    @php
+                        // LÓGICA DE COLORES
+                        $claseFondo = '';
+                        $esGuardado = isset($item['guardado']) && $item['guardado'];
+                        if (!$esGuardado) {
+                            // CASO 1: NUEVO -> VERDE
+                            $claseFondo = 'item-nuevo';
+                        } else {
+                            // CASO 2: EXISTENTE -> VERIFICAR CAMBIOS
+                            $id = $item['item_id'];
+                            $cantOrig = $this->cantidadesOriginales[$id] ?? 0;
+                            $precioOrig = $this->preciosOriginales[$id] ?? 0;
+
+                            $cambioCantidad = $item['quantity'] != $cantOrig;
+                            $cambioPrecio = abs(floatval($item['price']) - floatval($precioOrig)) > 0.001;
+
+                            if ($cambioCantidad || $cambioPrecio) {
+                                $claseFondo = 'item-actualizado'; // AMARILLO
+                            }
+                        }
+                    @endphp
+
+                    {{-- TU ESTRUCTURA ORIGINAL + CLASE DE COLOR --}}
+                    <div class="cart-item {{ $claseFondo }}" wire:key="cart-item-{{ $item['item_id'] }}">
                         <div class="cart-item-info">
                             <div class="cart-item-title">
                                 {{ $item['name'] }}
@@ -372,16 +531,24 @@
                                     <span class="text-xs text-orange-500 font-bold">(Cortesía)</span>
                                 @endif
                             </div>
+
                             <div class="cart-item-price">
+                                {{-- AQUÍ ESTÁ EL CAMBIO: INPUT SI ES NUEVO, TEXTO SI ES VIEJO --}}
                                 S/ {{ number_format($item['price'], 2) }} u.
+
+                                @if ($item['notes'])
+                                    <div class="text-xs text-gray-400 italic mt-1">
+                                        Nota: {{ Str::limit($item['notes'], 20) }}
+                                    </div>
+                                @endif
                             </div>
                         </div>
+
                         <div class="cart-item-actions">
                             <div class="font-bold">S/ {{ number_format($item['total'], 2) }}</div>
                             <div class="qty-control">
                                 @if ($item['quantity'] == 1)
-                                    <button class="btn-qty text-red-500"
-                                        wire:click="eliminarItem({{ $index }})">
+                                    <button class="btn-qty" wire:click="eliminarItem({{ $index }})">
                                         <svg style="width:14px;height:14px" fill="none" stroke="currentColor"
                                             viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -393,7 +560,11 @@
                                     <button class="btn-qty"
                                         wire:click="decrementarCantidad({{ $index }})">-</button>
                                 @endif
-                                <span class="text-xs font-bold px-2">{{ $item['quantity'] }}</span>
+
+                                <input type="number" min="1" class="qty-input"
+                                    value="{{ $item['quantity'] }}"
+                                    wire:change="actualizarCantidadManual({{ $index }}, $event.target.value)">
+
                                 <button class="btn-qty"
                                     wire:click="incrementarCantidad({{ $index }})">+</button>
                             </div>
@@ -401,6 +572,11 @@
                     </div>
                 @empty
                     <div class="text-gray-400 text-center py-10">
+                        <svg style="width:48px;height:48px;margin:0 auto 10px;opacity:0.5" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+                        </svg>
                         <span class="text-sm">La orden está vacía</span>
                     </div>
                 @endforelse
@@ -422,68 +598,106 @@
 
                 <div class="mt-4">
                     @if (!$pedido)
-                        {{-- ==================================================== --}}
-                        {{-- CASO 1: PEDIDO NUEVO (Aún no guardado)               --}}
-                        {{-- ==================================================== --}}
-                        <button wire:key="btn-ordenar-nuevo"
-                            class="btn-checkout bg-blue-600 hover:bg-blue-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                            wire:click="procesarOrden" wire:loading.attr="disabled"
-                            @if (count($carrito) == 0) disabled @endif>
-                            ORDENAR (S/ {{ number_format($total, 2) }})
+                        {{-- CASO 1: ORDENAR NUEVO --}}
+                        <button wire:key="btn-ordenar-nuevo" class="btn-checkout bg-blue" wire:click="procesarOrden"
+                            wire:loading.attr="disabled" @if (count($carrito) == 0) disabled @endif>
+
+                            <span wire:loading.remove wire:target="procesarOrden">
+                                ORDENAR (S/ {{ number_format($total, 2) }})
+                            </span>
+
+                            <div wire:loading wire:target="procesarOrden">
+                                <x-spiner-text>PROCESANDO...</x-spiner-text>
+                            </div>
                         </button>
                     @else
-                        {{-- ==================================================== --}}
-                        {{-- CASO 2: PEDIDO EXISTENTE (Ya en base de datos)       --}}
-                        {{-- ==================================================== --}}
-
-                        @if (count($carrito) === 0)
-                            {{-- SUB-CASO A: CARRITO VACÍO -> BOTÓN ANULAR --}}
-                            {{-- Usamos mountAction('anularPedido') para que salga el Modal de Filament --}}
-                            <button wire:key="btn-anular-pedido" type="button"
-                                wire:click="mountAction('anularPedido')" wire:loading.attr="disabled"
-                                class="btn-checkout bg-red-600 hover:bg-red-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg flex items-center justify-center gap-2">
-
-                                {{-- Icono Basura --}}
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
-                                    viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                ANULAR PEDIDO
-                            </button>
-                        @elseif ($hayCambios)
-                            {{-- SUB-CASO B: HAY CAMBIOS -> BOTÓN ACTUALIZAR --}}
-                            <button wire:key="btn-actualizar-pedido"
-                                class="btn-checkout bg-yellow-500 hover:bg-yellow-600 w-full py-3 rounded text-white font-bold text-lg shadow-lg animate-pulse flex items-center justify-center gap-2"
+                        @if ($hayCambios)
+                            {{-- SUB-CASO A: ACTUALIZAR --}}
+                            <button wire:key="btn-actualizar-pedido" class="btn-checkout bg-yellow"
                                 wire:click="actualizarOrden" wire:loading.attr="disabled">
 
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
-                                    viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                                ACTUALIZAR
+                                <span wire:loading.remove wire:target="actualizarOrden">ACTUALIZAR</span>
+
+                                <div wire:loading wire:target="actualizarOrden">
+                                    <x-spiner-text>GUARDANDO...</x-spiner-text>
+                                </div>
+                            </button>
+                        @elseif (count($carrito) === 0)
+                            {{-- SUB-CASO B: ANULAR --}}
+                            <button wire:key="btn-anular-pedido" class="btn-checkout bg-red"
+                                wire:click="mountAction('anularPedido')" wire:loading.attr="disabled">
+
+                                <span wire:loading.remove wire:target="mountAction('anularPedido')">ANULAR
+                                    PEDIDO</span>
+
+                                <div wire:loading wire:target="mountAction('anularPedido')">
+                                    <x-spiner-text>ANULANDO...</x-spiner-text>
+                                </div>
                             </button>
                         @else
-                            {{-- SUB-CASO C: TODO GUARDADO -> BOTÓN COBRAR --}}
-                            <button wire:key="btn-cobrar-pedido"
-                                class="btn-checkout bg-green-600 hover:bg-green-700 w-full py-3 rounded text-white font-bold text-lg shadow-lg"
-                                {{-- Aquí puedes poner la acción de ir a pagar si la tienes --}} wire:click="procesarOrden">
-                                COBRAR S/ {{ number_format($total, 2) }}
+                            {{-- SUB-CASO C: COBRAR --}}
+                            <button wire:key="btn-cobrar-pedido" class="btn-checkout bg-green"
+                                wire:click="pagarOrden" wire:loading.attr="disabled">
+
+                                <span wire:loading.remove wire:target="pagarOrden">
+                                    COBRAR S/ {{ number_format($total, 2) }}
+                                </span>
+
+                                <div wire:loading wire:target="pagarOrden">
+                                    <x-spiner-text>COBRANDO...</x-spiner-text>
+                                </div>
                             </button>
                         @endif
-
                     @endif
                 </div>
             </div>
         </div>
     </div>
 
-    {{-- MODALES EXISTENTES --}}
-    @php $jobId = session('print_job_id'); @endphp
+    {{-- ========================================================================= --}}
+    {{-- LÓGICA DE PREPARACIÓN DE PESTAÑAS Y LLAMADA AL MODAL --}}
+    {{-- ========================================================================= --}}
+    @php
+        $jobId = session('print_job_id');
+        $areasCollection = collect();
+
+        // 1. Intentamos obtener datos del Cache (Impresión Parcial/Actualización)
+        $datosCache = $jobId ? \Illuminate\Support\Facades\Cache::get($jobId) : null;
+
+        if ($datosCache) {
+            // Fusionamos 'nuevos' y 'cancelados' que vienen del cache
+            $items = array_merge($datosCache['nuevos'] ?? [], $datosCache['cancelados'] ?? []);
+            foreach ($items as $item) {
+                // Aquí usamos el 'area_id' que agregamos al backend en el paso anterior
+                $areasCollection->push([
+                    'id' => $item['area_id'] ?? 'general',
+                    'name' => $item['area_nombre'] ?? 'GENERAL',
+                ]);
+            }
+        }
+        // 2. Si no hay cache, usamos el objeto Order completo (Impresión Total/Reimpresión)
+        elseif ($ordenGenerada) {
+            foreach ($ordenGenerada->details as $det) {
+                $prod = $det->product->production ?? null;
+                $printer = $prod?->printer ?? null;
+
+                if ($prod && $prod->status && $printer && $printer->status) {
+                    $areasCollection->push(['id' => $prod->id, 'name' => $prod->name]);
+                } else {
+                    $areasCollection->push(['id' => 'general', 'name' => 'GENERAL']);
+                }
+            }
+        }
+
+        // Filtramos para tener solo una pestaña por área
+        $areasUnicas = $areasCollection->unique('id');
+    @endphp
+
     @if ($mostrarModalComanda && $ordenGenerada)
-        <x-modal-ticket :orderId="$ordenGenerada->id" :jobId="$jobId" />
+        {{-- PASAMOS LA VARIABLE $areasUnicas AL COMPONENTE --}}
+        <x-modal-ticket :orderId="$ordenGenerada->id" :jobId="$jobId" :areas="$areasUnicas" />
     @endif
+    {{-- ========================================================================= --}}
 
     @if ($productoSeleccionado)
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -493,6 +707,7 @@
             </div>
         </div>
     @endif
+
     @push('scripts')
         <script>
             let scrollAnimation;

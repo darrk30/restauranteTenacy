@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class Production extends Model
 {
-    protected $fillable = ['name', 'status', 'printer_id'];
+    protected $fillable = ['name', 'status', 'printer_id', 'restaurant_id'];
 
     public function restaurant()
     {
@@ -38,6 +38,9 @@ class Production extends Model
         });
 
         static::creating(function ($production) {
+            if (app()->has('bypass_tenant_scope')) {
+                return; // omitir asignación
+            }
             if (filament()->getTenant()) {
                 $production->restaurant_id = filament()->getTenant()->id;
             }

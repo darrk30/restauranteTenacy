@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Models\Sale;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 
 class ImprimirController extends Controller
@@ -41,45 +43,72 @@ class ImprimirController extends Controller
 
     public function imprimirComanda(Order $order, Request $request)
     {
-        $order->load(['table', 'user']); // Ya no cargamos details obligatoriamente
+        // 1. Carga de relaciones (Exactamente igual a tu lógica actual)
+        $order->load(['table', 'user', 'details.product.production.printer']);
 
-        // 1. Verificar si hay un trabajo parcial en Cache
         $jobId = $request->get('jobId');
-        $datosParciales = $jobId ? Cache::get($jobId) : null;
+        $areaSolicitada = $request->get('areaId', 'general');
 
-        $itemsParaImprimir = [];
+        $datosParciales = $jobId ? Cache::get($jobId) : null;
+        $itemsParaImprimir = ['nuevos' => [], 'cancelados' => []];
         $esParcial = false;
+        $nombreAreaTitulo = 'GENERAL';
 
         if ($datosParciales) {
-            // MODO PARCIAL (Solo cambios)
             $esParcial = true;
-            // Pasamos los datos crudos a la vista
-            $itemsParaImprimir = $datosParciales;
-
-            // Calculo de altura aproximada
-            $totalLineas = count($datosParciales['nuevos']) + count($datosParciales['cancelados']);
-        } else {
-            // MODO TOTAL (Fallback o primera orden)
-            $order->load('details');
-            $itemsParaImprimir = ['nuevos' => [], 'cancelados' => []];
-
-            // Convertimos los detalles normales al formato de impresión
-            foreach ($order->details as $det) {
-                $itemsParaImprimir['nuevos'][] = [
-                    'cant' => $det->cantidad,
-                    'nombre' => $det->product_name,
-                    'nota' => $det->notes
-                ];
+            foreach (['nuevos', 'cancelados'] as $tipo) {
+                if (isset($datosParciales[$tipo])) {
+                    foreach ($datosParciales[$tipo] as $item) {
+                        $areaItem = $item['area_id'] ?? 'general';
+                        if ((string)$areaItem === (string)$areaSolicitada) {
+                            $itemsParaImprimir[$tipo][] = $item;
+                            $nombreAreaTitulo = $item['area_nombre'] ?? 'GENERAL';
+                        }
+                    }
+                }
             }
-            $totalLineas = $order->details->count();
+        } else {
+            foreach ($order->details as $det) {
+                $prod = $det->product->production ?? null;
+                $printer = $prod?->printer ?? null;
+
+                if ($prod && $prod->status && $printer && $printer->status) {
+                    $idArea = $prod->id;
+                    $nombreArea = $prod->name;
+                } else {
+                    $idArea = 'general';
+                    $nombreArea = 'GENERAL';
+                }
+
+                if ((string)$idArea === (string)$areaSolicitada) {
+                    $itemsParaImprimir['nuevos'][] = [
+                        'cant'   => $det->cantidad,
+                        'nombre' => $det->product_name,
+                        'nota'   => $det->notes
+                    ];
+                    $nombreAreaTitulo = $nombreArea;
+                }
+            }
         }
 
-        // Calculamos altura dinámica
-        $height = 140 + ($totalLineas * 50) + 60;
-        $customPaper = array(0, 0, 226.77, $height);
+        // === EL CAMBIO CLAVE ESTÁ AQUÍ ===
+        // En lugar de Pdf::loadView(...)->stream(), retornamos una vista Blade común.
+        return view('pdf.ticket-cocina', [
+            'order' => $order,
+            'itemsParaImprimir' => $itemsParaImprimir,
+            'esParcial' => $esParcial,
+            'areaNombre' => $nombreAreaTitulo
+        ]);
+    }
 
-        return Pdf::loadView('pdf.ticket-cocina', compact('order', 'itemsParaImprimir', 'esParcial'))
-            ->setPaper($customPaper, 'portrait')
-            ->stream('comanda-' . $order->code . '.pdf');
+    public function printTicket(Sale $sale)
+    {
+        // Cargamos relaciones para no tener errores de "undefined"
+        $sale->load(['details', 'user']);
+
+        // Obtenemos los datos del restaurante (Tenant actual)
+        $tenant = Auth::user()->tenant;
+
+        return view('pdf.ticket-venta', compact('sale', 'tenant'));
     }
 }

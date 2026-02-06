@@ -51,6 +51,11 @@ class User extends Authenticatable implements HasTenants
         ];
     }
 
+    public function getFilamentAvatarUrl(): ?string
+    {
+        return $this->avatar_url;
+    }
+
     public function restaurants(): BelongsToMany
     {
         return $this->belongsToMany(Restaurant::class);
@@ -74,5 +79,25 @@ class User extends Authenticatable implements HasTenants
     public function stockAdjustments()
     {
         return $this->hasMany(StockAdjustment::class);
+    }
+
+    public function cashRegisters()
+    {
+        return $this->belongsToMany(CashRegister::class);
+    }
+
+    public function sesionCashRegisters()
+    {
+        return $this->hasMany(SessionCashRegister::class);
+    }
+
+    public function cashRegisterMovements()
+    {
+        return $this->hasMany(CashRegisterMovement::class);
+    }
+
+    public function conceptoCajas()
+    {
+        return $this->hasMany(ConceptoCaja::class);
     }
 }

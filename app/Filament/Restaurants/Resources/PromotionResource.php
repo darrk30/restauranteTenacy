@@ -2,21 +2,37 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use App\Enums\PromotionRuleType;
 use App\Enums\StatusProducto;
 use App\Filament\Restaurants\Resources\PromotionResource\Pages;
 use App\Models\Promotion;
+use App\Models\Product;
+use App\Models\Production;
 use App\Models\Variant;
 use Filament\Forms;
-use Filament\Forms\Components\Checkbox;
-use Filament\Forms\Components\Fieldset;
+use Filament\Forms\Components\CheckboxList;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Form;
+use Filament\Forms\Components\TimePicker;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Tabs\Tab;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\ToggleButtons;
+use Filament\Forms\Form;
+use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 class PromotionResource extends Resource
 {
@@ -27,193 +43,198 @@ class PromotionResource extends Resource
     protected static ?string $navigationLabel = 'Promociones';
     protected static ?string $pluralModelLabel = 'Promociones';
     protected static ?string $recordTitleAttribute = 'name';
-
     protected static ?int $navigationSort = 1;
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-
                 Forms\Components\Tabs::make('Promoción')
                     ->tabs([
-                        Forms\Components\Tabs\Tab::make('Información')
+                        // ------------------------------------------------------------------
+                        // TAB 1: INFORMACIÓN GENERAL (Se mantiene igual, resumido aquí)
+                        // ------------------------------------------------------------------
+                        Tab::make('Información')
+                            ->icon('heroicon-m-information-circle')
                             ->schema([
+                                Grid::make(['default' => 1, 'sm' => 2])->schema([
+                                    FileUpload::make('image_path')
+                                        ->label('Imagen')
+                                        ->directory('promotions')
+                                        ->disk('public')
+                                        ->image()
+                                        ->openable()
+                                        ->downloadable()
+                                        ->columnSpanFull(),
 
-                                Forms\Components\Grid::make([
-                                    'default' => 1,
-                                    'sm' => 2,
-                                ])
-                                    ->schema([
-                                        Forms\Components\TextInput::make('name')
-                                            ->label('Nombre')
-                                            ->required(),
+                                    TextInput::make('name')
+                                        ->label('Nombre')
+                                        ->required(),
 
-                                        Forms\Components\TextInput::make('price')
-                                            ->label('Precio')
-                                            ->numeric()
-                                            ->prefix('S/'),
+                                    TextInput::make('price')->label('Precio')->numeric()->prefix('S/')->required(),
 
-                                        Forms\Components\FileUpload::make('image_path')
-                                            ->label('Imagen')
-                                            ->image()
-                                            ->imageEditor()
-                                            ->directory('promotions')
-                                            ->disk('public')
-                                            ->preserveFilenames()
-                                            ->previewable(true),
+                                    Select::make('category_id')
+                                        ->label('Categoría POS')
+                                        ->relationship('category', 'name')
+                                        ->searchable()
+                                        ->createOptionForm([TextInput::make('name')->required()]),
 
-                                        Forms\Components\Toggle::make('visible')
-                                            ->label('Visible'),
+                                    // 1. El componente original (Solo visible si hay datos)
+                                    ToggleButtons::make('production_id')
+                                        ->label('Área de Producción')
+                                        ->options(fn() => Production::pluck('name', 'id'))
+                                        ->inline(true)
+                                        ->visible(fn() => Production::exists()), // Ocultar si la tabla está vacía
 
-                                        Forms\Components\Select::make('status')
-                                            ->label('Publicado')
-                                            ->options(StatusProducto::class)
-                                            ->required()
-                                            ->selectablePlaceholder(false)
-                                            ->default(StatusProducto::Activo),
+                                    // 2. El mensaje de error/aviso (Solo visible si NO hay datos)
+                                    Placeholder::make('no_production_alert')
+                                        ->label('Área de Producción')
+                                        ->content(new HtmlString('<span class="text-gray-500 italic">⚠ Sin datos encontrados. Crea una área de producción primero.</span>'))
+                                        ->hidden(fn() => Production::exists()),
 
-                                        Forms\Components\Textarea::make('description'),
-                                        Forms\Components\DateTimePicker::make('date_start')
-                                            ->label('Inicio'),
-                                        Forms\Components\DateTimePicker::make('date_end')
-                                            ->label('Fin'),
-                                    ]),
+                                    Grid::make(3) // <--- Esto divide el espacio en 3 columnas iguales
+                                        ->schema([
+                                            TextInput::make('code')
+                                                ->label('Codigo de Promoción'),
 
+                                            Select::make('status')
+                                                ->label('Estado')
+                                                ->options(StatusProducto::class)
+                                                ->default(StatusProducto::Activo)
+                                                ->required(),
+
+                                            Toggle::make('visible')
+                                                ->label('Visible en POS')
+                                                ->inline(false)
+                                                ->default(true),
+                                        ]),
+                                    DatetimePicker::make('date_start')->label('Fecha de Inicio')->hourMode(12)->displayFormat('d/m/y h:i A')->seconds(false),
+                                    DatetimePicker::make('date_end')->label('Fecha de Fin')->hourMode(12)->displayFormat('d/m/y h:i A')->seconds(false),
+
+                                    Textarea::make('description')->columnSpanFull(),
+                                ]),
                             ]),
-                        Forms\Components\Tabs\Tab::make('Productos')
+
+                        // ------------------------------------------------------------------
+                        // TAB 2: PRODUCTOS (Se mantiene igual, resumido aquí)
+                        // ------------------------------------------------------------------
+                        Tab::make('Productos')
+                            ->icon('heroicon-m-shopping-bag')
                             ->schema([
-                                Forms\Components\Repeater::make('Productos de la promoción')
-                                    ->label('')
-                                    ->relationship('promotionproducts')
-                                    ->columnSpan('full')
+                                Repeater::make('promotionProducts')
+                                    ->relationship()
                                     ->columns(3)
                                     ->schema([
-                                        // PRODUCTO
-                                        Forms\Components\Select::make('product_id')
-                                            ->label('Producto')
-                                            ->relationship('product', 'name')
+                                        Select::make('product_id')
+                                            ->options(Product::where('status', 'activo')->pluck('name', 'id'))
                                             ->searchable()
-                                            ->preload()
                                             ->reactive()
                                             ->required()
-                                            ->afterStateUpdated(function ($state, callable $set) {
-                                                if (!$state) {
-                                                    $set('variant_id', null);
-                                                    return;
+                                            ->afterStateUpdated(function ($state, Set $set) {
+                                                $set('variant_id', null);
+                                                if ($state) {
+                                                    $variants = Variant::where('product_id', $state)->where('status', 'activo')->get();
+                                                    if ($variants->count() === 1) $set('variant_id', $variants->first()->id);
                                                 }
-                                                $variants = Variant::where('product_id', $state)->where('status', 'activo')->get();
-                                                if ($variants->count() === 1) { $set('variant_id', $variants->first()->id); } 
-                                                else { $set('variant_id', null); }
                                             }),
-
-                                        // VARIANTE
                                         Select::make('variant_id')
-                                            ->label('Variante')
-                                            ->options(function (callable $get) {
-                                                $productId = $get('product_id');
-                                                if (!$productId) { return []; }
-                                                return Variant::where('product_id', $productId)->where('status', 'activo')->get()->pluck('full_name', 'id');
-                                            })
+                                            ->options(fn(Get $get) => Variant::where('product_id', $get('product_id'))
+                                                ->get()
+                                                ->pluck('full_name', 'id'))
                                             ->searchable()
-                                            ->preload()
                                             ->required(),
-
-                                        // CANTIDAD
-                                        Forms\Components\TextInput::make('quantity')
-                                            ->label('Cantidad')
-                                            ->numeric()
-                                            ->default(1)
-                                            ->minValue(1)
-                                            ->required(),
-
-                                    ])
-                            ]),
-
-                        Tab::make('Reglas')
-                            ->schema([
-                                Repeater::make('rules')
-                                    ->label('Reglas de promoción')
-                                    ->relationship()
-                                    ->defaultItems(0)
-                                    ->collapsed()
-                                    ->itemLabel(function (array $state): ?string {
-                                        if (!isset($state['type'])) { return 'Sin tipo'; }
-                                        return config("promotion_rules.types.{$state['type']}.label") ?? $state['type'];
-                                    })
-                                    ->schema([
-                                        Select::make('type')
-                                            ->label('Tipo de regla')
-                                            ->options(
-                                                collect(config('promotion_rules.types'))->mapWithKeys(fn($item, $key) => [$key => $item['label']])
-                                            )
-                                            ->live()
-                                            ->required()
-                                            ->afterStateHydrated(function ($state, $set) {
-                                                if (!$state) return;
-                                                $rule = config("promotion_rules.types.$state.fields");
-                                                $set('key', $rule['key']);
-                                                $set('operator', $rule['operator']);
-                                            })
-                                            ->afterStateUpdated(function ($state, $set) {
-                                                $rule = config("promotion_rules.types.$state.fields");
-                                                $set('key', $rule['key']);
-                                                $set('operator', $rule['operator']);
-                                                $set('value', null);
-                                            }),
-                                        // CHECK: Seleccionar todos
-                                        Checkbox::make('select_all_days')
-                                            ->label('Todos los días')
-                                            ->visible(fn($get) => $get('type') === 'days')
-                                            ->default(false)
-                                            ->reactive()
-                                            ->afterStateUpdated(function ($state, callable $set) {
-                                                $allDays = array_keys(config('promotion_rules.types.days.fields.options'));
-                                                $set('value', $state ? $allDays : []);
-                                            }),
-                                        // Datos de regla
-                                        Fieldset::make('Datos de regla')
-                                            ->schema([
-                                                Forms\Components\Hidden::make('key'),
-                                                Forms\Components\Hidden::make('operator'),
-                                                Forms\Components\CheckboxList::make('value')
-                                                    ->label('Selecciona los días')
-                                                    ->options(function (callable $get) {
-                                                        $type = $get('type');
-                                                        return config("promotion_rules.types.$type.fields.options") ?? [];
-                                                    })
-                                                    ->columns(4)
-                                                    ->visible(fn($get) => $get('type') === 'days')
-                                                    ->requiredIf('type', 'days')
-                                                    ->afterStateHydrated(function ($state, $set, $get) {
-                                                        if ($get('type') === 'days' && is_string($state)) {
-                                                            $set('value', json_decode($state, true));
-                                                        }
-                                                    })
-                                                    ->extraAttributes([
-                                                        'class' => 'checkbox-days-list'
-                                                    ])
-                                                    ->afterStateUpdated(function ($state, callable $set, callable $get) {
-                                                        if ($get('type') !== 'days') return;
-                                                        $allDays = array_keys(config('promotion_rules.types.days.fields.options'));
-                                                        $set('select_all_days', $state === $allDays);
-                                                    })
-                                                    ->columnSpan('full'),
-                                                // LÍMITE
-                                                TextInput::make('value')
-                                                    ->label('Cantidad')
-                                                    ->numeric()
-                                                    ->minValue(1)
-                                                    ->visible(fn($get) => $get('type') === 'limit')
-                                                    ->requiredIf('type', 'limit'),
-                                            ]),
-
-
+                                        TextInput::make('quantity')->numeric()->default(1)->required(),
                                     ]),
                             ]),
-                    ])
-                    ->columnSpan('full'),
 
+                        // ------------------------------------------------------------------
+                        // TAB 3: REGLAS (OPTIMIZADO CON ENUMS)
+                        // ------------------------------------------------------------------
+                        Tab::make('Reglas y Restricciones')
+                            ->icon('heroicon-m-adjustments-horizontal')
+                            ->schema([
+                                Repeater::make('rules')
+                                    ->relationship()
+                                    ->label('Condiciones')
+                                    ->defaultItems(0)
+                                    ->schema([
+                                        Grid::make(2)->schema([
+
+                                            // SELECTOR DE TIPO (Usando Enum)
+                                            Select::make('type')
+                                                ->label('Tipo de Restricción')
+                                                ->options(PromotionRuleType::class) // <--- Carga las opciones del Enum automáticamente
+                                                ->required()
+                                                ->live()
+                                                ->afterStateUpdated(function ($state, Set $set) {
+                                                    if (!$state) return;
+
+                                                    // Obtenemos la configuración desde el Enum
+                                                    // Esto reemplaza tu match gigante anterior
+                                                    $behavior = PromotionRuleType::from($state)->getBehavior();
+
+                                                    $set('key', $behavior['key']);
+                                                    $set('operator', $behavior['operator']);
+                                                    $set('value', $behavior['value']);
+                                                }),
+                                        ]),
+
+                                        Hidden::make('key'),
+                                        Hidden::make('operator'),
+
+                                        // --- UI DINÁMICA (Comparando contra Enum values) ---
+
+                                        // CASO 1: DÍAS
+                                        Section::make()
+                                            ->schema([
+                                                CheckboxList::make('value.days')
+                                                    ->label('Días permitidos')
+                                                    ->options([
+                                                        1 => 'Lunes',
+                                                        2 => 'Martes',
+                                                        3 => 'Miércoles',
+                                                        4 => 'Jueves',
+                                                        5 => 'Viernes',
+                                                        6 => 'Sábado',
+                                                        0 => 'Domingo'
+                                                    ])
+                                                    ->columns(4)
+                                                    ->bulkToggleable()
+                                                    ->required(),
+                                            ])
+                                            ->visible(fn(Get $get) => $get('type') === PromotionRuleType::Days->value),
+
+                                        // CASO 2: HORARIO
+                                        Section::make()
+                                            ->schema([
+                                                Grid::make(2)->schema([
+                                                    TimePicker::make('value.start')->label('Inicio')->required(),
+                                                    TimePicker::make('value.end')->label('Fin')->required(),
+                                                ])
+                                            ])
+                                            ->visible(fn(Get $get) => $get('type') === PromotionRuleType::TimeRange->value),
+
+                                        // CASO 3: LÍMITE
+                                        Section::make()
+                                            ->schema([
+                                                TextInput::make('value.limit')
+                                                    ->label('Cantidad máxima diaria')
+                                                    ->numeric()
+                                                    ->required(),
+                                            ])
+                                            ->visible(fn(Get $get) => $get('type') === PromotionRuleType::Limit->value),
+
+                                    ])
+                                    // LABEL DEL REPEATER (Usando Enum)
+                                    ->itemLabel(function (array $state): ?string {
+                                        $typeValue = $state['type'] ?? null;
+                                        if (!$typeValue) return 'Nueva Regla';
+
+                                        // Intenta obtener el label del Enum
+                                        return PromotionRuleType::tryFrom($typeValue)?->getLabel() ?? 'Regla desconocida';
+                                    }),
+                            ]),
+                    ])->columnSpanFull(),
             ]);
     }
 
@@ -221,60 +242,30 @@ class PromotionResource extends Resource
     {
         return $table
             ->columns([
-
-                Tables\Columns\TextColumn::make('name')
-                    ->label('Nombre')
-                    ->searchable()
-                    ->sortable(),
-
-                Tables\Columns\ImageColumn::make('image_path')
-                    ->label('Imagen')
-                    ->circular()
-                    ->disk('public')
-                    ->visibility('public')
-                    ->default(asset('img/productdefault.jpg')),
-
+                Tables\Columns\ImageColumn::make('image_path')->circular(),
+                Tables\Columns\TextColumn::make('name')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('category.name')->label('Categoría'),
+                Tables\Columns\TextColumn::make('price')->money('PEN'),
                 Tables\Columns\TextColumn::make('status')
-                    ->label('Estado'),
-
-                Tables\Columns\TextColumn::make('date_start')
-                    ->dateTime('d/m/Y H:i')
-                    ->label('Inicio')
-                    ->placeholder('Sin fecha'),
-
-                Tables\Columns\TextColumn::make('date_end')
-                    ->dateTime('d/m/Y H:i')
-                    ->label('Fin')
-                    ->placeholder('Sin fecha'),
-
+                    ->badge()
+                    ->color(fn($state) => match ($state) {
+                        'Activo' => 'success',
+                        'Inactivo' => 'danger',
+                        default => 'gray',
+                    }),
+                Tables\Columns\IconColumn::make('visible')->boolean(),
             ])
-            ->filters([])
-            ->actions([
-                Tables\Actions\EditAction::make(),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    // Tables\Actions\DeleteBulkAction::make(),
-                    // Tables\Actions\ForceDeleteBulkAction::make(),
-                    // Tables\Actions\RestoreBulkAction::make(),
-                ]),
-            ]);
+            ->actions([Tables\Actions\EditAction::make()])
+            ->bulkActions([Tables\Actions\BulkActionGroup::make([Tables\Actions\DeleteBulkAction::make()])]);
     }
 
-    /** ------------------------------
-     *  RELACIONES
-     * ------------------------------ */
     public static function getRelations(): array
     {
         return [
-            // PromotionProductRelationManager::class,
-            // PromotionRulesRelationManager::class,
+            // Generalmente no necesitas relation managers si usas Repeaters en el form principal
         ];
     }
 
-    /** ------------------------------
-     *  PÁGINAS
-     * ------------------------------ */
     public static function getPages(): array
     {
         return [

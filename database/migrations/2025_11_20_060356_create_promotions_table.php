@@ -16,15 +16,21 @@ return new class extends Migration
             $table->string('name');
             $table->decimal('price', 8, 2)->nullable();
             $table->string('slug');
+            $table->string('code')->nullable();
             $table->string('image_path')->nullable(); 
             $table->foreignId('production_id')->nullable()->constrained()->onDelete('restrict');
-            $table->foreignId('restaurant_id')->constrained('restaurants')->onDelete('cascade');
+            $table->foreignId('category_id')->nullable()->constrained()->onDelete('restrict');
             $table->boolean('visible')->default(true);
             $table->text('description')->nullable();
+            $table->integer('ventas_diarias_actuales')->default(0);
+            $table->date('fecha_ultima_venta')->nullable();
+            $table->string('type')->default('Promocion');
             $table->string('status')->default('Activo'); // Visibilidad / estado
             $table->dateTime('date_start')->nullable();
             $table->dateTime('date_end')->nullable();
             $table->unique(['restaurant_id', 'slug']);
+            $table->unique(['restaurant_id', 'code']);
+            $table->foreignId('restaurant_id')->constrained('restaurants')->onDelete('cascade');
             $table->timestamps();
         });
     }

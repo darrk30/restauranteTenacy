@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class Table extends Model
 {
-    protected $fillable = ['name', 'status', 'asientos', 'floor_id', 'restaurant_id', 'order_id'];
+    protected $fillable = ['name', 'estado_mesa', 'status', 'asientos', 'floor_id', 'restaurant_id', 'order_id'];
 
     public function restaurant()
     {

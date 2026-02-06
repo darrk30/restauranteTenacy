@@ -16,8 +16,10 @@ class Product extends Model
     protected $fillable = [
         'name',
         'slug',
+        'code',
         'image_path',
         'type',
+        'description',
         'production_id',
         'brand_id',
         'unit_id',
@@ -104,6 +106,11 @@ class Product extends Model
     public function orderDetails()
     {
         return $this->hasMany(OrderDetail::class);
+    }
+
+    public function saleDetails()
+    {
+        return $this->hasMany(SaleDetail::class);
     }
 
     // SCOPE 1: Lógica del Buscador

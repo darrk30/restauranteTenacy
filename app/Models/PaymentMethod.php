@@ -21,10 +21,19 @@ class PaymentMethod extends Model
         return $this->hasMany(PaymentMethodPurchase::class);
     }
 
-
     public function restaurant()
     {
         return $this->belongsTo(Restaurant::class);
+    }
+
+    public function cashRegisterMovements()
+    {
+        return $this->hasMany(CashRegisterMovement::class);
+    }
+
+    public function cierreCajaDetalles()
+    {
+        return $this->hasMany(CierreCajaDetalle::class);
     }
 
     protected static function booted(): void
@@ -36,6 +45,9 @@ class PaymentMethod extends Model
         });
 
         static::creating(function ($paymentMethod) {
+            if (app()->has('bypass_tenant_scope')) {
+                return; // omitir asignación
+            }
             if (filament()->getTenant()) {
                 $paymentMethod->restaurant_id = filament()->getTenant()->id;
             }
