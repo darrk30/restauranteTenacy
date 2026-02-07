@@ -61,6 +61,10 @@ class RestaurantResource extends Resource
                     ->required()
                     ->maxLength(255)
                     ->default('activo'),
+                TextInput::make('multialmacen')
+                    ->required()
+                    ->maxLength(255)
+                    ->default('inactivo'),
                 TextInput::make('logo')
                     ->maxLength(255),
                 TextInput::make('slug')

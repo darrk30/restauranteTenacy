@@ -24,6 +24,7 @@ return new class extends Migration
             $table->string('province')->nullable();
             $table->string('ubigeo')->nullable();
             $table->string('status')->default('activo');
+            $table->string('multialmacen')->default('inactivo');
             $table->string('logo')->nullable();
             $table->string('slug')->nullable();
             $table->timestamps();

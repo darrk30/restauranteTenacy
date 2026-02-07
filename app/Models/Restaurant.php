@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 #[ObservedBy([RestaurantObserver::class])]
 class Restaurant extends Model
 {
-    protected $fillable = ['name', 'name_comercial', 'ruc', 'address', 'phone', 'email', 'department', 'district', 'province', 'ubigeo', 'status', 'logo', 'slug'];
+    protected $fillable = ['name', 'name_comercial', 'ruc', 'address', 'phone', 'email', 'department', 'district', 'province', 'ubigeo', 'status', 'multialmacen', 'logo', 'slug'];
 
     public function getRouteKeyName(): string
     {

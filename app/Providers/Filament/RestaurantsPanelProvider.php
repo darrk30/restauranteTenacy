@@ -28,9 +28,17 @@ class RestaurantsPanelProvider extends PanelProvider
         return $panel
             ->id('restaurants')
             ->default()
-            ->brandName('Mi Restaurante')
-            ->brandLogo('/img/mi-restaurant.png')
-            ->brandLogoHeight('55px')
+            ->brandName(fn() => auth()->user()?->restaurants()->first()?->name_comercial ?? 'Mi Restaurante')
+            ->brandLogo(function () {
+                $user = auth()->user();
+                $restaurant = $user?->restaurants()->first();
+
+                if ($restaurant && $restaurant->logo) {
+                    return asset('storage/' . $restaurant->logo);
+                }
+                return asset('img/mi-restaurant.png');
+            })
+            ->brandLogoHeight('3.5rem')
             ->favicon('/img/restaurant-favicon.ico')
             ->path('restaurants')
             // ->profile()
