@@ -367,6 +367,20 @@ class PagarOrden extends Page implements HasForms, HasActions
             // 4. INSERCIONES MASIVAS (BATCH)
             DB::table('sale_details')->insert($detallesParaInsertar);
 
+            $detallesReales = \App\Models\SaleDetail::where('sale_id', $sale->id)
+                ->orderBy('id', 'asc') // El orden del insert masivo se respeta en los IDs
+                ->get();
+
+            // Sincronizamos los IDs con tus objetos de Kardex
+            foreach ($detallesParaKardex as $index => $tempDetail) {
+                if (isset($detallesReales[$index])) {
+                    // Le "tatuamos" el ID real al objeto temporal antes de ir al Trait
+                    $tempDetail->id = $detallesReales[$index]->id;
+                    $tempDetail->exists = true; // Le decimos a Eloquent que ya existe en la DB
+                }
+            }
+
+            // Ahora, cuando applyVentaMasiva lea $item->id, ya no será null
             if ($detallesParaKardex->isNotEmpty()) {
                 $this->applyVentaMasiva($detallesParaKardex, 'salida', "{$sale->serie}-{$sale->correlativo}", 'Venta');
             }
