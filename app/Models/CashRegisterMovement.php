@@ -37,6 +37,8 @@ class CashRegisterMovement extends Model
         return $this->belongsTo(User::class);
     }
 
-
-
+    public function referencia()
+    {
+        return $this->morphTo();
+    }
 }

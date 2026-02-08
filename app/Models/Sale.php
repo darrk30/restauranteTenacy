@@ -27,6 +27,8 @@ class Sale extends Model
         'fecha_emision',
     ];
 
+    public $monto_especifico_filtro;
+
     protected $casts = [
         'fecha_emision' => 'datetime',
     ];
@@ -34,6 +36,11 @@ class Sale extends Model
     public function order()
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function movements()
+    {
+        return $this->morphMany(CashRegisterMovement::class, 'referencia');
     }
 
     public function client()
@@ -56,6 +63,19 @@ class Sale extends Model
         return $this->belongsTo(Restaurant::class);
     }
 
+    public function getMontoFiltradoAttribute()
+    {
+        // Obtenemos el filtro directamente de la URL o del estado de Livewire
+        $metodoId = request()->fingerprint()['map']['tableFilters']['payment_method_id']['value'] ?? null;
+
+        if (!$metodoId) return $this->total;
+
+        return $this->movements()
+            ->where('payment_method_id', $metodoId)
+            ->where('status', 'active')
+            ->sum('monto');
+    }
+
     protected static function booted(): void
     {
         static::addGlobalScope('restaurant', function (Builder $query) {
@@ -70,5 +90,4 @@ class Sale extends Model
             }
         });
     }
-
 }
