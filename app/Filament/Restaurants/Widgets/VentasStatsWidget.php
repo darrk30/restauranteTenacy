@@ -11,6 +11,7 @@ use App\Models\Sale;
 class VentasStatsWidget extends BaseWidget
 {
     use InteractsWithPageTable;
+    protected static bool $isDiscovered = false;
 
     protected function getTablePage(): string
     {

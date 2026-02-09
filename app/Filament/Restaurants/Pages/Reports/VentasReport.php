@@ -2,9 +2,12 @@
 
 namespace App\Filament\Restaurants\Pages\Reports;
 
+use App\Exports\VentasExport;
 use App\Models\Sale;
 use App\Models\PaymentMethod;
 use App\Filament\Restaurants\Widgets\VentasStatsWidget;
+use Filament\Tables\Actions\Action;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -14,21 +17,17 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Infolist;
-use Filament\Infolists\Components\TextEntry;
-use Filament\Infolists\Components\Section;
-use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\ViewEntry;
 use Filament\Pages\Concerns\ExposesTableToWidgets;
 use Illuminate\Database\Eloquent\Builder;
-use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
-use pxlrbt\FilamentExcel\Actions\Tables\ExportAction;
-use pxlrbt\FilamentExcel\Exports\ExcelExport;
-use pxlrbt\FilamentExcel\Columns\Column as ExcelColumn;
+use Maatwebsite\Excel\Facades\Excel;
 
 class VentasReport extends Page implements HasTable, HasForms
 {
     use InteractsWithTable;
     use InteractsWithForms;
     use ExposesTableToWidgets;
+
     protected static ?string $navigationIcon = 'heroicon-o-presentation-chart-line';
     protected static ?string $navigationLabel = 'Reporte de Ventas';
     protected static ?string $title = 'Análisis de Ventas';
@@ -38,15 +37,13 @@ class VentasReport extends Page implements HasTable, HasForms
     protected function getTableQuery(): Builder
     {
         return Sale::query()
-            ->with(['movements']) // <--- ESTO ES CLAVE: Carga los movimientos de un solo golpe
+            ->with(['movements.paymentMethod', 'user', 'order'])
             ->latest('fecha_emision');
     }
 
     protected function getHeaderWidgets(): array
     {
-        return [
-            VentasStatsWidget::class,
-        ];
+        return [VentasStatsWidget::class];
     }
 
     public function table(Table $table): Table
@@ -54,61 +51,86 @@ class VentasReport extends Page implements HasTable, HasForms
         return $table
             ->query($this->getTableQuery())
             ->headerActions([
-                // Botón de Exportación
-                ExportAction::make()
-                    ->label('Exportar Excel')
+                Action::make('exportarExcel')
+                    ->label('Exportar Reporte')
                     ->icon('heroicon-o-document-arrow-down')
                     ->color('success')
-                    ->exports([
-                        ExcelExport::make()
-                            ->withFilename('Reporte_Ventas_' . date('d-m-Y'))
-                            // IMPORTANTE: Quitamos fromTable() y definimos manualmente para control total
-                            ->withColumns([
-                                ExcelColumn::make('fecha_emision')
-                                    ->heading('Fecha')
-                                    ->format('dd/mm/yyyy hh:mm'),
-
-                                ExcelColumn::make('comprobante')
-                                    ->heading('Documento'),
-
-                                ExcelColumn::make('nombre_cliente')
-                                    ->heading('Cliente'),
-
-                                ExcelColumn::make('monto_especifico_filtro')
-                                    ->heading(function () {
-                                        $metodoId = $this->tableFilters['payment_method_id']['value'] ?? null;
-                                        $nombre = $metodoId ? \App\Models\PaymentMethod::find($metodoId)?->name : 'Método';
-                                        return "Recaudado en {$nombre}";
-                                    })
-                                    ->formatStateUsing(function ($record) {
-                                        $metodoId = $this->tableFilters['payment_method_id']['value'] ?? null;
-                                        if (!$metodoId) return 0;
-
-                                        return \App\Models\CashRegisterMovement::query()
-                                            ->where('referencia_id', $record->id)
-                                            ->where('referencia_type', \App\Models\Sale::class)
-                                            ->where('payment_method_id', $metodoId)
-                                            ->where('status', 'aprobado')
-                                            ->sum('monto') ?? 0;
-                                    })
-                                    ->format('#,##0.00 "PEN"'), // Formato de moneda explícito
-
-                                ExcelColumn::make('total')
-                                    ->heading('Total General')
-                                    ->format('#,##0.00 "PEN"'),
-
-                                ExcelColumn::make('status')
-                                    ->heading('Estado')
-                                    ->formatStateUsing(fn($state) => ucfirst($state)),
+                    ->form([
+                        CheckboxList::make('columnas_reporte')
+                            ->label('Selecciona las columnas para el Excel')
+                            ->options([
+                                'fecha_emision'           => 'Fecha de Emisión',
+                                'tipo_comprobante'        => 'Tipo de Comprobante',
+                                'comprobante'             => 'Comprobante (Serie-Corr)',
+                                'orden_codigo'            => 'Código de Pedido',
+                                'nombre_cliente'          => 'Cliente',
+                                'documento_identidad'     => 'Doc. Identidad',
+                                'mozo'                    => 'Mozo / Atendió',
+                                'monto_especifico_filtro' => 'Monto por Método (Filtro)',
+                                'op_gravada'              => 'Op. Gravada',
+                                'monto_igv'               => 'IGV',
+                                'monto_descuento'         => 'Descuento Aplicado',
+                                'total'                   => 'Monto Total',
+                                'status'                  => 'Estado',
+                                'notas'                   => 'Notas/Observaciones',
                             ])
+                            ->default(['fecha_emision', 'comprobante', 'nombre_cliente', 'total', 'status'])
+                            ->columns(3)
+                            ->required(),
                     ])
+                    ->action(function (array $data, $livewire) {
+                        $query = $livewire->getFilteredTableQuery();
+                        $filtrosRaw = $livewire->tableFilters;
+                        $filtrosAplicados = [];
+
+                        // 1. Traducir filtros para el encabezado del Excel
+                        if (!empty($filtrosRaw['fecha_emision']['desde'])) $filtrosAplicados['Desde'] = $filtrosRaw['fecha_emision']['desde'];
+                        if (!empty($filtrosRaw['fecha_emision']['hasta'])) $filtrosAplicados['Hasta'] = $filtrosRaw['fecha_emision']['hasta'];
+                        if (!empty($filtrosRaw['payment_method_id']['value'])) {
+                            $filtrosAplicados['Método'] = \App\Models\PaymentMethod::find($filtrosRaw['payment_method_id']['value'])?->name;
+                        }
+                        if (!empty($filtrosRaw['status']['value'])) $filtrosAplicados['Estado'] = ucfirst($filtrosRaw['status']['value']);
+
+                        // 2. FORZAR ORDEN DE COLUMNAS
+                        // Definimos aquí el orden exacto en el que queremos que aparezcan en el Excel
+                        $ordenMaestro = [
+                            'fecha_emision',
+                            'tipo_comprobante',
+                            'comprobante',
+                            'orden_codigo',
+                            'nombre_cliente',
+                            'documento_identidad',
+                            'mozo',
+                            'monto_especifico_filtro',
+                            'op_gravada',
+                            'monto_igv',
+                            'monto_descuento',
+                            'total',
+                            'status',
+                            'notas',
+                        ];
+
+                        // Filtramos el orden maestro para que solo contenga lo que el usuario seleccionó
+                        $columnasOrdenadas = array_values(array_intersect($ordenMaestro, $data['columnas_reporte']));
+
+                        return Excel::download(
+                            new VentasExport($query, $columnasOrdenadas, $filtrosAplicados),
+                            'reporte-ventas-' . now()->format('d-m-Y') . '.xlsx'
+                        );
+                    })
             ])
             ->columns([
                 Tables\Columns\TextColumn::make('fecha_emision')
                     ->label('Fecha/Hora')
-                    ->dateTime('d/m/Y H:i')
+                    // Mostramos la fecha como valor principal
+                    ->dateTime('d/m/Y')
+                    ->icon('heroicon-m-calendar')
+                    ->iconColor('gray')
+                    // Mostramos la hora como descripción (aparece abajo en gris)
+                    ->description(function ($record) {
+                        return '🕒 ' . $record->fecha_emision->format('H:i A');
+                    })
                     ->sortable(),
-
                 Tables\Columns\TextColumn::make('comprobante')
                     ->label('Comprobante')
                     ->state(fn($record) => "{$record->serie}-{$record->correlativo}")
@@ -116,30 +138,32 @@ class VentasReport extends Page implements HasTable, HasForms
 
                 Tables\Columns\TextColumn::make('nombre_cliente')
                     ->label('Cliente')
+                    ->description(fn($record) => "{$record->tipo_documento}: {$record->numero_documento}")
                     ->searchable(),
 
-                // Dentro de table() -> columns() en VentasReport.php
+                Tables\Columns\TextColumn::make('user.name')
+                    ->label('Mozo')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                Tables\Columns\TextColumn::make('order.code')
+                    ->label('Pedido')
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('monto_especifico_filtro')
                     ->label(function () {
                         $metodoId = $this->tableFilters['payment_method_id']['value'] ?? null;
-                        $nombre = $metodoId ? \App\Models\PaymentMethod::find($metodoId)?->name : 'Método';
-                        return "Recaudado en {$nombre}";
+                        $nombre = $metodoId ? PaymentMethod::find($metodoId)?->name : 'Método';
+                        return "Recaudado ({$nombre})";
                     })
                     ->money('PEN')
-                    ->weight('bold')
                     ->color('success')
                     ->state(function ($record) {
                         $metodoId = $this->tableFilters['payment_method_id']['value'] ?? null;
                         if (!$metodoId) return 0;
-
-                        // ACCESO DIRECTO A BASE DE DATOS PARA EVITAR ERRORES DE COLECCIÓN
-                        return \App\Models\CashRegisterMovement::query()
-                            ->where('referencia_id', $record->id)
-                            ->where('referencia_type', \App\Models\Sale::class)
+                        return $record->movements
                             ->where('payment_method_id', $metodoId)
                             ->where('status', 'aprobado')
-                            ->sum('monto') ?? 0;
+                            ->sum('monto');
                     })
                     ->visible(fn() => !empty($this->tableFilters['payment_method_id']['value'])),
 
@@ -156,10 +180,8 @@ class VentasReport extends Page implements HasTable, HasForms
                         'anulado' => 'danger',
                         default => 'gray',
                     }),
-
             ])
             ->filters([
-                // 📅 Rango de fechas
                 Tables\Filters\Filter::make('fecha_emision')
                     ->form([
                         DatePicker::make('desde')->label('Desde'),
@@ -167,93 +189,29 @@ class VentasReport extends Page implements HasTable, HasForms
                     ])
                     ->query(function (Builder $query, array $data) {
                         return $query
-                            ->when(
-                                $data['desde'] ?? null,
-                                fn($q, $date) => $q->whereDate('fecha_emision', '>=', $date)
-                            )
-                            ->when(
-                                $data['hasta'] ?? null,
-                                fn($q, $date) => $q->whereDate('fecha_emision', '<=', $date)
-                            );
+                            ->when($data['desde'], fn($q, $date) => $q->whereDate('fecha_emision', '>=', $date))
+                            ->when($data['hasta'], fn($q, $date) => $q->whereDate('fecha_emision', '<=', $date));
                     })
-                    ->default([
-                        'desde' => now()->startOfMonth()->toDateString(),
-                        'hasta' => now()->toDateString(),
-                    ]),
+                    ->default(['desde' => now()->startOfMonth()->toDateString(), 'hasta' => now()->toDateString()]),
 
-                // 🧾 Tipo comprobante
-                Tables\Filters\SelectFilter::make('tipo_comprobante')
-                    ->options([
-                        'Boleta' => 'Boleta',
-                        'Factura' => 'Factura',
-                        'Nota de Venta' => 'Nota de Venta',
-                    ]),
-
-                // ⚙ Estado
-                Tables\Filters\SelectFilter::make('status')
-                    ->label('Estado')
-                    ->options([
-                        'completado' => 'Completado',
-                        'anulado' => 'Anulado',
-                    ]),
-
-                // 💳 Método de pago (CORREGIDO)
                 Tables\Filters\SelectFilter::make('payment_method_id')
                     ->label('Método de Pago')
-                    ->options(
-                        PaymentMethod::pluck('name', 'id')->toArray()
-                    )
+                    ->options(PaymentMethod::pluck('name', 'id'))
                     ->query(function (Builder $query, array $data) {
-                        $value = $data['value'] ?? null;
-
-                        if (! $value) {
-                            return $query;
-                        }
-
-                        return $query->whereHas('movements', function ($q) use ($value) {
-                            $q->where('payment_method_id', $value);
-                        });
+                        if (!$data['value']) return $query;
+                        return $query->whereHas('movements', fn($q) => $q->where('payment_method_id', $data['value']));
                     }),
 
+                Tables\Filters\SelectFilter::make('status')
+                    ->options(['completado' => 'Completado', 'anulado' => 'Anulado']),
             ])
             ->actions([
                 Tables\Actions\Action::make('detalles')
-                    ->label('Detalles')
                     ->icon('heroicon-m-ellipsis-horizontal')
-                    ->modalHeading('Desglose de Venta')
+                    ->modalHeading('Detalle de Venta')
                     ->modalSubmitAction(false)
                     ->infolist(fn(Infolist $infolist) => $infolist->schema([
-                        Section::make('Cuentas Totales')
-                            ->columns(4)
-                            ->schema([
-                                TextEntry::make('op_gravada')->label('Op. Gravada')->money('PEN'),
-                                TextEntry::make('monto_igv')->label('IGV')->money('PEN'),
-                                TextEntry::make('descuento_total')->label('Descuento')->money('PEN')->color('danger'),
-                                TextEntry::make('total')->label('Total')->money('PEN')->weight('bold')->color('primary'),
-                            ]),
-
-                        Section::make('Detalle de Ítems')
-                            ->schema([
-                                RepeatableEntry::make('details')
-                                    ->schema([
-                                        TextEntry::make('product_name')->label('Producto'),
-                                        TextEntry::make('cantidad')->label('Cant.'),
-                                        TextEntry::make('precio_unitario')->money('PEN'),
-                                        TextEntry::make('subtotal')->money('PEN'),
-                                    ])
-                                    ->columns(4),
-                            ]),
-
-                        Section::make('Métodos de Pago')
-                            ->schema([
-                                RepeatableEntry::make('movements')
-                                    ->schema([
-                                        TextEntry::make('paymentMethod.name')->label('Método'),
-                                        TextEntry::make('monto')->money('PEN'),
-                                        TextEntry::make('observacion')->label('Nota'),
-                                    ])
-                                    ->columns(3),
-                            ]),
+                        ViewEntry::make('detalle_venta')->view('filament.reports.ventas.venta-detalle')->columnSpanFull()
                     ])),
             ]);
     }
