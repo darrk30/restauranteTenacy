@@ -7,6 +7,7 @@ use App\Models\Restaurant;
 use App\Models\User;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -61,10 +62,8 @@ class RestaurantResource extends Resource
                     ->required()
                     ->maxLength(255)
                     ->default('activo'),
-                TextInput::make('multialmacen')
-                    ->required()
-                    ->maxLength(255)
-                    ->default('inactivo'),
+                Toggle::make('multialmacen')
+                    ->required(),
                 TextInput::make('logo')
                     ->maxLength(255),
                 TextInput::make('slug')

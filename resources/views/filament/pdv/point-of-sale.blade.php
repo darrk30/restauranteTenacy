@@ -66,12 +66,12 @@
                 <template x-if="activeTable.status !== 'free'">
                     <div>
                         <button class="global-menu-item pay"
-                            @click="window.location = '/restaurants/' + window.APP_TENANT + '/pagar/' + activeTable.orderId">
+                            @click="window.location = '/app/' + window.APP_TENANT + '/pagar/' + activeTable.orderId">
                             <x-heroicon-o-credit-card class="icon" /> <span>Pagar cuenta</span>
                         </button>
                         <div style="height:1px; background:#f3f4f6; margin:4px 0;"></div>
                         <button class="global-menu-item cancel"
-                            @click="if(confirm('¿Seguro que deseas cancelar este pedido?')) window.location = '/restaurants/' + window.APP_TENANT + '/cancelar/' + activeTable.orderId">
+                            @click="if(confirm('¿Seguro que deseas cancelar este pedido?')) window.location = '/app/' + window.APP_TENANT + '/cancelar/' + activeTable.orderId">
                             <x-heroicon-o-x-circle class="icon" /> <span>Cancelar Pedido</span>
                         </button>
                     </div>

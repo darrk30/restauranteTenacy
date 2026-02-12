@@ -92,7 +92,7 @@ class OrdenMesa extends Page implements HasActions
         if ($this->pedido) {
             $ordenExistente = Order::with(['details'])->find($this->pedido);
             if (!$ordenExistente || $ordenExistente->status === statusPedido::Cancelado) {
-                return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
+                return redirect()->to("/app/point-of-sale");
             }
             if ($ordenExistente) {
                 $this->codigoOrden = $ordenExistente->code;
@@ -229,7 +229,6 @@ class OrdenMesa extends Page implements HasActions
                     // Si es Producto individual
                     $this->gestionarStock($item['variant_id'], $item['quantity'], 'restar');
                 } else {
-                    // Si es Promoción -> Restamos sus ingredientes
                     $this->gestionarStockPromocion($item['promotion_id'], $item['quantity'], 'restar');
                 }
 
@@ -262,7 +261,7 @@ class OrdenMesa extends Page implements HasActions
 
             $this->carrito = [];
             return redirect()
-                ->to("/restaurants/{$this->tenantSlug}/orden-mesa/{$this->mesa}/{$order->id}")
+                ->to("/app/orden-mesa/{$this->mesa}/{$order->id}")
                 ->with('orden_creada_id', $order->id); // Flash ID para reabrir modal si es necesario
 
         } catch (\Exception $e) {
@@ -909,7 +908,7 @@ class OrdenMesa extends Page implements HasActions
                 ->success()
                 ->send();
 
-            return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
+            return redirect()->to("/app/point-of-sale");
         } catch (\Exception $e) {
             DB::rollBack();
             \Filament\Notifications\Notification::make()

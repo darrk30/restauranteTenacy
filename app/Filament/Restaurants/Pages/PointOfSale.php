@@ -57,7 +57,7 @@ class PointOfSale extends Page
     {
         session()->flash('personas_iniciales', $personas);
         $tenantId = Filament::getTenant()->slug; 
-        return redirect()->to("/restaurants/{$tenantId}/orden-mesa/{$mesaId}");
+        return redirect()->to("/app/orden-mesa/{$mesaId}");
     }
 
     public function getHeading(): string

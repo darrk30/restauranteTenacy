@@ -425,7 +425,7 @@ class PagarOrden extends Page implements HasForms, HasActions
             Notification::make()->title('Venta exitosa')->success()->send();
             $this->ventaExitosaId = $sale->id;
             $this->mostrarPantallaExito = true;
-            // return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
+            // return redirect()->to("/app/point-of-sale");
         } catch (\Exception $e) {
             DB::rollBack();
             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
@@ -434,7 +434,7 @@ class PagarOrden extends Page implements HasForms, HasActions
 
     public function terminarProcesoVenta()
     {
-        return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
+        return redirect()->to("/app/point-of-sale");
     }
 
     public function getHeading(): string

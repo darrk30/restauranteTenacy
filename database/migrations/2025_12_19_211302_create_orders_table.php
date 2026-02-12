@@ -14,6 +14,9 @@ return new class extends Migration
         Schema::create('orders', function (Blueprint $table) {
             $table->id();
             $table->string('code');
+            $table->string('canal')->nullable();
+            $table->foreignId('client_id')->nullable()->constrained()->nullOnDelete();
+            $table->string('nombre_cliente')->nullable();
             $table->string('status')->default('pendiente');
             $table->decimal('subtotal', 10, 2)->default(0);
             $table->decimal('igv', 10, 2)->default(0);

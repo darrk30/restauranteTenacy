@@ -82,7 +82,7 @@ document.addEventListener('alpine:init', () => {
             if (this.ignoreNextClick) return;
 
             if (tableData.status !== 'free' && tableData.orderId) {
-                window.location = '/restaurants/' + window.APP_TENANT + '/orden-mesa/' + tableData.id + '/' + tableData.orderId;
+                window.location = '/app/' + window.APP_TENANT + '/orden-mesa/' + tableData.id + '/' + tableData.orderId;
             } else {
                 this.$store.modalPdv.open = true;
                 this.$store.modalPdv.mesaId = tableData.id;

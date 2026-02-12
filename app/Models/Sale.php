@@ -11,8 +11,10 @@ class Sale extends Model
         'restaurant_id',
         'order_id',
         'client_id',
-        'user_id',
         'nombre_cliente',
+        'user_id',
+        'delivery_id',
+        'nombre_delivery',
         'tipo_documento',
         'numero_documento',
         'tipo_comprobante',
@@ -24,6 +26,7 @@ class Sale extends Model
         'total',
         'status',
         'notas',
+        'canal',
         'fecha_emision',
     ];
 

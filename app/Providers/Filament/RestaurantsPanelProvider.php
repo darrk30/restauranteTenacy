@@ -18,6 +18,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Njxqlus\FilamentProgressbar\FilamentProgressbarPlugin;
 
@@ -26,11 +27,11 @@ class RestaurantsPanelProvider extends PanelProvider
     public function panel(Panel $panel): Panel
     {
         return $panel
-            ->id('restaurants')
+            ->id('app')
             ->default()
             ->brandName(fn() => auth()->user()?->restaurants()->first()?->name_comercial ?? 'Mi Restaurante')
             ->brandLogo(function () {
-                $user = auth()->user();
+                $user = Auth::user();
                 $restaurant = $user?->restaurants()->first();
 
                 if ($restaurant && $restaurant->logo) {
@@ -40,7 +41,7 @@ class RestaurantsPanelProvider extends PanelProvider
             })
             ->brandLogoHeight('3.5rem')
             ->favicon('/img/restaurant-favicon.ico')
-            ->path('restaurants')
+            ->path('app')
             // ->profile()
             ->login()
             // ->colors([
@@ -157,6 +158,7 @@ class RestaurantsPanelProvider extends PanelProvider
             ])
             ->discoverClusters(in: app_path('Filament/Clusters'), for: 'App\\Filament\\Clusters')
             ->tenant(Restaurant::class, slugAttribute: 'slug')
+            ->tenantDomain('{tenant:slug}.restaurantetenacy.test')
             ->plugin(FilamentProgressbarPlugin::make()->color('#29b'));
     }
 }
