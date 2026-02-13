@@ -12,7 +12,7 @@ document.addEventListener('alpine:init', () => {
         /* === ESTADO === */
         menuOpen: false,
         menuPos: { x: 0, y: 0 },
-        activeTable: { id: null, orderId: null, status: 'free' },
+        activeTable: { id: null, orderId: null, status: 'free' }, 
 
         /* === VARIABLES AUXILIARES === */
         pressing: false,
@@ -82,7 +82,7 @@ document.addEventListener('alpine:init', () => {
             if (this.ignoreNextClick) return;
 
             if (tableData.status !== 'free' && tableData.orderId) {
-                window.location = '/app/' + window.APP_TENANT + '/orden-mesa/' + tableData.id + '/' + tableData.orderId;
+                window.location = '/app/orden-mesa/' + tableData.id + '/' + tableData.orderId;
             } else {
                 this.$store.modalPdv.open = true;
                 this.$store.modalPdv.mesaId = tableData.id;

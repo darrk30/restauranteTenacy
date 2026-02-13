@@ -9,6 +9,7 @@ use App\Models\PaymentMethod;
 use App\Models\Production;
 use App\Models\Restaurant;
 use App\Models\TypeDocument;
+use App\Models\CashRegister; // IMPORTANTE: Agregar el modelo
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -35,12 +36,12 @@ class ConfiguracionInicial extends Seeder
             ], [
                 'nombres'          => 'CLIENTES',
                 'apellidos'        => 'VARIOS',
-                'type_document_id' => $dniType->id, // Usamos el ID encontrado
+                'type_document_id' => $dniType->id,
                 'status'           => 'Activo',
             ]);
         }
 
-        // 2. MÉTODOS DE PAGO POR DEFECTO CON IMÁGENES
+        // 3. MÉTODOS DE PAGO POR DEFECTO CON IMÁGENES
         $metodosPago = [
             [
                 'name' => 'Efectivo',
@@ -69,24 +70,34 @@ class ConfiguracionInicial extends Seeder
             ], [
                 'payment_condition'   => $metodo['payment_condition'],
                 'requiere_referencia' => $metodo['requiere_referencia'],
-                'image_path'          => $metodo['image'], // Asignamos la ruta de la imagen
+                'image_path'          => $metodo['image'],
                 'status'              => true,
             ]);
         }
 
-        // 3. PUNTOS DE PRODUCCIÓN (Cocina y Almacén)
+        // 4. PUNTOS DE PRODUCCIÓN (Cocina y Almacén)
         $puntosProduccion = ['Cocina', 'Almacén'];
 
         foreach ($puntosProduccion as $punto) {
             Production::firstOrCreate([
                 'name'          => $punto,
-                'restaurant_id' => $restaurant->id, // Asumiendo que es multi-tenant
+                'restaurant_id' => $restaurant->id,
             ], [
                 'status'        => true,
-                'printer_id'    => null, // Se asignará luego manualmente
+                'printer_id'    => null,
             ]);
         }
 
+        // 5. CAJA PRINCIPAL (Nueva sección agregada)
+        CashRegister::firstOrCreate([
+            'restaurant_id' => $restaurant->id,
+            'code'          => 'CAJA-01', // Código único para la caja
+        ], [
+            'name'          => 'Caja Principal',
+            'status'        => true,
+        ]);
+
+        // 6. SERIES DE DOCUMENTOS
         $seriesIniciales = [
             [
                 'type_documento' => DocumentSeriesType::FACTURA,
@@ -102,16 +113,15 @@ class ConfiguracionInicial extends Seeder
             ],
             [
                 'type_documento' => DocumentSeriesType::NOTA_CREDITO,
-                'serie' => 'FC01', // Serie para Factura
+                'serie' => 'FC01',
             ],
             [
                 'type_documento' => DocumentSeriesType::NOTA_CREDITO,
-                'serie' => 'BC01', // Serie para Boleta
+                'serie' => 'BC01',
             ],
         ];
 
         foreach ($seriesIniciales as $data) {
-            // Usamos firstOrCreate para evitar duplicados si se corre dos veces
             DocumentSerie::firstOrCreate([
                 'restaurant_id' => $restaurant->id,
                 'serie' => $data['serie'],

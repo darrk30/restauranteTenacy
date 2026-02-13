@@ -11,6 +11,7 @@ class CashRegister extends Model
         'restaurant_id',
         'name',
         'code',
+        'status',
     ];
 
     public function restaurant()
