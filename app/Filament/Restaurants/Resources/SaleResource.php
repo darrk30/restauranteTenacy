@@ -91,7 +91,7 @@ class SaleResource extends Resource
             ->defaultSort('created_at', 'desc')
             ->filters([
                 // FILTRO POR DEFECTO: Solo turno actual
-                 Tables\Filters\Filter::make('created_at')
+                Tables\Filters\Filter::make('created_at')
                     ->form([
                         DateTimePicker::make('fecha_desde')->label('Desde')->hourMode(12)->displayFormat('d/m/y h:i A')->seconds(false)->default($sesionAbierta ? $sesionAbierta->opened_at : now()->startOfDay()),
                         DatetimePicker::make('fecha_hasta')->label('Hasta')->hourMode(12)->displayFormat('d/m/y h:i A')->seconds(false)->default(now()),
@@ -179,13 +179,19 @@ class SaleResource extends Resource
                             }
 
                             // Anulación de movimientos de caja
-                            CashRegisterMovement::where('referencia_type', get_class($record))
+                            // 1. Obtener los movimientos
+                            $movimientos = CashRegisterMovement::where('referencia_type', get_class($record))
                                 ->where('referencia_id', $record->id)
                                 ->where('status', 'aprobado')
-                                ->update([
-                                    'status' => 'anulado',
-                                    'description' => DB::raw("CONCAT(description, ' (ANULADO)')")
+                                ->get();
+
+                            // 2. Iterar y actualizar individualmente
+                            foreach ($movimientos as $movimiento) {
+                                // Al usar este update() sobre la instancia, SÍ se dispara el Observer
+                                $movimiento->update([
+                                    'status' => 'anulado'
                                 ]);
+                            }
 
                             DB::commit();
                             Notification::make()->title('Venta Anulada')->success()->send();

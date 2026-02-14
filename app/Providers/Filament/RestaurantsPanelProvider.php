@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Restaurants\Pages\Dashboard;
 use App\Models\Restaurant;
 use Filament\FontProviders\GoogleFontProvider;
 use Filament\Http\Middleware\Authenticate;
@@ -11,6 +12,8 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\Support\Assets\Css;
+use Filament\Support\Assets\Js;
 use Filament\Support\Enums\FontFamily;
 use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -135,7 +138,8 @@ class RestaurantsPanelProvider extends PanelProvider
             ->discoverResources(in: app_path('Filament/Restaurants/Resources'), for: 'App\\Filament\\Restaurants\\Resources')
             ->discoverPages(in: app_path('Filament/Restaurants/Pages'), for: 'App\\Filament\\Restaurants\\Pages')
             ->pages([
-                Pages\Dashboard::class,
+                // Pages\Dashboard::class,
+                Dashboard::class
             ])
             ->discoverWidgets(in: app_path('Filament/Restaurants/Widgets'), for: 'App\\Filament\\Restaurants\\Widgets')
             ->widgets([
@@ -156,6 +160,16 @@ class RestaurantsPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
+            ->spa()// para que las páginas se carguen sin refrescar toda la página
+            ->assets([
+            // Cargamos el script aquí para que esté disponible GLOBALMENTE
+                Js::make('mesas-script', asset('js/mesas.js')), 
+                Js::make('orden-mesa-script', asset('js/ordenmesa.js')), 
+            ])
+            ->globalSearch(true)
+            ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
+            ->unsavedChangesAlerts()//para mostrar alertas de cambios no guardados
+            ->databaseTransactions()//para realizar transacciones en las páginas de recursos
             ->discoverClusters(in: app_path('Filament/Clusters'), for: 'App\\Filament\\Clusters')
             ->tenant(Restaurant::class, slugAttribute: 'slug')
             ->tenantDomain('{tenant:slug}.restaurantetenacy.test')

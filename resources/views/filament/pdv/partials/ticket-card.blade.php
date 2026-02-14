@@ -17,7 +17,7 @@
 
     // Rutas y Acciones
     $accionBoton = "avanzarEstado({$order->id})";
-    $redireccionPago = "window.location='/app/{$tenant->slug}/pedidos/{$order->id}/pagar'";
+    $redireccionPago = "window.location='/app/pedidos/{$order->id}/pagar'";
 
     // 2. CONFIGURACIÓN VISUAL (LOGÍSTICA)
     if ($stLogistico === 'preparando') {
@@ -73,7 +73,7 @@
     <div class="ticket-status-bar" style="background-color: {{ $colorBarra }}"></div>
 
     {{-- Cabecera --}}
-    <div class="ticket-header" @click="window.location='/app/{{ $tenant->slug }}/orden-mesa/nuevo/{{ $order->id }}'"
+    <div class="ticket-header" @click="window.location='/app/orden-mesa/nuevo/{{ $order->id }}'"
         style="cursor: pointer;">
         <div>
             <span class="text-[10px] text-gray-400 font-bold block uppercase tracking-wide">Orden</span>
@@ -87,7 +87,7 @@
     </div>
 
     {{-- Cuerpo --}}
-    <div class="ticket-body" @click="window.location='/app/{{ $tenant->slug }}/orden-mesa/nuevo/{{ $order->id }}'"
+    <div class="ticket-body" @click="window.location='/app/orden-mesa/nuevo/{{ $order->id }}'"
         style="cursor: pointer;">
 
         <div>

@@ -78,17 +78,17 @@ class PointOfSale extends Page
     }
 
     // Método optimizado para ser llamado desde el modal
-public function cargarDetallesOrden($orderId)
-{
-    // Simplemente cargamos la orden, la vista se actualizará reactivamente
-    $this->ordenParaDetalles = Order::with(['details', 'user'])->find($orderId);
-}
+    public function cargarDetallesOrden($orderId)
+    {
+        // Simplemente cargamos la orden, la vista se actualizará reactivamente
+        $this->ordenParaDetalles = Order::with(['details', 'user'])->find($orderId);
+    }
 
-// Método para limpiar al cerrar (opcional, para ahorrar memoria)
-public function limpiarDetalles()
-{
-    $this->ordenParaDetalles = null;
-}
+    // Método para limpiar al cerrar (opcional, para ahorrar memoria)
+    public function limpiarDetalles()
+    {
+        $this->ordenParaDetalles = null;
+    }
 
     public function consultarDocumento()
     {
@@ -203,6 +203,16 @@ public function limpiarDetalles()
         $this->resetErrorBag();
     }
 
+    public function cerrarModalComanda()
+    {
+        $this->mostrarModalComanda = false;
+        $this->ordenGenerada = null;
+
+        // Limpiamos las sesiones de impresión para que no vuelva a salir al recargar
+        session()->forget('print_job_id');
+        session()->forget('print_order_id');
+    }
+
     // 3. CONSULTA FILTRADA (getViewData)
     protected function getViewData(): array
     {
@@ -210,11 +220,11 @@ public function limpiarDetalles()
 
         // Filtro común: status de pago no cancelado Y status logístico NO entregado
         $baseQuery = Order::where('restaurant_id', $tenant->id)
-            ->where('status', '!=', 'cancelado') 
-            ->where(function($q) {
+            ->where('status', '!=', 'cancelado')
+            ->where(function ($q) {
                 $q->where('status_llevar_delivery', '!=', 'entregado') // Aún no se entrega
-                  ->orWhere('status', '!=', 'pagado')                  // O aún no se paga
-                  ->orWhereNull('status_llevar_delivery');             // O es nuevo
+                    ->orWhere('status', '!=', 'pagado')                  // O aún no se paga
+                    ->orWhereNull('status_llevar_delivery');             // O es nuevo
             });
 
         return [

@@ -12,7 +12,7 @@ class Restaurant extends Model
 {
     protected $fillable = ['name', 'name_comercial', 'ruc', 'address', 'phone', 'email', 'department', 'district', 'province', 'ubigeo', 'status', 'multialmacen', 'logo', 'slug'];
 
-    public function getRouteKeyName(): string
+    public function getRouteKeyName()
     {
         return 'slug';
     }
@@ -56,7 +56,7 @@ class Restaurant extends Model
     {
         return $this->hasMany(Product::class);
     }
-    
+
     public function variants()
     {
         return $this->hasMany(Variant::class);
@@ -111,7 +111,7 @@ class Restaurant extends Model
     {
         return $this->hasMany(PaymentMethod::class);
     }
-    
+
     public function orders()
     {
         return $this->hasMany(Order::class);
@@ -131,7 +131,7 @@ class Restaurant extends Model
     {
         return $this->hasMany(SessionCashRegister::class);
     }
-    
+
     public function kardexes()
     {
         return $this->hasMany(Kardex::class);

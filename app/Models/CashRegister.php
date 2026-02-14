@@ -38,10 +38,12 @@ class CashRegister extends Model
         });
 
         static::creating(function ($cashregister) {
+            if (app()->has('bypass_tenant_scope')) {
+                return; // omitir asignación
+            }
             if (filament()->getTenant()) {
                 $cashregister->restaurant_id = filament()->getTenant()->id;
             }
         });
     }
 }
-

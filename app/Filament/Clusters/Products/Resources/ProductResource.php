@@ -15,6 +15,7 @@ use App\Models\Category;
 use App\Models\Production;
 use App\Models\Unit;
 use App\Models\Value;
+use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\ColorPicker;
@@ -67,12 +68,11 @@ class ProductResource extends Resource
                                             FileUpload::make('image_path')
                                                 ->label('Imagen del producto')
                                                 ->image()
-                                                ->directory('products')
                                                 ->disk('public')
+                                                ->directory('tenants/' . Filament::getTenant()->slug. '/products')
+                                                ->visibility('public')
                                                 ->preserveFilenames()
-                                                ->previewable(true)
                                                 ->columnSpanFull(),
-
                                             TextInput::make('name')
                                                 ->label('Nombre')
                                                 ->required()

@@ -738,7 +738,7 @@
 
     @push('scripts')
         <script>
-            let scrollAnimation;
+            window.scrollAnimation = window.scrollAnimation || null;
 
             function scrollCategories(direction) {
                 const container = document.getElementById('categoryList');
@@ -748,18 +748,17 @@
                 const start = container.scrollLeft;
                 const change = direction === 'left' ? -distance : distance;
                 const startTime = performance.now();
-                cancelAnimationFrame(scrollAnimation);
-
+                cancelAnimationFrame(window.scrollAnimation);
                 function animate(currentTime) {
                     const elapsed = currentTime - startTime;
                     const progress = Math.min(elapsed / duration, 1);
                     const ease = 1 - (1 - progress) * (1 - progress);
                     container.scrollLeft = start + (change * ease);
                     if (elapsed < duration) {
-                        scrollAnimation = requestAnimationFrame(animate);
+                        window.scrollAnimation = requestAnimationFrame(animate);
                     }
                 }
-                scrollAnimation = requestAnimationFrame(animate);
+                window.scrollAnimation = requestAnimationFrame(animate);
             }
         </script>
     @endpush
