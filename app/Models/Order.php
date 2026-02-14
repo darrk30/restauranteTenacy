@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Enums\statusPedido;
+use App\Enums\StatusPedido;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -30,7 +30,7 @@ class Order extends Model
     ];
 
     protected $casts = [
-        'status' => statusPedido::class,
+        'status' => StatusPedido::class,
     ];
 
     public function restaurant()

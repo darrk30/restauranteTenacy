@@ -2,23 +2,34 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
+use App\Models\CashRegister;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
+use Filament\Actions\BulkActionGroup;
+use App\Filament\Restaurants\Resources\SessionCashRegisterResource\Pages\ListSessionCashRegisters;
+use App\Filament\Restaurants\Resources\SessionCashRegisterResource\Pages\CreateSessionCashRegister;
+use App\Filament\Restaurants\Resources\SessionCashRegisterResource\Pages\EditSessionCashRegister;
+use App\Filament\Restaurants\Resources\SessionCashRegisterResource\Pages\ViewSessionCashRegister;
 use App\Filament\Restaurants\Resources\SessionCashRegisterResource\Pages;
 use App\Models\SessionCashRegister;
 use App\Models\PaymentMethod;
-use Filament\Forms\Form;
+use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Placeholder;
-use Filament\Forms\Get;
-use Filament\Forms\Set;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
 
@@ -26,15 +37,16 @@ class SessionCashRegisterResource extends Resource
 {
     protected static ?string $model = SessionCashRegister::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-currency-dollar';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
+
 
     protected static ?string $navigationLabel = 'Apertura y Cierre';
     protected static ?string $pluralModelLabel = 'Apertura y Cierre';
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->components([
 
                 // ==========================================
                 //  ESCENARIO 1: APERTURA (Solo en Create)
@@ -67,7 +79,7 @@ class SessionCashRegisterResource extends Resource
                                     ->required()
                                     ->preload()
                                     // CORRECCIÓN AQUÍ TAMBIÉN: 'users.id'
-                                    ->disabled(fn() => \App\Models\CashRegister::whereHas('users', fn($q) => $q->where('users.id', Auth::id()))->count() === 0),
+                                    ->disabled(fn() => CashRegister::whereHas('users', fn($q) => $q->where('users.id', Auth::id()))->count() === 0),
 
                                 TextInput::make('turno_ficticio')
                                     ->label('TURNO')
@@ -268,26 +280,26 @@ class SessionCashRegisterResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('session_code')
+                TextColumn::make('session_code')
                     ->label('Código')
                     ->searchable()
                     ->sortable()
                     ->weight('bold')
                     ->copyable(),
 
-                Tables\Columns\TextColumn::make('user.name')
+                TextColumn::make('user.name')
                     ->label('Cajero')
                     ->searchable()
                     ->sortable()
                     ->icon('heroicon-o-user'),
 
-                Tables\Columns\TextColumn::make('cashRegister.name')
+                TextColumn::make('cashRegister.name')
                     ->label('Caja')
                     ->sortable()
                     ->badge()
                     ->color('gray'),
 
-                Tables\Columns\TextColumn::make('status')
+                TextColumn::make('status')
                     ->label('Estado')
                     ->badge()
                     ->colors([
@@ -303,7 +315,7 @@ class SessionCashRegisterResource extends Resource
                     }),
 
                 // 1. FECHA DE APERTURA (Dos líneas)
-                Tables\Columns\TextColumn::make('opened_at')
+                TextColumn::make('opened_at')
                     ->label('F. Apertura')
                     ->dateTime('d/m/Y') // Arriba: Solo la fecha
                     ->description(fn($record) => $record->opened_at?->format('h:i A')) // Abajo: La hora (ej: 10:30 AM)
@@ -312,7 +324,7 @@ class SessionCashRegisterResource extends Resource
                     ->iconColor('primary'),
 
                 // 2. FECHA DE CIERRE (Dos líneas)
-                Tables\Columns\TextColumn::make('closed_at')
+                TextColumn::make('closed_at')
                     ->label('F. Cierre')
                     ->dateTime('d/m/Y') // Arriba: Solo la fecha
                     ->description(
@@ -325,7 +337,7 @@ class SessionCashRegisterResource extends Resource
                     ->icon(fn($state) => $state ? 'heroicon-m-lock-closed' : 'heroicon-m-clock')
                     ->color(fn($state) => $state ? 'gray' : 'warning'),
 
-                Tables\Columns\TextColumn::make('difference')
+                TextColumn::make('difference')
                     ->label('Cuadre')
                     ->money('PEN')
                     ->placeholder('-')
@@ -333,29 +345,29 @@ class SessionCashRegisterResource extends Resource
             ])
             ->defaultSort('opened_at', 'desc')
             ->filters([
-                Tables\Filters\SelectFilter::make('status')
+                SelectFilter::make('status')
                     ->options([
                         'open' => 'Abiertas',
                         'closed' => 'Cerradas',
                     ]),
             ])
-            ->actions([
+            ->recordActions([
                 // BOTÓN 1: CERRAR CAJA (Solo visible si está ABIERTA)
-                Tables\Actions\EditAction::make()
+                EditAction::make()
                     ->label('Cerrar Caja')
                     ->icon('heroicon-m-lock-closed')
                     ->color('warning')
                     ->visible(fn($record) => $record->status === 'open'),
 
                 // BOTÓN 2: VER DETALLES (Solo visible si está CERRADA)
-                Tables\Actions\ViewAction::make() // 🔥 Usamos ViewAction
+                ViewAction::make() // 🔥 Usamos ViewAction
                     ->label('Ver Detalles')
                     ->icon('heroicon-m-eye')
                     ->color('gray')
                     ->visible(fn($record) => $record->status === 'closed'),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
+            ->toolbarActions([
+                BulkActionGroup::make([
                     // Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
@@ -371,10 +383,10 @@ class SessionCashRegisterResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListSessionCashRegisters::route('/'),
-            'create' => Pages\CreateSessionCashRegister::route('/create'),
-            'edit' => Pages\EditSessionCashRegister::route('/{record}/edit'),
-            'view' => Pages\ViewSessionCashRegister::route('/{record}'),
+            'index' => ListSessionCashRegisters::route('/'),
+            'create' => CreateSessionCashRegister::route('/create'),
+            'edit' => EditSessionCashRegister::route('/{record}/edit'),
+            'view' => ViewSessionCashRegister::route('/{record}'),
         ];
     }
 }

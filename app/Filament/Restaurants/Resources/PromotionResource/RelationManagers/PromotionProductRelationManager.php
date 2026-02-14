@@ -2,9 +2,17 @@
 
 namespace App\Filament\Restaurants\Resources\PromotionResource\RelationManagers;
 
+use Filament\Schemas\Schema;
+use App\Models\Variant;
+use Filament\Forms\Components\TextInput;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Actions\CreateAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Forms;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -13,11 +21,11 @@ class PromotionProductRelationManager extends RelationManager
 {
     protected static string $relationship = 'promotionproducts';
 
-    public function form(Form $form): Form
+    public function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\Select::make('product_id')
+        return $schema
+            ->components([
+                Select::make('product_id')
                     ->label('Producto')
                     ->relationship('product', 'name')
                     ->searchable()
@@ -31,7 +39,7 @@ class PromotionProductRelationManager extends RelationManager
                         }
 
                         // Buscar variantes activas del producto
-                        $variants = \App\Models\Variant::where('product_id', $state)
+                        $variants = Variant::where('product_id', $state)
                             ->where('status', 'activo')
                             ->get();
 
@@ -53,7 +61,7 @@ class PromotionProductRelationManager extends RelationManager
                             return [];
                         }
 
-                        return \App\Models\Variant::where('product_id', $productId)
+                        return Variant::where('product_id', $productId)
                             ->where('status', 'activo')
                             ->get()
                             ->pluck('full_name', 'id');
@@ -62,7 +70,7 @@ class PromotionProductRelationManager extends RelationManager
                     ->preload()
                     ->required(),
 
-                Forms\Components\TextInput::make('quantity')
+                TextInput::make('quantity')
                     ->label('Cantidad')
                     ->numeric()
                     ->default(1)
@@ -76,25 +84,25 @@ class PromotionProductRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('Productos de la Promoción')
             ->columns([
-                Tables\Columns\TextColumn::make('product.name')
+                TextColumn::make('product.name')
                     ->label('Producto')
                     ->sortable()
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('quantity')
+                TextColumn::make('quantity')
                     ->label('Cantidad')
                     ->sortable(),
             ])
             ->headerActions([
-                Tables\Actions\CreateAction::make(),
+                CreateAction::make(),
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+            ->recordActions([
+                EditAction::make(),
+                DeleteAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

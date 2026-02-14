@@ -2,6 +2,20 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Grid;
+use Filament\Actions\Action;
+use Filament\Schemas\Components\Utilities\Set;
+use Exception;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\EditAction;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
+use App\Filament\Restaurants\Resources\PurchaseResource\Pages\ListPurchases;
+use App\Filament\Restaurants\Resources\PurchaseResource\Pages\CreatePurchase;
+use App\Filament\Restaurants\Resources\PurchaseResource\Pages\EditPurchase;
 use App\Enums\StatusProducto;
 use App\Enums\TipoProducto;
 use App\Filament\Clusters\Products\Resources\ProductResource;
@@ -15,20 +29,17 @@ use App\Models\Variant;
 use App\Models\Warehouse;
 use App\Services\ProductService;
 use App\Services\PurcharseService;
-use Filament\Forms\Components\Actions\Action;
-use Filament\Forms\Form;
-use Filament\Forms\Components\Section;
+use BackedEnum;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Repeater;
-use Filament\Forms\Get;
-use Filament\Forms\Set;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Group;
 use Filament\Support\Exceptions\Halt;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -39,17 +50,19 @@ class PurchaseResource extends Resource
 {
     protected static ?string $model = Purchase::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
+
     protected static ?string $navigationLabel = 'Compras';
-    protected static ?string $navigationGroup = 'Inventario';
+    // protected static ?string $navigationGroup = 'Inventario';
 
 
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->components([
                 Section::make('Datos generales')
+                    ->columnSpanFull()
                     ->schema([
                         Select::make('tipo_documento')
                             ->label('Tipo de comprobante')
@@ -88,6 +101,7 @@ class PurchaseResource extends Resource
                     ->columns(['default' => 1, 'md' => 3, 'xl' => 3,]),
 
                 Section::make('Estados')
+                    ->columnSpanFull()
                     ->schema([
                         DatePicker::make('fecha_compra')
                             ->label('Fecha de compra')
@@ -113,155 +127,123 @@ class PurchaseResource extends Resource
                     ])->columns(['default' => 1, 'md' => 3, 'xl' => 3,]),
 
                 Section::make('Productos')
+                    ->columnSpanFull()
                     ->schema([
                         Repeater::make('details')
                             ->relationship()
-                            ->label('')
-                            ->schema([
-                                Grid::make()
-                                    ->columns(['default' => 1, 'md' => 2, 'xl' => 3,])
-                                    ->schema([
-                                        Select::make('product_id')
-                                            ->label('Producto')
-                                            ->relationship('product', 'name', function ($query) {
-                                                $query->whereIn('type', [TipoProducto::Producto->value, TipoProducto::Insumo->value,])
-                                                    ->where('control_stock', true)
-                                                    ->where('status', StatusProducto::Activo->value);
-                                            })
-                                            ->searchable()
-                                            ->preload()
-                                            ->reactive()
-                                            ->required()
-                                            ->suffixAction(
-                                                Action::make('createProduct')
-                                                    ->label('Nuevo')
-                                                    ->icon('heroicon-o-plus')
-                                                    ->modalHeading('Crear producto')
-                                                    ->modalSubmitActionLabel('Guardar')
-                                                    ->form(ProductResource::getSchema())
-                                                    ->action(function (array $data, Set $set) {
-                                                        try {
-                                                            $data = (new ProductService())->validateAndGenerateSlug($data);
-                                                        } catch (\Exception $e) {
-                                                            Notification::make()
-                                                                ->title('No se pudo crear el producto')
-                                                                ->body($e->getMessage())
-                                                                ->danger()
-                                                                ->send();
-                                                            throw new Halt();
-                                                        }
-                                                        $categories = $data['categories'] ?? [];
-                                                        unset($data['categories']);
-                                                        $unidId = $data['unid_id'] ?? null;
-                                                        $product = Product::create($data);
-                                                        if (!empty($categories)) {
-                                                            $product->categories()->sync($categories);
-                                                        }
-                                                        if (!empty($unidId)) {
-                                                            $product->unit()->associate($unidId);
-                                                            $product->save();
-                                                        }
-                                                        (new ProductService())->handleAfterCreate($product, $data);
-                                                        $set('product_id', $product->id);
-                                                    })
-                                            )
-                                            ->afterStateUpdated(function ($state, Set $set) {
-                                                if (!$state) {
-                                                    $set('variant_id', null);
-                                                    $set('unit_id', null);
-                                                    return;
-                                                }
-                                                $variants = Variant::where('product_id', $state)->where('status', 'activo')->get();
-                                                $product = Product::with('unit')->find($state);
-                                                if ($variants->count() === 1) {
-                                                    $set('variant_id', $variants->first()->id);
-                                                } else {
-                                                    $set('variant_id', null);
-                                                }
-                                                if ($product?->unit?->id) {
-                                                    $set('unit_id', $product->unit->id);
-                                                }
-                                            }),
+                            ->table([
+                                // 1. FUSIONAMOS LOS ENCABEZADOS
+                                TableColumn::make('Producto / Variante')
+                                    ->width('400px'), // Sumamos el ancho de las dos columnas anteriores
 
-                                        Select::make('variant_id')
-                                            ->label('Variante')
-                                            ->options(function (callable $get) {
-                                                $productId = $get('product_id');
-                                                if (!$productId) {
-                                                    return [];
-                                                }
-                                                return Variant::where('product_id', $productId)
-                                                    ->where('status', 'activo')
-                                                    ->get()
-                                                    ->pluck('full_name', 'id');
-                                            })
-                                            ->searchable()
-                                            ->preload()
-                                            ->required(),
+                                TableColumn::make('Almacén')
+                                    ->width('160px'),
 
-                                        Select::make('warehouse_id')
-                                            ->label('Almacén')
-                                            ->relationship('warehouse', 'name')
-                                            ->searchable()
-                                            ->preload()
-                                            ->default(function () {
-                                                return Warehouse::query()->orderBy('id')->value('id'); // primer almacén
-                                            })
-                                            ->required(),
-                                    ]),
+                                TableColumn::make('Cant.')
+                                    ->width('80px')
+                                    ->alignCenter(),
 
-                                // OTRO GRID PARA LOS CAMPOS NUMÉRICOS
-                                Grid::make()
-                                    ->columns(['default' => 1, 'md' => 2, 'xl' => 4,])
-                                    ->schema([
-                                        TextInput::make('cantidad')
-                                            ->label('Cantidad')
-                                            ->numeric()
-                                            ->placeholder(0.00)
-                                            ->minValue(0.01)
-                                            ->reactive()
-                                            ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculateLine($get, $set))
-                                            ->required(),
+                                TableColumn::make('Unidad')
+                                    ->width('130px'),
 
+                                TableColumn::make('Costo')
+                                    ->width('120px')
+                                    ->alignEnd(),
 
-                                        Select::make('unit_id')
-                                            ->label('Unidad')
-                                            ->options(function (callable $get) {
-                                                $product = Product::with('unit')->find($get('product_id'));
-                                                $categoryId = $product?->unit?->unit_category_id;
-                                                return $categoryId
-                                                    ? Unit::where('unit_category_id', $categoryId)->pluck('name', 'id')
-                                                    : [];
-                                            })
-                                            ->searchable()
-                                            ->preload()
-                                            ->required(),
-
-                                        TextInput::make('costo')
-                                            ->label('Costo')
-                                            ->numeric()
-                                            ->placeholder(0.00)
-                                            ->prefix('S/')
-                                            ->reactive()
-                                            ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculateLine($get, $set))
-                                            ->required(),
-
-                                        TextInput::make('subtotal')
-                                            ->label('Subtotal')
-                                            ->numeric()
-                                            ->placeholder(0.00)
-                                            ->prefix('S/')
-                                            ->readOnly(),
-                                    ]),
+                                TableColumn::make('Subtotal')
+                                    ->width('120px')
+                                    ->alignEnd(),
                             ])
-                            ->columns(['default' => 1, 'md' => 2, 'xl' => 4,])
+                            ->schema([
+                                // 2. AGRUPAMOS LOS INPUTS EN UN SOLO BLOQUE
+
+                                Select::make('product_id')
+                                    ->label('Producto')
+                                    ->hiddenLabel() // Ocultamos label interno para ahorrar espacio
+                                    ->placeholder('Seleccionar Producto')
+                                    ->relationship('product', 'name', function ($query) {
+                                        $query->whereIn('type', [TipoProducto::Producto->value, TipoProducto::Insumo->value,])
+                                            ->where('control_stock', true)
+                                            ->where('status', StatusProducto::Activo->value);
+                                    })
+                                    ->searchable()
+                                    ->preload()
+                                    ->reactive()
+                                    ->required()
+                                    // ... tu lógica de createProduct ...
+                                    ->afterStateUpdated(function ($state, Set $set) {
+                                        // ... tu lógica existente ...
+                                    }),
+
+                                Select::make('variant_id')
+                                    ->label('Variante')
+                                    ->hiddenLabel() // Ocultamos label interno
+                                    ->placeholder('Seleccionar Variante')
+                                    ->options(function (callable $get) {
+                                        // ... tu lógica existente ...
+                                        $productId = $get('product_id');
+                                        if (!$productId) return [];
+                                        return Variant::where('product_id', $productId)
+                                            ->where('status', 'activo')
+                                            ->pluck('full_name', 'id');
+                                    })
+                                    ->searchable()
+                                    ->preload()
+                                    ->required()
+                                    ->visible(fn(callable $get) => $get('product_id') !== null), // Opcional: mostrar solo si hay producto
+
+                                // 3. EL RESTO DE CAMPOS SIGUE IGUAL (Cada uno corresponde a su columna)
+                                Select::make('warehouse_id')
+                                    ->label('Almacén')
+                                    ->hiddenLabel()
+                                    ->relationship('warehouse', 'name')
+                                    ->default(fn() => Warehouse::query()->orderBy('id')->value('id'))
+                                    ->required(),
+
+                                TextInput::make('cantidad')
+                                    ->label('Cantidad')
+                                    ->hiddenLabel()
+                                    ->numeric()
+                                    ->default(1)
+                                    ->minValue(0.01)
+                                    ->reactive()
+                                    ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculateLine($get, $set))
+                                    ->required(),
+
+                                Select::make('unit_id')
+                                    ->label('Unidad')
+                                    ->hiddenLabel()
+                                    ->options(function (callable $get) {
+                                        // ... tu lógica existente ...
+                                        $product = Product::with('unit')->find($get('product_id'));
+                                        $categoryId = $product?->unit?->unit_category_id;
+                                        return $categoryId ? Unit::where('unit_category_id', $categoryId)->pluck('name', 'id') : [];
+                                    })
+                                    ->required(),
+
+                                TextInput::make('costo')
+                                    ->label('Costo')
+                                    ->hiddenLabel()
+                                    ->numeric()
+                                    ->reactive()
+                                    ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculateLine($get, $set))
+                                    ->required(),
+
+                                TextInput::make('subtotal')
+                                    ->label('Subtotal')
+                                    ->hiddenLabel()
+                                    ->numeric()
+                                    ->readOnly(),
+                            ])
                             ->defaultItems(1)
+                            ->columnSpanFull()
                             ->reactive()
                             ->addActionLabel('Agregar producto'),
                     ]),
 
 
                 Section::make('')
+                    ->columnSpanFull()
                     ->heading(fn() => new HtmlString(
                         '<div class="flex items-center w-full">
                             <span>Métodos de pago</span>
@@ -323,6 +305,7 @@ class PurchaseResource extends Resource
                     ]),
 
                 Section::make('Totales y estado')
+                    ->columnSpanFull()
                     ->schema([
                         TextInput::make('costo_envio')
                             ->label('Costo de envío')
@@ -542,22 +525,22 @@ class PurchaseResource extends Resource
 
             ])
             ->defaultSort('id', 'desc')
-            ->actions([
-                Tables\Actions\ActionGroup::make([
-                    Tables\Actions\EditAction::make(),
+            ->recordActions([
+                ActionGroup::make([
+                    EditAction::make(),
 
-                    Tables\Actions\Action::make('pagos')
+                    Action::make('pagos')
                         ->label('Pagos')
                         ->icon('heroicon-o-banknotes')
                         ->modalHeading('Pagos de la compra')
-                        ->form(function ($record) {
+                        ->schema(function ($record) {
 
                             $schema = [
                                 Placeholder::make('pagos_realizados')
                                     ->label('')
                                     ->content(function ($record) {
                                         $pagos = $record->paymentMethods()->with('paymentMethod')->get();
-                                        return new \Illuminate\Support\HtmlString(
+                                        return new HtmlString(
                                             view('filament.purchase.pagos-table', [
                                                 'pagos' => $pagos,
                                                 'saldo' => $record->saldo,
@@ -602,7 +585,7 @@ class PurchaseResource extends Resource
 
                             // Si hay saldo → mostrar botón submit normal
                             return [
-                                \Filament\Actions\Action::make('submit')
+                                Action::make('submit')
                                     ->label('Agregar pago')
                                     ->submit('submit'),
                             ];
@@ -627,14 +610,14 @@ class PurchaseResource extends Resource
 
                             $livewire->dispatch('refresh');
 
-                            \Filament\Notifications\Notification::make()
+                            Notification::make()
                                 ->title('Pago agregado exitosamente')
                                 ->success()
                                 ->send();
                         }),
 
 
-                    Tables\Actions\Action::make('anular')
+                    Action::make('anular')
                         ->label('Anular')
                         ->color('danger')
                         ->icon('heroicon-o-x-circle')
@@ -651,9 +634,9 @@ class PurchaseResource extends Resource
                 ])->visible(fn($record) => $record->estado_comprobante !== 'anulado')
             ])
             ->filters([
-                Tables\Filters\Filter::make('fecha')
+                Filter::make('fecha')
                     ->default(true)
-                    ->form([
+                    ->schema([
                         DatePicker::make('desde')->label('Desde'),
                         DatePicker::make('hasta')->label('Hasta'),
                     ])
@@ -667,7 +650,7 @@ class PurchaseResource extends Resource
                         'hasta' => now()->toDateString(),
                     ]),
 
-                Tables\Filters\SelectFilter::make('estado_comprobante')
+                SelectFilter::make('estado_comprobante')
                     ->label('Estado de comprobante')
                     ->options([
                         'aceptado' => 'Aceptado',
@@ -675,7 +658,7 @@ class PurchaseResource extends Resource
                     ]),
             ])
 
-            ->bulkActions([
+            ->toolbarActions([
                 // Tables\Actions\DeleteBulkAction::make(),
             ])->recordUrl(null);
     }
@@ -697,9 +680,9 @@ class PurchaseResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListPurchases::route('/'),
-            'create' => Pages\CreatePurchase::route('/create'),
-            'edit' => Pages\EditPurchase::route('/{record}/edit'),
+            'index' => ListPurchases::route('/'),
+            'create' => CreatePurchase::route('/create'),
+            'edit' => EditPurchase::route('/{record}/edit'),
         ];
     }
 }

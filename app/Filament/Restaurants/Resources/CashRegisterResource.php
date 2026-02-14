@@ -6,35 +6,42 @@ use App\Filament\Restaurants\Resources\CashRegisterResource\Pages;
 use App\Filament\Restaurants\Resources\CashRegisterResource\RelationManagers;
 use App\Filament\Restaurants\Resources\CashRegisterResource\RelationManagers\UsersRelationManager;
 use App\Models\CashRegister;
+use BackedEnum;
+use Filament\Actions\EditAction;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Form;
+use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 
 class CashRegisterResource extends Resource
 {
     protected static ?string $model = CashRegister::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-computer-desktop';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
 
     protected static ?string $navigationLabel = 'Cajas Registradoras';
-    
+
     protected static ?string $pluralModelLabel = 'Cajas Registradoras';
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\TextInput::make('name')
+        return $schema
+            ->components([
+                TextInput::make('name')
                     ->required()
                     ->maxLength(255),
-                Forms\Components\TextInput::make('code')
+
+                TextInput::make('code')
                     ->required()
                     ->maxLength(255),
-                Forms\Components\Toggle::make('status')
+
+                Toggle::make('status')
                     ->label('Active')
                     ->default(true),
             ]);
@@ -56,12 +63,12 @@ class CashRegisterResource extends Resource
                 //
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                EditAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
+                // BulkActionGroup::make([
+                //     DeleteBulkAction::make(),
+                // ]),
             ]);
     }
 

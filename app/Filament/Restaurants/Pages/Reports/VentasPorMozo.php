@@ -2,6 +2,8 @@
 
 namespace App\Filament\Restaurants\Pages\Reports;
 
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Pages\Page;
 use App\Models\Sale;
 use App\Models\User;
@@ -10,10 +12,8 @@ use Filament\Facades\Filament;
 use Illuminate\Support\Facades\DB;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Grid;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
-use Filament\Forms\Get;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 
@@ -21,11 +21,11 @@ class VentasPorMozo extends Page implements HasForms
 {
     use InteractsWithForms;
 
-    protected static ?string $navigationIcon = 'heroicon-o-users';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-users';
     protected static ?string $navigationLabel = 'Ventas por Mozo';
     protected static ?string $title = 'Rendimiento de Mozos';
-    protected static ?string $navigationGroup = 'Reportes';
-    protected static string $view = 'filament.reports.operativo.ventas-por-mozo';
+    protected static string | \UnitEnum | null $navigationGroup = 'Reportes';
+    protected string $view = 'filament.reports.operativo.ventas-por-mozo';
 
     public $filter_type = 'mensual';
     public $fecha_desde;
@@ -145,7 +145,7 @@ class VentasPorMozo extends Page implements HasForms
         $ventas = Sale::query()
             ->withoutGlobalScopes()
             ->where('user_id', $waiterId)
-            ->where('restaurant_id', \Filament\Facades\Filament::getTenant()->id)
+            ->where('restaurant_id', Filament::getTenant()->id)
             ->where('status', 'completado')
             ->whereBetween('fecha_emision', [$desde, $hasta])
             ->latest('fecha_emision')

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Restaurants\Resources\PrinterResource\Pages;
 
+use Filament\Actions\CreateAction;
 use App\Filament\Restaurants\Resources\PrinterResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
@@ -13,7 +14,7 @@ class ListPrinters extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            CreateAction::make(),
         ];
     }
 }

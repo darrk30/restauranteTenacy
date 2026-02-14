@@ -1,6 +1,7 @@
 <?php
 namespace App\Filament\Restaurants\Widgets;
 
+use App\Models\PaymentMethod;
 use App\Filament\Restaurants\Pages\Reports\VentasReport;
 use Filament\Widgets\Concerns\InteractsWithPageTable;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
@@ -43,7 +44,7 @@ class VentasStatsWidget extends BaseWidget
 
         // 4. Nombre dinámico para el Stat
         $nombreMetodo = $metodoId 
-            ? \App\Models\PaymentMethod::find($metodoId)?->name 
+            ? PaymentMethod::find($metodoId)?->name 
             : 'Total General';
 
         return [

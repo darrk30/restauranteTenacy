@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Exception;
 use App\Filament\Clusters\Products\Traits\SyncProductAttributesTrait;
 use App\Models\Product;
 use Illuminate\Support\Str;
@@ -42,7 +43,7 @@ class ProductService
             $slug = Str::slug($data['name']. '-' . filament()->getTenant()->id);
 
             if (Product::where('slug', $slug)->exists()) {
-                throw new \Exception("El slug ya existe: {$slug}");
+                throw new Exception("El slug ya existe: {$slug}");
             }
 
             $data['slug'] = $slug;

@@ -2,6 +2,8 @@
 
 namespace App\Filament\Restaurants\Resources\ConceptoCajasResource\Pages;
 
+use Filament\Actions\Contracts\HasActions;
+use Filament\Actions\Concerns\InteractsWithActions;
 use App\Filament\Restaurants\Resources\ConceptoCajasResource;
 use App\Models\SessionCashRegister;
 use Filament\Actions;
@@ -9,8 +11,9 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Support\Facades\Auth;
 
-class ListConceptoCajas extends ListRecords
+class ListConceptoCajas extends ListRecords implements HasActions
 {
+    use InteractsWithActions;
     protected static string $resource = ConceptoCajasResource::class;
 
     protected function getHeaderActions(): array

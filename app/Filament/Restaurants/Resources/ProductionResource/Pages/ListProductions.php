@@ -2,6 +2,7 @@
 
 namespace App\Filament\Restaurants\Resources\ProductionResource\Pages;
 
+use Filament\Actions\CreateAction;
 use App\Filament\Restaurants\Resources\ProductionResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
@@ -13,7 +14,7 @@ class ListProductions extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            CreateAction::make(),
         ];
     }
 }

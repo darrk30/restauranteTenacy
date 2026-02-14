@@ -2,9 +2,16 @@
 
 namespace App\Filament\Clusters\Products\Resources;
 
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Columns\ImageColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\ToggleButtons;
+use App\Models\Warehouse;
+use App\Models\WarehouseStock;
 use App\Filament\Clusters\Products\Resources\ProductResource;
 use App\Models\Product;
-use App\Services\BarcodeLookupService;
 use Filament\Resources\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -13,13 +20,13 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Forms\Components\Actions\Action;
 
-class ProductVariants extends Page implements Tables\Contracts\HasTable
+class ProductVariants extends Page implements HasTable
 {
-    use Tables\Concerns\InteractsWithTable;
+    use InteractsWithTable;
 
     protected static string $resource = ProductResource::class;
 
-    protected static string $view = 'filament.products.pages.product-variants';
+    protected string $view = 'filament.products.pages.product-variants';
 
     public Product $record;
 
@@ -58,17 +65,17 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                     ->whereIn('status', ['activo', 'inactivo'])
             )
             ->columns([
-                Tables\Columns\ImageColumn::make('image_path')
+                ImageColumn::make('image_path')
                     ->label('Imagen')
                     ->circular()
                     ->disk('public')
                     ->visibility('public')
                     ->default(asset('img/productdefault.jpg')),
 
-                Tables\Columns\TextColumn::make('product.name')
+                TextColumn::make('product.name')
                     ->label('Producto'),
 
-                Tables\Columns\TextColumn::make('values')
+                TextColumn::make('values')
                     ->label('Variante de producto')
                     ->getStateUsing(
                         fn($record) =>
@@ -82,14 +89,14 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                     ->colors(['primary']),
 
 
-                Tables\Columns\TextColumn::make('precio_extra')
+                TextColumn::make('precio_extra')
                     ->label('Precio extra')
                     ->getStateUsing(function ($record) {
                         $extraPrice = $record->extra_price ?? 0;
                         return 'S/ ' . number_format($extraPrice, 2);
                     }),
 
-                Tables\Columns\TextColumn::make('status')
+                TextColumn::make('status')
                     ->label('Estado')
                     ->badge()
                     ->colors([
@@ -97,8 +104,8 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                         'danger' => 'inactivo',
                     ]),
             ])
-            ->actions([
-                Tables\Actions\Action::make('edit')
+            ->recordActions([
+                \Filament\Actions\Action::make('edit')
                     ->label('Editar')
                     ->icon('heroicon-o-pencil-square')
                     ->button()
@@ -113,8 +120,8 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                         'status' => $record->status,
                         'unit' => $record->unit,
                     ])
-                    ->form([
-                        Forms\Components\FileUpload::make('image_path')
+                    ->schema([
+                        FileUpload::make('image_path')
                             ->label('Imagen')
                             ->image()
                             ->imageEditor()
@@ -122,20 +129,20 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                             ->disk('public')
                             ->preserveFilenames()
                             ->previewable(true),
-                        Forms\Components\TextInput::make('codigo_barras')
+                        TextInput::make('codigo_barras')
                             ->label('Codigo de barras')
                             ->maxLength(100),
 
-                        Forms\Components\TextInput::make('internal_code')
+                        TextInput::make('internal_code')
                             ->label('Código interno')
                             ->maxLength(100),
 
-                        Forms\Components\TextInput::make('extra_price')
+                        TextInput::make('extra_price')
                             ->label('Precio adicional')
                             ->numeric()
                             ->prefix('S/'),
 
-                        Forms\Components\TextInput::make('stock_inicial')
+                        TextInput::make('stock_inicial')
                             ->label(
                                 fn($record) =>
                                 $record?->product?->unit?->name
@@ -163,7 +170,7 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                             )
                             ->helperText("El stock inicial solo se podrá ingresar una única vez."),
 
-                        Forms\Components\ToggleButtons::make('status')
+                        ToggleButtons::make('status')
                             ->label('Estado')
                             ->options([
                                 'activo' => 'Activo',
@@ -184,12 +191,12 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                             $cantidad = (int) $data['stock_inicial'];
 
                             if ($cantidad > 0) {
-                                $warehouse = \App\Models\Warehouse::where('restaurant_id', filament()->getTenant()->id)
+                                $warehouse = Warehouse::where('restaurant_id', filament()->getTenant()->id)
                                     ->orderBy('order')
                                     ->first();
 
                                 if ($warehouse) {
-                                    $stock = \App\Models\WarehouseStock::firstOrCreate(
+                                    $stock = WarehouseStock::firstOrCreate(
                                         [
                                             'warehouse_id' => $warehouse->id,
                                             'variant_id' => $record->id,

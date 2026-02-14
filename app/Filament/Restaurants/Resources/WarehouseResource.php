@@ -2,10 +2,17 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Forms\Components\TextInput;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use App\Filament\Restaurants\Resources\WarehouseResource\Pages\ListWarehouses;
 use App\Filament\Restaurants\Resources\WarehouseResource\Pages;
 use App\Models\Warehouse;
+use BackedEnum;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -14,9 +21,10 @@ class WarehouseResource extends Resource
 {
     protected static ?string $model = Warehouse::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-archive-box';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
 
-    protected static ?string $navigationGroup = 'Configuración';
+
+    // protected static ?string $navigationGroup = 'Configuración';
 
     protected static ?int $navigationSort = 5;
 
@@ -26,21 +34,21 @@ class WarehouseResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Almacenes';
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\TextInput::make('name')
+        return $schema
+            ->components([
+                TextInput::make('name')
                     ->label('Nombre')
                     ->required()
                     ->maxLength(255),
 
-                Forms\Components\TextInput::make('code')
+                TextInput::make('code')
                     ->label('Código')
                     ->required()
                     ->maxLength(50),
 
-                Forms\Components\TextInput::make('direccion')
+                TextInput::make('direccion')
                     ->label('Dirección')
                     ->required()
                     ->maxLength(200),
@@ -54,26 +62,26 @@ class WarehouseResource extends Resource
             ->reorderable('order')     // permitir arrastrar filas y guardar el orden
             ->defaultSort('id', 'asc')     // ordenar por defecto por order ASC
             ->columns([
-                Tables\Columns\TextColumn::make('name')
+                TextColumn::make('name')
                     ->label('Nombre')
                     ->searchable()
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('code')
+                TextColumn::make('code')
                     ->label('Código')
                     ->searchable()
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('direccion')
+                TextColumn::make('direccion')
                     ->label('Dirección')
                     ->limit(30),
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -89,7 +97,7 @@ class WarehouseResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListWarehouses::route('/'),
+            'index' => ListWarehouses::route('/'),
             // 'create' => Pages\CreateWarehouse::route('/create'),
             // 'edit' => Pages\EditWarehouse::route('/{record}/edit'),
         ];

@@ -2,6 +2,10 @@
 
 namespace App\Filament\Restaurants\Pages;
 
+use Filament\Schemas\Schema;
+use Exception;
+use App\Models\SaleDetail;
+use Illuminate\Database\Eloquent\Collection;
 use App\Models\Order;
 use App\Models\Client;
 use App\Models\Payment;
@@ -9,7 +13,6 @@ use App\Models\DocumentSerie;
 use App\Models\PaymentMethod;
 use Filament\Pages\Page;
 use Filament\Actions\Action;
-use Filament\Forms\Form;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
@@ -34,13 +37,13 @@ class PagarOrden extends Page implements HasForms, HasActions
     use InteractsWithForms;
     use ManjoStockProductos;
 
-    protected static ?string $navigationIcon = 'heroicon-o-banknotes';
-    protected static string $view = 'filament.pdv.pagar-orden';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-banknotes';
+    protected string $view = 'filament.pdv.pagar-orden';
     protected static bool $shouldRegisterNavigation = false;
     protected static ?string $slug = 'pedidos/{record}/pagar';
 
     public Order $order;
-    /** @var \Illuminate\Database\Eloquent\Collection */
+    /** @var Collection */
     public $items = [];
 
     // UI & Pagos
@@ -225,7 +228,7 @@ class PagarOrden extends Page implements HasForms, HasActions
             ->label('Nuevo Cliente')
             ->modalWidth('2xl')
             ->model(Client::class)
-            ->form(fn(Form $form) => ClientResource::form($form))
+            ->schema(fn(Schema $schema) => ClientResource::form($schema))
             ->action(function (array $data) {
                 $cliente = Client::create($data);
                 $this->seleccionarCliente($cliente->id);
@@ -299,10 +302,10 @@ class PagarOrden extends Page implements HasForms, HasActions
         try {
             // Bloqueos pesimistas para concurrencia
             $order = Order::where('id', $this->order->id)->lockForUpdate()->first();
-            if ($order->status === 'pagado') throw new \Exception("Orden ya procesada.");
+            if ($order->status === 'pagado') throw new Exception("Orden ya procesada.");
 
             $serieConfig = DocumentSerie::where('id', $this->serie_id)->lockForUpdate()->first();
-            if (!$serieConfig) throw new \Exception("Serie no válida.");
+            if (!$serieConfig) throw new Exception("Serie no válida.");
 
             $correlativo = $this->obtenerCorrelativoFinal($this->serie_id);
             $nombreFinalCliente = $this->cliente_seleccionado 
@@ -345,7 +348,7 @@ class PagarOrden extends Page implements HasForms, HasActions
                 );
 
                 if ($item->product->control_stock && !$almacenSeleccionado) {
-                    throw new \Exception("Sin stock disponible para: " . $item->product->name);
+                    throw new Exception("Sin stock disponible para: " . $item->product->name);
                 }
 
                 // Preparar array para Batch Insert
@@ -362,7 +365,7 @@ class PagarOrden extends Page implements HasForms, HasActions
                 // Preparar para actualización de stock (Trait)
                 if ($item->product->control_stock) {
                     // Creamos un objeto temporal para que el Trait pueda leer sus relaciones
-                    $tempDetail = new \App\Models\SaleDetail($detallesParaInsertar[count($detallesParaInsertar) - 1]);
+                    $tempDetail = new SaleDetail($detallesParaInsertar[count($detallesParaInsertar) - 1]);
                     $tempDetail->setRelation('warehouse', $almacenSeleccionado);
                     $tempDetail->setRelation('product', $item->product);
                     $tempDetail->setRelation('variant', $item->variant);
@@ -374,7 +377,7 @@ class PagarOrden extends Page implements HasForms, HasActions
             // 4. INSERCIONES MASIVAS (BATCH)
             DB::table('sale_details')->insert($detallesParaInsertar);
 
-            $detallesReales = \App\Models\SaleDetail::where('sale_id', $sale->id)
+            $detallesReales = SaleDetail::where('sale_id', $sale->id)
                 ->orderBy('id', 'asc') // El orden del insert masivo se respeta en los IDs
                 ->get();
 
@@ -432,7 +435,7 @@ class PagarOrden extends Page implements HasForms, HasActions
             $this->ventaExitosaId = $sale->id;
             $this->mostrarPantallaExito = true;
             // return redirect()->to("/app/point-of-sale");
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             DB::rollBack();
             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
         }

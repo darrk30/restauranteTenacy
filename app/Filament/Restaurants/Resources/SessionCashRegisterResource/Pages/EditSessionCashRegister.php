@@ -2,6 +2,7 @@
 
 namespace App\Filament\Restaurants\Resources\SessionCashRegisterResource\Pages;
 
+use Filament\Actions\DeleteAction;
 use App\Filament\Restaurants\Resources\SessionCashRegisterResource;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
@@ -13,7 +14,7 @@ class EditSessionCashRegister extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            DeleteAction::make(),
         ];
     }
 

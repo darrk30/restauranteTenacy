@@ -2,6 +2,19 @@
 
 namespace App\Filament\Clusters\Products\Resources;
 
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Section;
+use Filament\Actions\Action;
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Utilities\Set;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
 use App\Enums\StatusProducto;
 use App\Filament\Clusters\Products\Resources\ProductResource\Pages\CreateProduct;
 use App\Filament\Clusters\Products\Resources\ProductResource\Pages\EditProduct;
@@ -15,34 +28,27 @@ use App\Models\Category;
 use App\Models\Production;
 use App\Models\Unit;
 use App\Models\Value;
+use BackedEnum;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\ColorPicker;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Forms\Components\Repeater;
-use Filament\Forms\Components\Tabs;
-use Filament\Forms\Components\Tabs\Tab;
-use Filament\Forms\Get;
-use Filament\Forms\Set;
 
 class ProductResource extends Resource
 {
     protected static ?string $model = Product::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-cube';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
 
     protected static ?string $cluster = ProductsCluster::class;
 
@@ -61,9 +67,9 @@ class ProductResource extends Resource
                 ->tabs([
                     Tab::make('Información')
                         ->schema([
-                            Forms\Components\Grid::make(2)
+                            Grid::make(2)
                                 ->schema([
-                                    Forms\Components\Grid::make(3)
+                                    Grid::make(3)
                                         ->schema([
                                             FileUpload::make('image_path')
                                                 ->label('Imagen del producto')
@@ -292,9 +298,9 @@ class ProductResource extends Resource
     }
 
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form->schema(static::getSchema());
+        return $schema->components(static::getSchema());
     }
 
 
@@ -385,7 +391,7 @@ class ProductResource extends Resource
                                 ];
                             })
                             // EL FORMULARIO DENTRO DEL MODAL
-                            ->form([
+                            ->schema([
                                 Repeater::make('precios_repeater')
                                     ->hiddenLabel()
                                     ->addable(false) // No pueden agregar filas, solo editar las existentes
@@ -430,70 +436,70 @@ class ProductResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->columns([
-            Tables\Columns\TextColumn::make('name')
+            TextColumn::make('name')
                 ->label('Nombre')
                 ->searchable()
                 ->sortable(),
 
-            Tables\Columns\TextColumn::make('brand.name')
+            TextColumn::make('brand.name')
                 ->label('Marca')
                 ->sortable()
                 ->searchable()
                 ->toggleable(isToggledHiddenByDefault: true),
 
-            Tables\Columns\TextColumn::make('categories.name')
+            TextColumn::make('categories.name')
                 ->label('Categorías')
                 ->badge()
                 ->separator(', ')
                 ->searchable()
                 ->toggleable(isToggledHiddenByDefault: true),
 
-            Tables\Columns\TextColumn::make('production.name')
+            TextColumn::make('production.name')
                 ->label('Área de producción')
                 ->searchable()
                 ->toggleable(isToggledHiddenByDefault: true),
 
-            Tables\Columns\TextColumn::make('type')
+            TextColumn::make('type')
                 ->label('Tipo')
                 ->sortable(),
 
-            Tables\Columns\TextColumn::make('price')
+            TextColumn::make('price')
                 ->label('Precio')
                 ->money('PEN', true)
                 ->sortable(),
 
-            Tables\Columns\IconColumn::make('cortesia')
+            IconColumn::make('cortesia')
                 ->label('Cortesía')
                 ->boolean()
                 ->toggleable(isToggledHiddenByDefault: true),
 
-            Tables\Columns\IconColumn::make('visible')
+            IconColumn::make('visible')
                 ->label('Visible')
                 ->boolean()
                 ->toggleable(isToggledHiddenByDefault: true),
 
-            Tables\Columns\TextColumn::make('order')
+            TextColumn::make('order')
                 ->label('Orden')
                 ->sortable()
                 ->toggleable(isToggledHiddenByDefault: true),
 
-            Tables\Columns\TextColumn::make('status')
+            TextColumn::make('status')
                 ->label('Estado')
                 ->sortable(),
 
-            Tables\Columns\TextColumn::make('created_at')
+            TextColumn::make('created_at')
                 ->label('Creado')
                 ->dateTime('d/m/Y H:i')
                 ->sortable()
                 ->toggleable(isToggledHiddenByDefault: true),
 
         ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

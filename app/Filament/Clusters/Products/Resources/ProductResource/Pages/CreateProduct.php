@@ -2,6 +2,7 @@
 
 namespace App\Filament\Clusters\Products\Resources\ProductResource\Pages;
 
+use Exception;
 use App\Filament\Clusters\Products\Resources\ProductResource;
 use App\Services\ProductService;
 use Filament\Resources\Pages\CreateRecord;
@@ -24,7 +25,7 @@ class CreateProduct extends CreateRecord
     {
         try {
             return (new ProductService())->validateAndGenerateSlug($data);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Notification::make()
                 ->title('El slug ya existe')
                 ->body($e->getMessage())

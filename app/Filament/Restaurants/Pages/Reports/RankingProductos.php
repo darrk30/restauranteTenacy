@@ -2,6 +2,10 @@
 
 namespace App\Filament\Restaurants\Pages\Reports;
 
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Schema;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Pages\Page;
 use App\Models\SaleDetail;
 use App\Models\Category;
@@ -10,23 +14,20 @@ use Filament\Facades\Filament;
 use Illuminate\Support\Facades\DB;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Grid;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
-use Filament\Forms\Get;
 use Filament\Actions\Action;
-use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 
 class RankingProductos extends Page implements HasForms
 {
     use InteractsWithForms;
 
-    protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-chart-bar';
     protected static ?string $navigationLabel = 'Ranking de Productos';
     protected static ?string $title = 'Ranking de Productos';
-    protected static ?string $navigationGroup = 'Reportes';
-    protected static string $view = 'filament.reports.ventas.ranking-productos';
+    protected static string | \UnitEnum | null $navigationGroup = 'Reportes';
+    protected string $view = 'filament.reports.ventas.ranking-productos';
 
     // Propiedades públicas NECESARIAS para la sincronización de Livewire
     public $filter_type = 'mensual';
@@ -162,7 +163,7 @@ class RankingProductos extends Page implements HasForms
                 ->color('danger')
                 ->icon('heroicon-o-document-arrow-down')
                 // Agregamos el parámetro tipado $form
-                ->form(function (Form $form): array {
+                ->schema(function (Schema $schema): array {
                     // Usamos la propiedad pública directamente para evitar conflictos de estado
                     $catId = $this->category_id;
 
@@ -196,7 +197,7 @@ class RankingProductos extends Page implements HasForms
                         }
                     }
 
-                    $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.ranking-productos', [
+                    $pdf = Pdf::loadView('pdf.ranking-productos', [
                         'rankings' => $rankings,
                         'restaurant' => Filament::getTenant(),
                         'desde' => $filtros['fecha_desde'] ?? $this->fecha_desde,

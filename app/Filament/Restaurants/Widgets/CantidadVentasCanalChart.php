@@ -14,9 +14,10 @@ class CantidadVentasCanalChart extends ChartWidget
 {
     use InteractsWithPageFilters;
 
-    protected static ?string $heading = 'Tendencia de Pedidos por Canal';
+    protected ?string $heading = 'Tendencia de Pedidos por Canal';
+
     protected static ?int $sort = 2;
-    protected static string $color = 'info';
+    // protected static string $color = 'info';
 
     protected function getData(): array
     {

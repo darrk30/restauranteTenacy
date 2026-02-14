@@ -2,9 +2,19 @@
 
 namespace App\Filament\Restaurants\Resources\UnitCategoryResource\RelationManagers;
 
+use Filament\Schemas\Schema;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Toggle;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Actions\CreateAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
 use App\Models\Unit;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -13,27 +23,27 @@ class UnitRelationManager extends RelationManager
 {
     protected static string $relationship = 'units'; // ← asegúrate que coincide con la relación real
 
-    public function form(Form $form): Form
+    public function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\TextInput::make('name')
+        return $schema
+            ->components([
+                TextInput::make('name')
                     ->label('Nombre')
                     ->required()
                     ->maxLength(255),
 
-                Forms\Components\TextInput::make('code')
+                TextInput::make('code')
                     ->label('Código')
                     ->maxLength(50)
                     ->required(),
 
-                Forms\Components\TextInput::make('quantity')
+                TextInput::make('quantity')
                     ->label('Cantidad')
                     ->numeric()
                     ->required(),
 
                 // ⚖️ Unidad base (solo unidades de la misma categoría que son base o sin referencia)
-                Forms\Components\Select::make('reference_unit_id')
+                Select::make('reference_unit_id')
                     ->label('Unidad base')
                     ->relationship('unidadBase', 'name')
                     ->searchable()
@@ -53,7 +63,7 @@ class UnitRelationManager extends RelationManager
                     ->helperText('Selecciona una unidad base compatible con esta categoría.')
                     ->reactive(),
 
-                Forms\Components\Toggle::make('is_base')
+                Toggle::make('is_base')
                     ->label('¿Es unidad base?')
                     ->default(false),
             ]);
@@ -64,24 +74,24 @@ class UnitRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('name')
             ->columns([
-                Tables\Columns\TextColumn::make('name')->label('Nombre'),
-                Tables\Columns\TextColumn::make('code')->label('Código'),
-                Tables\Columns\TextColumn::make('quantity')->label('Cantidad'),
-                Tables\Columns\TextColumn::make('unidadBase.name')->label('Unidad base'),
-                Tables\Columns\IconColumn::make('is_base')
+                TextColumn::make('name')->label('Nombre'),
+                TextColumn::make('code')->label('Código'),
+                TextColumn::make('quantity')->label('Cantidad'),
+                TextColumn::make('unidadBase.name')->label('Unidad base'),
+                IconColumn::make('is_base')
                     ->boolean()
                     ->label('Es base'),
             ])
             ->headerActions([
-                Tables\Actions\CreateAction::make(),
+                CreateAction::make(),
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+            ->recordActions([
+                EditAction::make(),
+                DeleteAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

@@ -1,13 +1,13 @@
 {{-- INICIO DISEÑO TICKET CARD --}}
 @php
-    use App\Enums\statusPedido;
+    use App\Enums\StatusPedido;
 
     $stLogistico = $order->status_llevar_delivery ?? 'preparando';
 
     // 1. OBTENCIÓN SEGURA DEL ESTADO DE PAGO
     // Si hiciste el paso 1, $order->status es el Enum. Si no, es un string.
     $statusEnum = $order->status;
-    $stPagoValue = $statusEnum instanceof statusPedido ? $statusEnum->value : $statusEnum;
+    $stPagoValue = $statusEnum instanceof StatusPedido ? $statusEnum->value : $statusEnum;
 
     // Variables por defecto
     $colorBarra = '#eab308'; // Amarillo
@@ -42,7 +42,7 @@
 
         // 3. LÓGICA DE PAGO
         // Usamos statusPedido::Pagado->value para comparar seguramente
-        if ($stPagoValue !== statusPedido::Pagado->value) {
+        if ($stPagoValue !== StatusPedido::Pagado->value) {
             $textoBtn = 'Cobrar 💵';
             $claseBtn = 'btn-primary';
             $accionBoton = $redireccionPago;
@@ -54,8 +54,8 @@
 
     // 4. COLOR DEL BADGE DE PAGO
     $claseBadgePago = match ($stPagoValue) {
-        statusPedido::Pagado->value => 'badge-green',
-        statusPedido::Cancelado->value => 'badge-red',
+        StatusPedido::Pagado->value => 'badge-green',
+        StatusPedido::Cancelado->value => 'badge-red',
         default => 'badge-gray',
     };
 @endphp
@@ -107,7 +107,7 @@
         <div class="flex flex-wrap gap-2 mt-auto">
             {{-- Badge Pago: Usa el Label del Enum (ej: "Pagado", "Pendiente") --}}
             <span class="badge-pill {{ $claseBadgePago }}">
-                {{ $statusEnum instanceof statusPedido ? $statusEnum->getLabel() : ucfirst($stPagoValue) }}
+                {{ $statusEnum instanceof StatusPedido ? $statusEnum->getLabel() : ucfirst($stPagoValue) }}
             </span>
 
             {{-- Badge Logístico --}}
@@ -126,7 +126,7 @@
         </button>
 
         {{-- Botón Estado (Se mantiene con Livewire porque ejecuta lógica) --}}
-        @if ($stLogistico === 'entregado' && $stPagoValue !== statusPedido::Pagado->value)
+        @if ($stLogistico === 'entregado' && $stPagoValue !== StatusPedido::Pagado->value)
             <button onclick="{{ $accionBoton }}" class="btn-action {{ $claseBtn }}">
                 {{ $textoBtn }}
             </button>

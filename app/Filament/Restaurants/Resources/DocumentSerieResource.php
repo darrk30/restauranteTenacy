@@ -2,15 +2,21 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Actions\BulkActionGroup;
+use App\Filament\Restaurants\Resources\DocumentSerieResource\Pages\ListDocumentSeries;
+use App\Filament\Restaurants\Resources\DocumentSerieResource\Pages\CreateDocumentSerie;
+use App\Filament\Restaurants\Resources\DocumentSerieResource\Pages\EditDocumentSerie;
 use App\Enums\DocumentSeriesType; // Importamos tu Enum
 use App\Filament\Restaurants\Resources\DocumentSerieResource\Pages;
 use App\Models\DocumentSerie;
+use BackedEnum;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
@@ -21,15 +27,16 @@ class DocumentSerieResource extends Resource
 {
     protected static ?string $model = DocumentSerie::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-hashtag';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
+
     protected static ?string $navigationLabel = 'Series de Documentos';
     protected static ?string $modelLabel = 'Serie';
-    protected static ?string $navigationGroup = 'Configuración';
+    // protected static ?string $navigationGroup = 'Configuración';
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->components([
                 Section::make('Configuración de Comprobantes')
                     ->description('Administra las series y correlativos para la facturación.')
                     ->schema([
@@ -96,16 +103,16 @@ class DocumentSerieResource extends Resource
                     ->sortable(),
             ])
             ->filters([
-                Tables\Filters\SelectFilter::make('type_documento')
+                SelectFilter::make('type_documento')
                     ->label('Tipo de Documento')
                     ->options(DocumentSeriesType::class), // 🔥 Filtro automático con Enum
             ])
-            ->actions([
+            ->recordActions([
                 // Tables\Actions\EditAction::make(),
                 // Tables\Actions\DeleteAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
+            ->toolbarActions([
+                BulkActionGroup::make([
                     // Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
@@ -114,9 +121,9 @@ class DocumentSerieResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListDocumentSeries::route('/'),
-            'create' => Pages\CreateDocumentSerie::route('/create'),
-            'edit' => Pages\EditDocumentSerie::route('/{record}/edit'),
+            'index' => ListDocumentSeries::route('/'),
+            'create' => CreateDocumentSerie::route('/create'),
+            'edit' => EditDocumentSerie::route('/{record}/edit'),
         ];
     }
 }

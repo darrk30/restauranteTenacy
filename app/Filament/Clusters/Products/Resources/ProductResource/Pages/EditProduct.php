@@ -2,6 +2,7 @@
 
 namespace App\Filament\Clusters\Products\Resources\ProductResource\Pages;
 
+use Filament\Actions\Action;
 use App\Filament\Clusters\Products\Resources\ProductResource;
 use App\Filament\Clusters\Products\Traits\SyncProductAttributesTrait;
 use App\Models\Variant;
@@ -76,7 +77,7 @@ class EditProduct extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            \Filament\Actions\Action::make('ver_variantes')
+            Action::make('ver_variantes')
                 ->label(fn() => "Variantes (" . $this->record->variants()->where('status', 'activo')->count() . ")")
                 ->color('info')
                 ->icon('heroicon-o-squares-2x2')
@@ -84,7 +85,7 @@ class EditProduct extends EditRecord
                 ->url(fn() => static::getResource()::getUrl('variants', ['record' => $this->record])),
 
 
-            \Filament\Actions\DeleteAction::make(),
+            DeleteAction::make(),
         ];
     }
 }

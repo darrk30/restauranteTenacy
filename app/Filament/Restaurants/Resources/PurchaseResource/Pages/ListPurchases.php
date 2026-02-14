@@ -2,6 +2,7 @@
 
 namespace App\Filament\Restaurants\Resources\PurchaseResource\Pages;
 
+use Filament\Actions\CreateAction;
 use App\Filament\Restaurants\Resources\PurchaseResource;
 use App\Filament\Restaurants\Resources\PurchaseResource\Widgets\PurchaseStats;
 use App\Models\PaymentMethodPurchase;
@@ -15,11 +16,11 @@ class ListPurchases extends ListRecords
     protected static string $resource = PurchaseResource::class;
 
     use ExposesTableToWidgets;
-    
+
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            CreateAction::make(),
         ];
     }
 

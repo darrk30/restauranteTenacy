@@ -2,6 +2,8 @@
 
 namespace App\Providers\Filament;
 
+use Filament\Widgets\AccountWidget;
+use Filament\Widgets\FilamentInfoWidget;
 use App\Filament\Restaurants\Pages\Dashboard;
 use App\Models\Restaurant;
 use Filament\FontProviders\GoogleFontProvider;
@@ -143,8 +145,8 @@ class RestaurantsPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Restaurants/Widgets'), for: 'App\\Filament\\Restaurants\\Widgets')
             ->widgets([
-                Widgets\AccountWidget::class,
-                Widgets\FilamentInfoWidget::class,
+                AccountWidget::class,
+                FilamentInfoWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,
@@ -172,7 +174,7 @@ class RestaurantsPanelProvider extends PanelProvider
             ->databaseTransactions()//para realizar transacciones en las páginas de recursos
             ->discoverClusters(in: app_path('Filament/Clusters'), for: 'App\\Filament\\Clusters')
             ->tenant(Restaurant::class, slugAttribute: 'slug')
-            ->tenantDomain('{tenant:slug}.restaurantetenacy.test')
-            ->plugin(FilamentProgressbarPlugin::make()->color('#29b'));
+            ->tenantDomain('{tenant:slug}.restaurantetenacy.test');
+            // ->plugin(FilamentProgressbarPlugin::make()->color('#29b'));
     }
 }

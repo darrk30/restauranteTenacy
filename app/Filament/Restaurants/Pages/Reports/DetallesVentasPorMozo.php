@@ -2,6 +2,7 @@
 
 namespace App\Filament\Restaurants\Pages\Reports;
 
+use Illuminate\Contracts\Support\Htmlable;
 use App\Models\Sale;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -10,7 +11,7 @@ use Illuminate\Support\Facades\Request;
 
 class DetallesVentasPorMozo extends Page
 {
-    protected static string $view = 'filament.reports.operativo.detalles-ventas-por-mozo';
+    protected string $view = 'filament.reports.operativo.detalles-ventas-por-mozo';
     protected static ?string $title = 'Detalle de Ventas del Mozo';
     protected static bool $shouldRegisterNavigation = false;
     protected static ?string $slug = 'detalles-empleado-ventas';
@@ -23,12 +24,12 @@ class DetallesVentasPorMozo extends Page
     public function getBreadcrumbs(): array
     {
         return [
-            \App\Filament\Restaurants\Pages\Reports\VentasPorMozo::getUrl() => 'Ranking de Ventas',
+            VentasPorMozo::getUrl() => 'Ranking de Ventas',
             null => 'Detalle de ' . ($this->mozo->name ?? 'Mozo'),
         ];
     }
 
-    public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable
+    public function getHeading(): string|Htmlable
     {
         return "Detalle de Ventas: " . ($this->mozo->name ?? 'Cargando...');
     }
@@ -45,7 +46,7 @@ class DetallesVentasPorMozo extends Page
         $this->mozo = $currentRestaurant->users()->where('users.id', $mozoId)->first();
 
         if (!$this->mozo) {
-            return redirect(\App\Filament\Restaurants\Pages\Reports\VentasPorMozo::getUrl());
+            return redirect(VentasPorMozo::getUrl());
         }
 
         // Consulta con relación de cliente

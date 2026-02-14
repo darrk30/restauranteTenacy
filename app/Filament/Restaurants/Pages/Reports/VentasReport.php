@@ -2,11 +2,15 @@
 
 namespace App\Filament\Restaurants\Pages\Reports;
 
+use Filament\Actions\Action;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Schemas\Schema;
 use App\Exports\VentasExport;
 use App\Models\Sale;
 use App\Models\PaymentMethod;
 use App\Filament\Restaurants\Widgets\VentasStatsWidget;
-use Filament\Tables\Actions\Action;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Pages\Page;
 use Filament\Tables;
@@ -16,7 +20,6 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Components\DatePicker;
-use Filament\Infolists\Infolist;
 use Filament\Infolists\Components\ViewEntry;
 use Filament\Pages\Concerns\ExposesTableToWidgets;
 use Illuminate\Database\Eloquent\Builder;
@@ -28,10 +31,10 @@ class VentasReport extends Page implements HasTable, HasForms
     use InteractsWithForms;
     use ExposesTableToWidgets;
 
-    protected static ?string $navigationIcon = 'heroicon-o-presentation-chart-line';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-presentation-chart-line';
     protected static ?string $navigationLabel = 'Reporte de Ventas';
     protected static ?string $title = 'Análisis de Ventas';
-    protected static string $view = 'filament.reports.ventas.ventas-report';
+    protected string $view = 'filament.reports.ventas.ventas-report';
     public ?string $activeTab = null;
 
     protected function getTableQuery(): Builder
@@ -55,7 +58,7 @@ class VentasReport extends Page implements HasTable, HasForms
                     ->label('Exportar Reporte')
                     ->icon('heroicon-o-document-arrow-down')
                     ->color('success')
-                    ->form([
+                    ->schema([
                         CheckboxList::make('columnas_reporte')
                             ->label('Selecciona las columnas para el Excel')
                             ->options([
@@ -87,7 +90,7 @@ class VentasReport extends Page implements HasTable, HasForms
                         if (!empty($filtrosRaw['fecha_emision']['desde'])) $filtrosAplicados['Desde'] = $filtrosRaw['fecha_emision']['desde'];
                         if (!empty($filtrosRaw['fecha_emision']['hasta'])) $filtrosAplicados['Hasta'] = $filtrosRaw['fecha_emision']['hasta'];
                         if (!empty($filtrosRaw['payment_method_id']['value'])) {
-                            $filtrosAplicados['Método'] = \App\Models\PaymentMethod::find($filtrosRaw['payment_method_id']['value'])?->name;
+                            $filtrosAplicados['Método'] = PaymentMethod::find($filtrosRaw['payment_method_id']['value'])?->name;
                         }
                         if (!empty($filtrosRaw['status']['value'])) $filtrosAplicados['Estado'] = ucfirst($filtrosRaw['status']['value']);
 
@@ -120,7 +123,7 @@ class VentasReport extends Page implements HasTable, HasForms
                     })
             ])
             ->columns([
-                Tables\Columns\TextColumn::make('fecha_emision')
+                TextColumn::make('fecha_emision')
                     ->label('Fecha/Hora')
                     // Mostramos la fecha como valor principal
                     ->dateTime('d/m/Y')
@@ -131,25 +134,25 @@ class VentasReport extends Page implements HasTable, HasForms
                         return '🕒 ' . $record->fecha_emision->format('H:i A');
                     })
                     ->sortable(),
-                Tables\Columns\TextColumn::make('comprobante')
+                TextColumn::make('comprobante')
                     ->label('Comprobante')
                     ->state(fn($record) => "{$record->serie}-{$record->correlativo}")
                     ->searchable(['serie', 'correlativo']),
 
-                Tables\Columns\TextColumn::make('nombre_cliente')
+                TextColumn::make('nombre_cliente')
                     ->label('Cliente')
                     ->description(fn($record) => "{$record->tipo_documento}: {$record->numero_documento}")
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('user.name')
+                TextColumn::make('user.name')
                     ->label('Mozo')
                     ->toggleable(isToggledHiddenByDefault: true),
 
-                Tables\Columns\TextColumn::make('order.code')
+                TextColumn::make('order.code')
                     ->label('Pedido')
                     ->toggleable(isToggledHiddenByDefault: true),
 
-                Tables\Columns\TextColumn::make('monto_especifico_filtro')
+                TextColumn::make('monto_especifico_filtro')
                     ->label(function () {
                         $metodoId = $this->tableFilters['payment_method_id']['value'] ?? null;
                         $nombre = $metodoId ? PaymentMethod::find($metodoId)?->name : 'Método';
@@ -167,13 +170,13 @@ class VentasReport extends Page implements HasTable, HasForms
                     })
                     ->visible(fn() => !empty($this->tableFilters['payment_method_id']['value'])),
 
-                Tables\Columns\TextColumn::make('total')
+                TextColumn::make('total')
                     ->label('Total')
                     ->money('PEN')
                     ->weight('bold')
                     ->color(fn($record) => $record->status === 'anulado' ? 'gray' : 'success'),
 
-                Tables\Columns\TextColumn::make('status')
+                TextColumn::make('status')
                     ->badge()
                     ->color(fn($state) => match ($state) {
                         'completado' => 'success',
@@ -182,8 +185,8 @@ class VentasReport extends Page implements HasTable, HasForms
                     }),
             ])
             ->filters([
-                Tables\Filters\Filter::make('fecha_emision')
-                    ->form([
+                Filter::make('fecha_emision')
+                    ->schema([
                         DatePicker::make('desde')->label('Desde'),
                         DatePicker::make('hasta')->label('Hasta'),
                     ])
@@ -194,7 +197,7 @@ class VentasReport extends Page implements HasTable, HasForms
                     })
                     ->default(['desde' => now()->startOfMonth()->toDateString(), 'hasta' => now()->toDateString()]),
 
-                Tables\Filters\SelectFilter::make('payment_method_id')
+                SelectFilter::make('payment_method_id')
                     ->label('Método de Pago')
                     ->options(PaymentMethod::pluck('name', 'id'))
                     ->query(function (Builder $query, array $data) {
@@ -202,15 +205,15 @@ class VentasReport extends Page implements HasTable, HasForms
                         return $query->whereHas('movements', fn($q) => $q->where('payment_method_id', $data['value']));
                     }),
 
-                Tables\Filters\SelectFilter::make('status')
+                SelectFilter::make('status')
                     ->options(['completado' => 'Completado', 'anulado' => 'Anulado']),
             ])
-            ->actions([
-                Tables\Actions\Action::make('detalles')
+            ->recordActions([
+                Action::make('detalles')
                     ->icon('heroicon-m-ellipsis-horizontal')
                     ->modalHeading('Detalle de Venta')
                     ->modalSubmitAction(false)
-                    ->infolist(fn(Infolist $infolist) => $infolist->schema([
+                    ->schema(fn(Schema $schema) => $schema->components([
                         ViewEntry::make('detalle_venta')->view('filament.reports.ventas.venta-detalle')->columnSpanFull()
                     ])),
             ]);

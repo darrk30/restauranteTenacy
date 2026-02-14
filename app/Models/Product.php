@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Collection;
 use App\Enums\StatusProducto;
 use App\Enums\TipoProducto;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * @property \Illuminate\Database\Eloquent\Collection $attributes
+ * @property Collection $attributes
  */
-
 class Product extends Model
 {
     protected $fillable = [

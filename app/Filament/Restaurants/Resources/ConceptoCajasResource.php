@@ -2,22 +2,29 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
+use Carbon\Carbon;
+use Filament\Actions\Action;
+use Filament\Actions\CreateAction;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
+use App\Filament\Restaurants\Resources\ConceptoCajasResource\Pages\ListConceptoCajas;
 use App\Enums\TipoEgreso;
 use App\Filament\Restaurants\Resources\ConceptoCajasResource\Pages;
 use App\Models\ConceptoCaja;
 use App\Models\SessionCashRegister;
+use BackedEnum;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\DatePicker; // Importante para el filtro
 use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Get;
 use Illuminate\Support\Facades\Auth;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder; // Importante para el filtro
@@ -26,15 +33,16 @@ class ConceptoCajasResource extends Resource
 {
     protected static ?string $model = ConceptoCaja::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-banknotes';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
+
     protected static ?string $navigationLabel = 'Ingresos y Egresos';
     protected static ?string $modelLabel = 'Ingresos y Egresos';
 
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->components([
                 TextInput::make('tipo_movimiento')->disabled(),
                 TextInput::make('monto')->prefix('S/')->disabled(),
                 Textarea::make('motivo')->disabled(),
@@ -50,12 +58,12 @@ class ConceptoCajasResource extends Resource
 
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime('d/m/Y h:i A')
                     ->label('Fecha')
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('tipo_movimiento')
+                TextColumn::make('tipo_movimiento')
                     ->badge()
                     ->colors([
                         'success' => 'ingreso',
@@ -64,13 +72,13 @@ class ConceptoCajasResource extends Resource
                     ->formatStateUsing(fn(string $state) => ucfirst($state))
                     ->label('Tipo'),
 
-                Tables\Columns\TextColumn::make('categoria')
+                TextColumn::make('categoria')
                     ->badge()
                     ->label('Categoría')
                     ->formatStateUsing(fn($state) => $state instanceof TipoEgreso ? $state->getLabel() : 'Ingreso General')
                     ->color(fn($state) => $state instanceof TipoEgreso ? $state->getColor() : 'gray'),
 
-                Tables\Columns\TextColumn::make('persona_externa')
+                TextColumn::make('persona_externa')
                     ->label('Responsable / Entidad')
                     ->placeholder('Sin dato')
                     ->formatStateUsing(function ($record) {
@@ -80,20 +88,20 @@ class ConceptoCajasResource extends Resource
                     })
                     ->wrap(),
 
-                Tables\Columns\TextColumn::make('motivo')
+                TextColumn::make('motivo')
                     ->label('Motivo / Detalle')
                     ->placeholder('Sin dato')
                     ->limit(30)
-                    ->tooltip(fn(Tables\Columns\TextColumn $column): ?string => $column->getState()),
+                    ->tooltip(fn(TextColumn $column): ?string => $column->getState()),
 
-                Tables\Columns\TextColumn::make('monto')
+                TextColumn::make('monto')
                     ->prefix('S/ ')
                     ->numeric(decimalPlaces: 2)
                     ->label('Monto')
                     ->weight('bold')
                     ->alignRight(),
 
-                Tables\Columns\TextColumn::make('estado')
+                TextColumn::make('estado')
                     ->badge()
                     ->colors([
                         'success' => 'aprobado',
@@ -102,8 +110,8 @@ class ConceptoCajasResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
-                Tables\Filters\Filter::make('created_at')
-                    ->form([
+                Filter::make('created_at')
+                    ->schema([
                         DatetimePicker::make('fecha_desde')->label('Desde')->hourMode(12)->displayFormat('d/m/y h:i A')->seconds(false)->default($sesionAbierta ? $sesionAbierta->opened_at : now()->startOfDay()),
                         DatetimePicker::make('fecha_hasta')->label('Hasta')->hourMode(12)->displayFormat('d/m/y h:i A')->seconds(false)->default(now()),
                     ])
@@ -122,17 +130,17 @@ class ConceptoCajasResource extends Resource
                         $indicators = [];
                         // Mostramos formato amigable incluyendo la hora
                         if ($data['fecha_desde'] ?? null) {
-                            $indicators[] = 'Desde: ' . \Carbon\Carbon::parse($data['fecha_desde'])->format('d/m/Y h:i A');
+                            $indicators[] = 'Desde: ' . Carbon::parse($data['fecha_desde'])->format('d/m/Y h:i A');
                         }
                         if ($data['fecha_hasta'] ?? null) {
-                            $indicators[] = 'Hasta: ' . \Carbon\Carbon::parse($data['fecha_hasta'])->format('d/m/Y h:i A');
+                            $indicators[] = 'Hasta: ' . Carbon::parse($data['fecha_hasta'])->format('d/m/Y h:i A');
                         }
                         return $indicators;
                     }),
             ])
             // 3. ACCIONES
-            ->actions([
-                Tables\Actions\Action::make('anular')
+            ->recordActions([
+                Action::make('anular')
                     ->label('Anular')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
@@ -165,13 +173,13 @@ class ConceptoCajasResource extends Resource
             ->headerActions([
 
                 // 🟢 INGRESO
-                Tables\Actions\CreateAction::make('ingreso')
+                CreateAction::make('ingreso')
                     ->label('Registrar Ingreso')
                     ->icon('heroicon-o-arrow-trending-up')
                     ->color('success')
                     ->modalHeading('Nuevo Ingreso a Caja')
                     ->visible(fn() => $sesionAbierta !== null)
-                    ->form([
+                    ->schema([
                         TextInput::make('persona_externa')
                             ->label('Recibido De')
                             ->placeholder('Ej: Cliente Juan, Socio')
@@ -187,7 +195,7 @@ class ConceptoCajasResource extends Resource
                             ->label('Motivo')
                             ->required(),
                     ])
-                    ->mutateFormDataUsing(function (array $data) use ($sesionAbierta) {
+                    ->mutateDataUsing(function (array $data) use ($sesionAbierta) {
                         if (filament()->getTenant()) {
                             $data['restaurant_id'] = filament()->getTenant()->id;
                         }
@@ -199,13 +207,13 @@ class ConceptoCajasResource extends Resource
                     }),
 
                 // 🔴 EGRESO
-                Tables\Actions\CreateAction::make('egreso')
+                CreateAction::make('egreso')
                     ->label('Registrar Egreso')
                     ->icon('heroicon-o-arrow-trending-down')
                     ->color('danger')
                     ->modalHeading('Registrar Salida de Dinero')
                     ->visible(fn() => $sesionAbierta !== null)
-                    ->form([
+                    ->schema([
                         Grid::make(1)->schema([
                             Select::make('categoria')
                                 ->label('Categoría')
@@ -242,7 +250,7 @@ class ConceptoCajasResource extends Resource
                                 ->required(),
                         ])
                     ])
-                    ->mutateFormDataUsing(function (array $data) use ($sesionAbierta) {
+                    ->mutateDataUsing(function (array $data) use ($sesionAbierta) {
                         if (filament()->getTenant()) {
                             $data['restaurant_id'] = filament()->getTenant()->id;
                         }
@@ -258,7 +266,7 @@ class ConceptoCajasResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListConceptoCajas::route('/'),
+            'index' => ListConceptoCajas::route('/'),
         ];
     }
 }

@@ -2,6 +2,22 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Section;
+use Filament\Tables\Columns\ImageColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use App\Filament\Restaurants\Resources\PromotionResource\Pages\ListPromotions;
+use App\Filament\Restaurants\Resources\PromotionResource\Pages\CreatePromotion;
+use App\Filament\Restaurants\Resources\PromotionResource\Pages\EditPromotion;
 use App\Enums\PromotionRuleType;
 use App\Enums\StatusProducto;
 use App\Filament\Restaurants\Resources\PromotionResource\Pages;
@@ -9,25 +25,20 @@ use App\Models\Promotion;
 use App\Models\Product;
 use App\Models\Production;
 use App\Models\Variant;
+use BackedEnum;
 use Filament\Forms;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
-use Filament\Forms\Components\Section;
-use Filament\Forms\Components\Tabs\Tab;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ToggleButtons;
-use Filament\Forms\Form;
-use Filament\Forms\Get;
-use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -38,18 +49,19 @@ class PromotionResource extends Resource
 {
     protected static ?string $model = Promotion::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-receipt-percent';
-    protected static ?string $navigationGroup = 'Inventarios';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
+
+    // protected static ?string $navigationGroup = 'Inventarios';
     protected static ?string $navigationLabel = 'Promociones';
     protected static ?string $pluralModelLabel = 'Promociones';
     protected static ?string $recordTitleAttribute = 'name';
     protected static ?int $navigationSort = 1;
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\Tabs::make('Promoción')
+        return $schema
+            ->components([
+                Tabs::make('Promoción')
                     ->tabs([
                         // ------------------------------------------------------------------
                         // TAB 1: INFORMACIÓN GENERAL (Se mantiene igual, resumido aquí)
@@ -242,21 +254,21 @@ class PromotionResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\ImageColumn::make('image_path')->circular(),
-                Tables\Columns\TextColumn::make('name')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('category.name')->label('Categoría'),
-                Tables\Columns\TextColumn::make('price')->money('PEN'),
-                Tables\Columns\TextColumn::make('status')
+                ImageColumn::make('image_path')->circular(),
+                TextColumn::make('name')->searchable()->sortable(),
+                TextColumn::make('category.name')->label('Categoría'),
+                TextColumn::make('price')->money('PEN'),
+                TextColumn::make('status')
                     ->badge()
                     ->color(fn($state) => match ($state) {
                         'Activo' => 'success',
                         'Inactivo' => 'danger',
                         default => 'gray',
                     }),
-                Tables\Columns\IconColumn::make('visible')->boolean(),
+                IconColumn::make('visible')->boolean(),
             ])
-            ->actions([Tables\Actions\EditAction::make()])
-            ->bulkActions([Tables\Actions\BulkActionGroup::make([Tables\Actions\DeleteBulkAction::make()])]);
+            ->recordActions([EditAction::make()])
+            ->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 
     public static function getRelations(): array
@@ -269,9 +281,9 @@ class PromotionResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListPromotions::route('/'),
-            'create' => Pages\CreatePromotion::route('/create'),
-            'edit' => Pages\EditPromotion::route('/{record}/edit'),
+            'index' => ListPromotions::route('/'),
+            'create' => CreatePromotion::route('/create'),
+            'edit' => EditPromotion::route('/{record}/edit'),
         ];
     }
 }

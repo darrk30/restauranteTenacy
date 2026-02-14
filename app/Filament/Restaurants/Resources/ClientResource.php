@@ -2,22 +2,33 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Actions\Action;
+use App\Services\DocumentoService;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use App\Filament\Restaurants\Resources\ClientResource\Pages\ListClients;
+use App\Filament\Restaurants\Resources\ClientResource\Pages\CreateClient;
+use App\Filament\Restaurants\Resources\ClientResource\Pages\EditClient;
 use App\Filament\Restaurants\Resources\ClientResource\Pages;
 use App\Models\Client;
 use App\Models\TypeDocument;
+use BackedEnum;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Grid;
-use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Illuminate\Validation\Rule;
-use Filament\Forms\Components\Actions\Action;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -25,14 +36,15 @@ class ClientResource extends Resource
 {
     protected static ?string $model = Client::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-users';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
+
     protected static ?string $navigationLabel = 'Clientes';
     protected static ?string $modelLabel = 'Cliente';
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->components([
                 Section::make('Identificación')
                     ->schema([
                         Grid::make(2)->schema([
@@ -43,7 +55,7 @@ class ClientResource extends Resource
                                 ->required()
                                 ->default(1)
                                 ->live() // 🔥 VITAL: Esto hace que el formulario se "refresque" al cambiar
-                                ->afterStateUpdated(function (Forms\Set $set) {
+                                ->afterStateUpdated(function (Set $set) {
                                     // Opcional: Si cambian de DNI a RUC, limpiamos el número para que no quede uno inválido
                                     $set('numero', '');
                                 }),
@@ -109,7 +121,7 @@ class ClientResource extends Resource
 
                                             // --- CASO RUC ---
                                             if ($codigo === 'RUC') {
-                                                $data = \App\Services\DocumentoService::consultarRuc($numero);
+                                                $data = DocumentoService::consultarRuc($numero);
 
                                                 // Validación de error en respuesta
                                                 if (!$data || isset($data['error']) || isset($data['message'])) {
@@ -146,7 +158,7 @@ class ClientResource extends Resource
 
                                             // --- CASO DNI ---
                                             elseif ($codigo === 'DNI') {
-                                                $data = \App\Services\DocumentoService::consultarDni($numero);
+                                                $data = DocumentoService::consultarDni($numero);
 
                                                 if (!$data || isset($data['error'])) {
                                                     Notification::make()->title('DNI no encontrado')->danger()->send();
@@ -241,7 +253,7 @@ class ClientResource extends Resource
             ->modifyQueryUsing(fn(Builder $query) => $query->with('typeDocument'))
             ->columns([
                 // 1. TIPO Y NÚMERO
-                Tables\Columns\TextColumn::make('typeDocument.code')
+                TextColumn::make('typeDocument.code')
                     ->label('Tipo')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
@@ -250,47 +262,47 @@ class ClientResource extends Resource
                         default => 'gray',
                     }),
 
-                Tables\Columns\TextColumn::make('numero')
+                TextColumn::make('numero')
                     ->label('Número')
                     ->searchable()
                     ->weight('bold'),
 
                 // 2. LAS 3 COLUMNAS QUE PEDISTE (Simplificadas)
-                Tables\Columns\TextColumn::make('nombres')
+                TextColumn::make('nombres')
                     ->label('Nombres')
                     ->searchable()
                     ->placeholder('Sin dato'), // Esto lo pone gris automático
 
-                Tables\Columns\TextColumn::make('apellidos')
+                TextColumn::make('apellidos')
                     ->label('Apellidos')
                     ->searchable()
                     ->placeholder('Sin dato'),
 
-                Tables\Columns\TextColumn::make('razon_social')
+                TextColumn::make('razon_social')
                     ->label('Razón Social')
                     ->searchable()
                     ->placeholder('Sin dato'),
 
                 // 3. CONTACTO
-                Tables\Columns\TextColumn::make('telefono')
+                TextColumn::make('telefono')
                     ->label('Teléfono')
                     ->toggleable(),
             ])
             ->filters([
                 // ... tus filtros igual que antes ...
             ])
-            ->actions([
-                Tables\Actions\EditAction::make()
+            ->recordActions([
+                EditAction::make()
                     // Ocultar si es el cliente genérico
                     ->hidden(fn(Client $record) => $record->numero === '99999999'),
 
-                Tables\Actions\DeleteAction::make()
+                DeleteAction::make()
                     // Ocultar si es el cliente genérico
                     ->hidden(fn(Client $record) => $record->numero === '99999999'),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make()
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make()
                         // Evita que se elimine incluso si se selecciona en grupo
                         ->action(function (Collection $records) {
                             $records->filter(fn($record) => $record->numero !== '99999999')
@@ -308,9 +320,9 @@ class ClientResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListClients::route('/'),
-            'create' => Pages\CreateClient::route('/create'),
-            'edit' => Pages\EditClient::route('/{record}/edit'),
+            'index' => ListClients::route('/'),
+            'create' => CreateClient::route('/create'),
+            'edit' => EditClient::route('/{record}/edit'),
         ];
     }
 }

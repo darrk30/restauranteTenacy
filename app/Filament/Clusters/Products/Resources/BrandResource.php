@@ -2,15 +2,21 @@
 
 namespace App\Filament\Clusters\Products\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
 use App\Filament\Clusters\Products\ProductsCluster;
 use App\Filament\Clusters\Products\Resources\BrandResource\Pages\CreateBrand;
 use App\Filament\Clusters\Products\Resources\BrandResource\Pages\EditBrand;
 use App\Filament\Clusters\Products\Resources\BrandResource\Pages\ListBrands;
 use App\Models\Brand;
+use BackedEnum;
 use Filament\Forms;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -19,7 +25,7 @@ class BrandResource extends Resource
 {
     protected static ?string $model = Brand::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-tag';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
 
     protected static ?string $recordTitleAttribute = 'name';
 
@@ -29,10 +35,10 @@ class BrandResource extends Resource
 
     protected static ?int $navigationSort = 3;
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->components([
                 TextInput::make('name')->label('Nombre')
                     ->required()
                     ->maxLength(255),
@@ -49,18 +55,18 @@ class BrandResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')
+                TextColumn::make('name')
                     ->searchable(),
-                Tables\Columns\IconColumn::make('status')
+                IconColumn::make('status')
                     ->boolean(),
-                Tables\Columns\TextColumn::make('restaurant_id')
+                TextColumn::make('restaurant_id')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -68,12 +74,12 @@ class BrandResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

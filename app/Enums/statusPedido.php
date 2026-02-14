@@ -6,7 +6,7 @@ use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasIcon;
 use Filament\Support\Contracts\HasLabel;
 
-enum statusPedido: string implements HasColor, HasIcon, HasLabel
+enum StatusPedido: string implements HasColor, HasIcon, HasLabel
 {
     case Pendiente = 'pendiente';
     case Servido = 'servido';

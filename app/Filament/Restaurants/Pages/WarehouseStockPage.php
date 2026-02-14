@@ -2,26 +2,29 @@
 
 namespace App\Filament\Restaurants\Pages;
 
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Actions\Action;
 use App\Models\Variant;
 use App\Models\WarehouseStock;
 use Filament\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Tables\Actions\Action;
 
-class WarehouseStockPage extends Page implements Tables\Contracts\HasTable
+class WarehouseStockPage extends Page implements HasTable
 {
-    use Tables\Concerns\InteractsWithTable;
+    use InteractsWithTable;
 
-    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-clipboard-document-list';
 
     protected static ?string $navigationLabel = 'Existencias';
 
-    protected static ?string $navigationGroup = 'Inventarios';
+    protected static string | \UnitEnum | null $navigationGroup = 'Inventarios';
 
     protected static ?string $title = 'Existencias de Almacén';
 
-    protected static string $view = 'filament.warehouse.pages.existencias';
+    protected string $view = 'filament.warehouse.pages.existencias';
 
     public function table(Table $table): Table
     {
@@ -40,15 +43,15 @@ class WarehouseStockPage extends Page implements Tables\Contracts\HasTable
                     ->whereHas('stocks')
             )
             ->columns([
-                Tables\Columns\TextColumn::make('product.name')
+                TextColumn::make('product.name')
                     ->label('Producto')
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('full_name')
+                TextColumn::make('full_name')
                     ->label('Variante')
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('min_stock_promedio')
+                TextColumn::make('min_stock_promedio')
                     ->label('Stock Min. Promedio')
                     ->getStateUsing(
                         fn($record) =>
@@ -58,7 +61,7 @@ class WarehouseStockPage extends Page implements Tables\Contracts\HasTable
                     ->color('warning'),
 
 
-                Tables\Columns\TextColumn::make('stock_total')
+                TextColumn::make('stock_total')
                     ->label('Stock Total')
                     ->getStateUsing(
                         fn($record) =>
@@ -80,14 +83,14 @@ class WarehouseStockPage extends Page implements Tables\Contracts\HasTable
                                 ]);
                             })
                     ),
-                Tables\Columns\TextColumn::make('product.unit.name')
+                TextColumn::make('product.unit.name')
                     ->label('Unidad')
                     ->sortable()
                     ->toggleable()
                     ->badge()
                     ->color('info'),
             ])
-            ->actions([])
-            ->bulkActions([]);
+            ->recordActions([])
+            ->toolbarActions([]);
     }
 }

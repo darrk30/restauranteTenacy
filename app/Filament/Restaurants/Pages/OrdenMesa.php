@@ -2,7 +2,9 @@
 
 namespace App\Filament\Restaurants\Pages;
 
-use App\Enums\statusPedido;
+use Exception;
+use Filament\Panel;
+use App\Enums\StatusPedido;
 use App\Enums\TipoProducto;
 use App\Models\Order;
 use App\Models\OrderDetail;
@@ -25,7 +27,7 @@ use Illuminate\Support\Facades\DB;
 class OrdenMesa extends Page implements HasActions
 {
     use InteractsWithActions;
-    protected static string $view = 'filament.pdv.orden-mesa';
+    protected string $view = 'filament.pdv.orden-mesa';
     protected static string $panel = 'restaurants';
 
     public $subtotal = 0.00;
@@ -113,7 +115,7 @@ class OrdenMesa extends Page implements HasActions
         if ($this->pedido) {
             $ordenExistente = Order::with(['details.product'])->find($this->pedido);
 
-            if (!$ordenExistente || $ordenExistente->status === statusPedido::Cancelado) {
+            if (!$ordenExistente || $ordenExistente->status === StatusPedido::Cancelado) {
                 return redirect()->to("/app/point-of-sale");
             }
 
@@ -152,7 +154,7 @@ class OrdenMesa extends Page implements HasActions
                     'is_cortesia'  => (bool) $detalle->cortesia,
                     'notes'        => $detalle->notes,
                     'image'        => $esPromocion
-                        ? (\App\Models\Promotion::find($idReal)?->image_path)
+                        ? (Promotion::find($idReal)?->image_path)
                         : ($detalle->product ? $detalle->product->image_path : null),
                     'guardado'     => true,
                 ];
@@ -214,7 +216,7 @@ class OrdenMesa extends Page implements HasActions
                 'direccion'     => $this->direccion,
                 'telefono'      => $this->telefono,
                 'code'          => $codigoFinal,
-                'status'        => statusPedido::Pendiente,
+                'status'        => StatusPedido::Pendiente,
                 'subtotal'      => $this->subtotal,
                 'igv'           => $this->igv,
                 'total'         => $this->total,
@@ -236,7 +238,7 @@ class OrdenMesa extends Page implements HasActions
                     'cantidad'      => $item['quantity'],
                     'subTotal'      => $item['total'],
                     'cortesia'      => $item['is_cortesia'] ? 1 : 0,
-                    'status'        => statusPedido::Pendiente,
+                    'status'        => StatusPedido::Pendiente,
                     'notes'         => $item['notes'],
                     'fecha_envio_cocina' => now(),
                 ]);
@@ -264,7 +266,7 @@ class OrdenMesa extends Page implements HasActions
             return redirect()
                 ->to("/app/orden-mesa/{$paramMesa}/{$order->id}")
                 ->with('orden_creada_id', $order->id);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             DB::rollBack();
             Notification::make()->title('Error al procesar')->body($e->getMessage())->danger()->send();
         }
@@ -381,7 +383,7 @@ class OrdenMesa extends Page implements HasActions
                         'cantidad'      => $item['quantity'],
                         'subTotal'      => $item['total'],
                         'cortesia'      => $item['is_cortesia'] ? 1 : 0,
-                        'status'        => statusPedido::Pendiente,
+                        'status'        => StatusPedido::Pendiente,
                         'notes'         => $item['notes'],
                         'fecha_envio_cocina' => now(),
                     ]);
@@ -463,7 +465,7 @@ class OrdenMesa extends Page implements HasActions
 
             // === PASO CLAVE 3: Reiniciar estados del carrito sin recargar la página entera ===
             $this->cargarDatosPedido();
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             DB::rollBack();
             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
         }
@@ -593,7 +595,7 @@ class OrdenMesa extends Page implements HasActions
         if (!$this->productoSeleccionado) return;
 
         // ... (Tu lógica de detección de tipo y preparación de datos sigue igual) ...
-        $esPromocion = $this->productoSeleccionado instanceof \App\Models\Promotion;
+        $esPromocion = $this->productoSeleccionado instanceof Promotion;
 
         // Validaciones...
         if (!$esPromocion && $this->productoSeleccionado->variants->count() > 0 && !$this->variantSeleccionadaId) {
@@ -842,14 +844,14 @@ class OrdenMesa extends Page implements HasActions
         try {
             DB::beginTransaction();
 
-            $order = \App\Models\Order::with('details.product.production.printer')->findOrFail($pedidoId);
+            $order = Order::with('details.product.production.printer')->findOrFail($pedidoId);
             $diffParaCocina = ['nuevos' => [], 'cancelados' => []];
 
             // Iteramos sobre CADA detalle
             foreach ($order->details as $detail) {
 
                 // Si ya está cancelado, lo ignoramos para no devolver stock doble
-                if ($detail->status === statusPedido::Cancelado) continue;
+                if ($detail->status === StatusPedido::Cancelado) continue;
 
                 // 1. Detectamos si es Promo o Producto Normal
                 $esPromo = $detail->item_type === TipoProducto::Promocion->value || $detail->promotion_id;
@@ -880,12 +882,12 @@ class OrdenMesa extends Page implements HasActions
 
                 // 4. CAMBIO CRÍTICO: Actualizamos el modelo individualmente
                 // Esto dispara el evento 'updated' en OrderDetail.php y resta la 'venta_diaria' de la promo
-                $detail->status = statusPedido::Cancelado;
+                $detail->status = StatusPedido::Cancelado;
                 $detail->save();
             }
 
             // Actualizamos la cabecera de la orden
-            $order->update(['status' => statusPedido::Cancelado]);
+            $order->update(['status' => StatusPedido::Cancelado]);
 
             // Liberamos Mesa
             if ($order->table_id) {
@@ -906,15 +908,15 @@ class OrdenMesa extends Page implements HasActions
 
             DB::commit();
 
-            \Filament\Notifications\Notification::make()
+            Notification::make()
                 ->title('Pedido anulado correctamente')
                 ->success()
                 ->send();
 
             return redirect()->to("/app/point-of-sale");
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             DB::rollBack();
-            \Filament\Notifications\Notification::make()
+            Notification::make()
                 ->title('Error')
                 ->body($e->getMessage())
                 ->danger()
@@ -956,7 +958,7 @@ class OrdenMesa extends Page implements HasActions
                 $conteoPromosTotal[$promoId] += $qtyActual;
 
                 // Para Stock Físico: Usamos el DELTA de los ingredientes
-                $promoModel = \App\Models\Promotion::with('promotionproducts')->find($promoId);
+                $promoModel = Promotion::with('promotionproducts')->find($promoId);
                 if ($promoModel) {
                     foreach ($promoModel->promotionproducts as $pp) {
                         $gasto = $pp->quantity * $delta; // Solo lo extra resta stock
@@ -985,7 +987,7 @@ class OrdenMesa extends Page implements HasActions
 
         $itemsMixtos->transform(function ($item) use ($consumoVariantes, $consumoProductos, $conteoPromosTotal) {
 
-            $tipo = $item->type instanceof \App\Enums\TipoProducto ? $item->type->value : $item->type;
+            $tipo = $item->type instanceof TipoProducto ? $item->type->value : $item->type;
             $item->type = $tipo;
 
             // --- PRODUCTO ---
@@ -1114,7 +1116,7 @@ class OrdenMesa extends Page implements HasActions
     // Este método simula agregar +1 a la promo y verifica si explota el stock de ingredientes
     private function puedeAgregarPromo($promoId, $cantidadAumentar = 1)
     {
-        $promocion = \App\Models\Promotion::with('promotionproducts')->find($promoId);
+        $promocion = Promotion::with('promotionproducts')->find($promoId);
         if (!$promocion) return false;
 
         // 1. Validar Regla
@@ -1143,7 +1145,7 @@ class OrdenMesa extends Page implements HasActions
 
             if ($pp->variant_id) {
                 // Stock Total en BD
-                $variant = \App\Models\Variant::with('stocks')->find($pp->variant_id);
+                $variant = Variant::with('stocks')->find($pp->variant_id);
                 $stockBD = $variant->stocks->sum('stock_reserva');
 
                 // Consumo de TODO el carrito actual (Deltas)
@@ -1158,7 +1160,7 @@ class OrdenMesa extends Page implements HasActions
                     }
                     // Si es promo (esta u otra)
                     elseif (isset($c['type']) && $c['type'] === TipoProducto::Promocion->value) {
-                        $pModel = \App\Models\Promotion::with('promotionproducts')->find($c['promotion_id']);
+                        $pModel = Promotion::with('promotionproducts')->find($c['promotion_id']);
                         foreach ($pModel->promotionproducts as $subPP) {
                             if ($subPP->variant_id == $pp->variant_id) {
                                 $necesarioTotal += ($subPP->quantity * $deltaItem);
@@ -1171,7 +1173,7 @@ class OrdenMesa extends Page implements HasActions
                 $necesarioTotal += ($pp->quantity * $cantidadAumentar);
             } elseif ($pp->product_id) {
                 // ... Lógica análoga para producto simple ...
-                $prod = \App\Models\Product::find($pp->product_id);
+                $prod = Product::find($pp->product_id);
                 $stockBD = $prod->stock ?? 0;
 
                 foreach ($this->carrito as $c) {
@@ -1182,7 +1184,7 @@ class OrdenMesa extends Page implements HasActions
                     if ((!isset($c['type']) || $c['type'] === TipoProducto::Producto->value) && $c['product_id'] == $pp->product_id) {
                         $necesarioTotal += $deltaItem;
                     } elseif (isset($c['type']) && $c['type'] === TipoProducto::Promocion->value) {
-                        $pModel = \App\Models\Promotion::with('promotionproducts')->find($c['promotion_id']);
+                        $pModel = Promotion::with('promotionproducts')->find($c['promotion_id']);
                         foreach ($pModel->promotionproducts as $subPP) {
                             if ($subPP->product_id == $pp->product_id) {
                                 $necesarioTotal += ($subPP->quantity * $deltaItem);
@@ -1203,7 +1205,7 @@ class OrdenMesa extends Page implements HasActions
     public function agregarPromocion($promoId)
     {
         // 1. Buscamos la promoción con sus relaciones necesarias
-        $promocion = \App\Models\Promotion::with('promotionproducts')->find($promoId);
+        $promocion = Promotion::with('promotionproducts')->find($promoId);
 
         if (!$promocion) {
             Notification::make()->title('Promoción no encontrada')->danger()->send();
@@ -1241,7 +1243,7 @@ class OrdenMesa extends Page implements HasActions
     // --- HELPER PARA GESTIONAR INGREDIENTES DE PROMOS ---
     private function gestionarStockPromocion($promoId, $cantidadPromo, $operacion = 'restar')
     {
-        $promo = \App\Models\Promotion::with('promotionproducts.product.variants')->find($promoId);
+        $promo = Promotion::with('promotionproducts.product.variants')->find($promoId);
 
         if (!$promo) return;
 
@@ -1330,7 +1332,7 @@ class OrdenMesa extends Page implements HasActions
         return redirect()->to(PagarOrden::getUrl(['record' => $this->pedido]));
     }
 
-    public static function getSlug(): string
+    public static function getSlug(?Panel $panel = null): string
     {
         return 'orden-mesa/{mesa?}/{pedido?}';
     }

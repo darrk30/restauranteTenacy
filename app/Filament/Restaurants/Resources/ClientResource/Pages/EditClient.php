@@ -2,6 +2,7 @@
 
 namespace App\Filament\Restaurants\Resources\ClientResource\Pages;
 
+use Filament\Actions\DeleteAction;
 use App\Filament\Restaurants\Resources\ClientResource;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
@@ -13,7 +14,7 @@ class EditClient extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            DeleteAction::make(),
         ];
     }
 }

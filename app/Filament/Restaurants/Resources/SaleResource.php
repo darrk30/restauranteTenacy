@@ -2,11 +2,26 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use Filament\Tables\Columns\Summarizers\Sum;
+use Filament\Tables\Filters\Filter;
+use Carbon\Carbon;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Toggle;
+use App\Traits\ManjoStockProductos;
+use Exception;
+use Filament\Actions\ViewAction;
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Grid;
+use App\Filament\Restaurants\Resources\SaleResource\Pages\ListSales;
+use App\Filament\Restaurants\Resources\SaleResource\Pages\ViewSale;
 use App\Filament\Restaurants\Resources\SaleResource\Pages;
 use App\Models\CashRegisterMovement;
 use App\Models\Sale;
 use App\Models\Kardex;
 use App\Models\SessionCashRegister;
+use BackedEnum;
 use Filament\Forms;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Resources\Resource;
@@ -14,10 +29,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Notifications\Notification;
-use Filament\Infolists\Infolist;
 use Filament\Infolists\Components\TextEntry;
-use Filament\Infolists\Components\Section;
-use Filament\Infolists\Components\Grid;
 use Filament\Infolists\Components\RepeatableEntry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Builder;
@@ -26,7 +38,8 @@ use Illuminate\Support\Facades\Auth;
 class SaleResource extends Resource
 {
     protected static ?string $model = Sale::class;
-    protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
+
     protected static ?string $navigationLabel = 'Historial de Ventas';
 
     public static function canCreate(): bool
@@ -76,7 +89,7 @@ class SaleResource extends Resource
                 TextColumn::make('total')
                     ->label('Total')
                     ->money('PEN')
-                    ->summarize(Tables\Columns\Summarizers\Sum::make()->label('Total')),
+                    ->summarize(Sum::make()->label('Total')),
 
                 TextColumn::make('status')
                     ->label('Estado')
@@ -91,8 +104,8 @@ class SaleResource extends Resource
             ->defaultSort('created_at', 'desc')
             ->filters([
                 // FILTRO POR DEFECTO: Solo turno actual
-                Tables\Filters\Filter::make('created_at')
-                    ->form([
+                Filter::make('created_at')
+                    ->schema([
                         DateTimePicker::make('fecha_desde')->label('Desde')->hourMode(12)->displayFormat('d/m/y h:i A')->seconds(false)->default($sesionAbierta ? $sesionAbierta->opened_at : now()->startOfDay()),
                         DatetimePicker::make('fecha_hasta')->label('Hasta')->hourMode(12)->displayFormat('d/m/y h:i A')->seconds(false)->default(now()),
                     ])
@@ -111,22 +124,22 @@ class SaleResource extends Resource
                         $indicators = [];
                         // Mostramos formato amigable incluyendo la hora
                         if ($data['fecha_desde'] ?? null) {
-                            $indicators[] = 'Desde: ' . \Carbon\Carbon::parse($data['fecha_desde'])->format('d/m/Y h:i A');
+                            $indicators[] = 'Desde: ' . Carbon::parse($data['fecha_desde'])->format('d/m/Y h:i A');
                         }
                         if ($data['fecha_hasta'] ?? null) {
-                            $indicators[] = 'Hasta: ' . \Carbon\Carbon::parse($data['fecha_hasta'])->format('d/m/Y h:i A');
+                            $indicators[] = 'Hasta: ' . Carbon::parse($data['fecha_hasta'])->format('d/m/Y h:i A');
                         }
                         return $indicators;
                     }),
 
-                Tables\Filters\SelectFilter::make('status')
+                SelectFilter::make('status')
                     ->options([
                         'completado' => 'Completado',
                         'anulado' => 'Anulado',
                     ]),
             ])
-            ->actions([
-                Tables\Actions\Action::make('anular')
+            ->recordActions([
+                Action::make('anular')
                     ->label('Anular')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
@@ -140,10 +153,10 @@ class SaleResource extends Resource
                             !$sesionAbierta ||
                             $record->created_at < $sesionAbierta->created_at
                     )
-                    ->form(function (Sale $record) {
+                    ->schema(function (Sale $record) {
                         $tieneProductosConStock = $record->details()->whereHas('product', fn($q) => $q->where('control_stock', true))->exists();
                         return $tieneProductosConStock ? [
-                            Forms\Components\Toggle::make('restablecer_stock')
+                            Toggle::make('restablecer_stock')
                                 ->label('¿Desea restablecer el stock?')
                                 ->default(true)
                                 ->onColor('success')
@@ -158,7 +171,7 @@ class SaleResource extends Resource
                             // Lógica de reversión de stock
                             if ($data['restablecer_stock'] ?? false) {
                                 $stockManager = new class {
-                                    use \App\Traits\ManjoStockProductos;
+                                    use ManjoStockProductos;
                                     public function ejecutarReverseVenta($sale)
                                     {
                                         $this->reverseVenta($sale);
@@ -195,20 +208,20 @@ class SaleResource extends Resource
 
                             DB::commit();
                             Notification::make()->title('Venta Anulada')->success()->send();
-                        } catch (\Exception $e) {
+                        } catch (Exception $e) {
                             DB::rollBack();
                             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
                         }
                     }),
 
-                Tables\Actions\ViewAction::make(),
+                ViewAction::make(),
             ]);
     }
 
-    public static function infolist(Infolist $infolist): Infolist
+    public static function infolist(Schema $schema): Schema
     {
-        return $infolist
-            ->schema([
+        return $schema
+            ->components([
                 Section::make('Información del Comprobante')
                     ->schema([
                         Grid::make(3)->schema([
@@ -248,8 +261,8 @@ class SaleResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListSales::route('/'),
-            'view' => Pages\ViewSale::route('/{record}'),
+            'index' => ListSales::route('/'),
+            'view' => ViewSale::route('/{record}'),
         ];
     }
 }

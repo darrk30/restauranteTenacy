@@ -2,10 +2,10 @@
 
 namespace App\Filament\Restaurants\Pages;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Form;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Pages\Dashboard\Concerns\HasFiltersForm; // 👈 Importante
 
@@ -13,10 +13,10 @@ class Dashboard extends BaseDashboard
 {
     use HasFiltersForm; // 👈 Habilita los filtros
 
-    public function filtersForm(Form $form): Form
+    public function filtersForm(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->components([
                 Section::make('Periodo de Reporte')
                     ->schema([
                         Select::make('rango')

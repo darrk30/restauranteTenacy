@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Enums\TipoEgreso;
 use App\Models\CashRegisterMovement;
 use App\Models\ConceptoCaja;
 use App\Models\PaymentMethod;
@@ -61,7 +62,7 @@ class ConceptoCajaObserver
     // Helper para no repetir código de descripción
     private function generarDescripcion(ConceptoCaja $concepto): string
     {
-        $tipo = $concepto->categoria instanceof \App\Enums\TipoEgreso
+        $tipo = $concepto->categoria instanceof TipoEgreso
             ? $concepto->categoria->getLabel()
             : 'Ingreso';
 

@@ -14,9 +14,9 @@ class VentasPorDiaChart extends ChartWidget
 {
     use InteractsWithPageFilters; // 👈 2. Activar la escucha de filtros del Dashboard
 
-    protected static ?string $heading = 'Tendencia de Ventas';
+    protected ?string $heading = 'Tendencia de Ventas';
     protected static ?int $sort = 1;
-    protected static string $color = 'info';
+    protected string $color = 'info';
 
     // ❌ BORRAMOS O COMENTAMOS ESTO (Ya no usaremos el filtro propio del widget)
     // public ?string $filter = 'month';
@@ -84,7 +84,7 @@ class VentasPorDiaChart extends ChartWidget
             ],
             'labels' => $data->map(function (TrendValue $value) use ($rango) {
                 $date = Carbon::parse($value->date);
-                
+
                 if ($rango === 'hoy') {
                     return $date->format('H:i'); // 14:00
                 } elseif ($rango === 'year') {

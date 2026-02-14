@@ -2,19 +2,19 @@
 
 namespace App\Filament\Restaurants\Pages\Reports;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Grid;
 use App\Exports\VentasCanalExport;
 use App\Filament\Restaurants\Widgets\VentasCanalStats;
 use App\Models\DocumentSerie;
 use App\Models\Sale;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Grid;
-use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
-use Filament\Forms\Form;
 use Filament\Pages\Page;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
@@ -27,11 +27,11 @@ class ReporteVentasPorCanal extends Page implements HasForms, HasTable
     use InteractsWithForms;
     use InteractsWithTable;
 
-    protected static ?string $navigationIcon = 'heroicon-o-presentation-chart-line';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-presentation-chart-line';
     protected static ?string $navigationLabel = 'Reporte Detallado Ventas';
     protected static ?string $title = 'Reporte de Ventas por Canal';
-    protected static ?string $navigationGroup = 'Reportes';
-    protected static string $view = 'filament.reports.ventas.reporte-ventas-por-canal';
+    protected static string | \UnitEnum | null $navigationGroup = 'Reportes';
+    protected string $view = 'filament.reports.ventas.reporte-ventas-por-canal';
 
     public ?array $data = [];
 
@@ -67,10 +67,10 @@ class ReporteVentasPorCanal extends Page implements HasForms, HasTable
         ];
     }
 
-    public function form(Form $form): Form
+    public function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->components([
                 Section::make('Filtros de Búsqueda')
                     ->schema([
                         Grid::make()

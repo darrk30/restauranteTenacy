@@ -15,11 +15,11 @@ use Illuminate\Http\Request;
 
 class PointOfSale extends Page
 {
-    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-clipboard-document';
     protected static ?string $navigationLabel = 'Punto de venta';
-    protected static ?string $navigationGroup = 'Punto de venta';
+    protected static string | \UnitEnum | null $navigationGroup = 'Punto de venta';
     protected static ?string $title = 'Punto de venta';
-    protected static string $view = 'filament.pdv.point-of-sale';
+    protected string $view = 'filament.pdv.point-of-sale';
 
     public $mostrarModalComanda = false;
     public ?Order $ordenGenerada = null;

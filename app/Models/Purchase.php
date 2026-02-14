@@ -52,18 +52,18 @@ class Purchase extends Model
         return $this->belongsTo(Restaurant::class);
     }
 
-    protected static function booted(): void
-    {
-        static::addGlobalScope('restaurant', function (Builder $query) {
-            if (filament()->getTenant()) {
-                $query->where('restaurant_id', filament()->getTenant()->id);
-            }
-        });
+    // protected static function booted(): void
+    // {
+    //     static::addGlobalScope('restaurant', function (Builder $query) {
+    //         if (filament()->getTenant()) {
+    //             $query->where('restaurant_id', filament()->getTenant()->id);
+    //         }
+    //     });
 
-        static::creating(function ($purchase) {
-            if (filament()->getTenant()) {
-                $purchase->restaurant_id = filament()->getTenant()->id;
-            }
-        });
-    }
+    //     static::creating(function ($purchase) {
+    //         if (filament()->getTenant()) {
+    //             $purchase->restaurant_id = filament()->getTenant()->id;
+    //         }
+    //     });
+    // }
 }

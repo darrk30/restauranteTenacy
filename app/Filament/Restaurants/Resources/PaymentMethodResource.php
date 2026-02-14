@@ -2,13 +2,21 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use App\Filament\Restaurants\Resources\PaymentMethodResource\Pages\ListPaymentMethods;
+use App\Filament\Restaurants\Resources\PaymentMethodResource\Pages\CreatePaymentMethod;
+use App\Filament\Restaurants\Resources\PaymentMethodResource\Pages\EditPaymentMethod;
 use App\Filament\Restaurants\Resources\PaymentMethodResource\Pages;
 use App\Models\PaymentMethod;
-use Filament\Forms\Components\Section;
+use BackedEnum;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
@@ -22,14 +30,15 @@ class PaymentMethodResource extends Resource
 {
     protected static ?string $model = PaymentMethod::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-credit-card';
-    protected static ?string $navigationLabel = 'Métodos de Pago';
-    protected static ?string $navigationGroup = 'Configuración';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
 
-    public static function form(Form $form): Form
+    protected static ?string $navigationLabel = 'Métodos de Pago';
+    // protected static ?string $navigationGroup = 'Configuración';
+
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->components([
 
                 Section::make('Información del método de pago')
                     ->description('Configura los datos principales del método.')
@@ -111,19 +120,19 @@ class PaymentMethodResource extends Resource
                     ->sortable(),
             ])
             ->filters([
-                Tables\Filters\SelectFilter::make('status')
+                SelectFilter::make('status')
                     ->label('Estado')
                     ->options([
                         'activo' => 'Activo',
                         'inactivo' => 'Inactivo',
                     ]),
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->defaultSort('name');
@@ -137,9 +146,9 @@ class PaymentMethodResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListPaymentMethods::route('/'),
-            'create' => Pages\CreatePaymentMethod::route('/create'),
-            'edit' => Pages\EditPaymentMethod::route('/{record}/edit'),
+            'index' => ListPaymentMethods::route('/'),
+            'create' => CreatePaymentMethod::route('/create'),
+            'edit' => EditPaymentMethod::route('/{record}/edit'),
         ];
     }
 }

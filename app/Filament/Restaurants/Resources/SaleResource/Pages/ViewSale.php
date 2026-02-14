@@ -2,6 +2,7 @@
 
 namespace App\Filament\Restaurants\Resources\SaleResource\Pages;
 
+use Filament\Actions\Action;
 use App\Filament\Restaurants\Resources\SaleResource;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Actions;
@@ -14,7 +15,7 @@ class ViewSale extends ViewRecord
     {
         return [
             // Podemos agregar un botón de imprimir aquí en el futuro
-            Actions\Action::make('print')
+            Action::make('print')
                 ->label('Reimprimir')
                 ->icon('heroicon-o-printer')
                 ->action(fn() => $this->halt()),

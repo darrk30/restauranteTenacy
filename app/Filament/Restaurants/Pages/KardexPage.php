@@ -2,6 +2,10 @@
 
 namespace App\Filament\Restaurants\Pages;
 
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Schemas\Components\Utilities\Set;
 use App\Models\Kardex;
 use App\Models\Variant;
 use Filament\Pages\Page;
@@ -9,18 +13,17 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Set;
 use Filament\Tables\Filters\Filter;
 
-class KardexPage extends Page implements Tables\Contracts\HasTable
+class KardexPage extends Page implements HasTable
 {
-    use Tables\Concerns\InteractsWithTable;
+    use InteractsWithTable;
 
-    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-clipboard-document';
     protected static ?string $navigationLabel = 'Kardex';
-    protected static ?string $navigationGroup = 'Inventarios';
+    protected static string | \UnitEnum | null $navigationGroup = 'Inventarios';
     protected static ?string $title = 'Reporte de Kardex';
-    protected static string $view = 'filament.kardex.kardex-page';
+    protected string $view = 'filament.kardex.kardex-page';
 
     public ?int $productId = null;
 
@@ -37,18 +40,18 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                     )->orderBy('id', 'desc')
             )
             ->columns([
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->label('Fecha')
                     ->dateTime('d/m/Y H:i:s')
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('comprobante')
+                TextColumn::make('comprobante')
                     ->label('Doc. Asociado')
                     ->sortable()
                     ->wrap(),
 
 
-                Tables\Columns\TextColumn::make('modelo_type')
+                TextColumn::make('modelo_type')
                     ->label('Origen')
                     ->formatStateUsing(function ($state) {
 
@@ -78,7 +81,7 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                         };
                     }),
 
-                Tables\Columns\TextColumn::make('tipo_movimiento')
+                TextColumn::make('tipo_movimiento')
                     ->label('Movimiento')
                     ->badge()
                     ->color(fn($state) => match ($state) {
@@ -90,32 +93,32 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                         default => 'gray',
                     }),
 
-                Tables\Columns\TextColumn::make('warehouse.name')
+                TextColumn::make('warehouse.name')
                     ->label('Almacen')
                     ->placeholder('—')
                     ->sortable()
                     ->wrap(),
 
-                Tables\Columns\TextColumn::make('entrada')
+                TextColumn::make('entrada')
                     ->label('Entrada')
                     ->getStateUsing(fn($record) => $record->cantidad > 0 ? $record->cantidad : 0)
                     ->numeric(3)
                     ->color('success'),
 
-                Tables\Columns\TextColumn::make('salida')
+                TextColumn::make('salida')
                     ->label('Salida')
                     ->getStateUsing(fn($record) => $record->cantidad < 0 ? $record->cantidad : 0)
                     ->numeric(3)
                     ->color('danger'),
 
-                Tables\Columns\TextColumn::make('balance')
+                TextColumn::make('balance')
                     ->label('Balance')
                     ->getStateUsing(fn($record) => $record->stock_restante)
                     ->numeric(3),
             ])
             ->filters([
                 Filter::make('producto_variante')
-                    ->form([
+                    ->schema([
                         Select::make('product_id')
                             ->label('Producto')
                             ->relationship('product', 'name')
@@ -147,7 +150,7 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                             ->when($data['variant_id'] ?? null, fn($q) => $q->where('variant_id', $data['variant_id']));
                     }),
                 Filter::make('fecha')
-                    ->form([
+                    ->schema([
                         DatePicker::make('desde')->label('Desde'),
                         DatePicker::make('hasta')->label('Hasta'),
                     ])
@@ -162,8 +165,8 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
             ->emptyStateHeading('No hay registros para mostrar')
             ->emptyStateDescription('Aplica filtros o cambia los parámetros de búsqueda.')
             ->emptyStateIcon('heroicon-o-clipboard-document')
-            ->actions([])
-            ->bulkActions([]);
+            ->recordActions([])
+            ->toolbarActions([]);
     }
 
     public function areFiltersActive(): bool

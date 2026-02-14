@@ -2,18 +2,23 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Actions\Action;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use App\Filament\Resources\RestaurantResource\Pages\ListRestaurants;
 use App\Filament\Resources\RestaurantResource\Pages;
 use App\Models\Restaurant;
 use App\Models\User;
+use BackedEnum;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
-use Filament\Tables\Actions\Action;
 use Filament\Tables\Columns\TextColumn;
 
 class RestaurantResource extends Resource
@@ -22,17 +27,17 @@ class RestaurantResource extends Resource
 
     protected static bool $isScopedToTenant = false;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
 
     public static function canAccess(): bool
     {
         return Auth::user()->id == 1;
     }
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->components([
                 TextInput::make('name')
                     ->required()
                     ->maxLength(255),
@@ -118,12 +123,12 @@ class RestaurantResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
+            ->recordActions([
                 Action::make('manageUsers')
                     ->icon('heroicon-o-user-plus')
                     ->label('Usuarios')
                     ->color('primary')
-                    ->form(function (Restaurant $record) {
+                    ->schema(function (Restaurant $record) {
                         return [
                             Select::make('users')
                                 ->label('Usuarios')
@@ -138,12 +143,12 @@ class RestaurantResource extends Resource
                         $userIds = $data['users'] ?? [];
                         $record->users()->sync($userIds); // actualiza la relación (agrega y quita)
                     }),
-                Tables\Actions\EditAction::make(),
+                EditAction::make(),
             ])
 
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -158,7 +163,7 @@ class RestaurantResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListRestaurants::route('/'),
+            'index' => ListRestaurants::route('/'),
             // 'create' => Pages\CreateRestaurant::route('/create'),
             // 'edit' => Pages\EditRestaurant::route('/{record}/edit'),
         ];

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Restaurants\Resources\PurchaseResource\Pages;
 
+use Filament\Actions\DeleteAction;
 use App\Filament\Restaurants\Resources\PurchaseResource;
 use App\Traits\ManjoStockProductos;
 use Filament\Actions;
@@ -27,7 +28,7 @@ class EditPurchase extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            DeleteAction::make(),
         ];
     }
 

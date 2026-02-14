@@ -2,11 +2,24 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Grid;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Toggle;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use App\Filament\Restaurants\Resources\ProductionResource\Pages\ListProductions;
+use App\Filament\Restaurants\Resources\ProductionResource\Pages\CreateProduction;
+use App\Filament\Restaurants\Resources\ProductionResource\Pages\EditProduction;
 use App\Filament\Restaurants\Resources\ProductionResource\Pages;
 use App\Models\Production;
+use BackedEnum;
 use Filament\Forms;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -15,9 +28,10 @@ class ProductionResource extends Resource
 {
     protected static ?string $model = Production::class;
 
-    protected static ?string $navigationIcon = 'heroicon-m-squares-plus';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
 
-    protected static ?string $navigationGroup = 'Configuración';
+
+    // protected static ?string $navigationGroup = 'Configuración';
 
     protected static ?int $navigationSort = 5;
 
@@ -27,20 +41,20 @@ class ProductionResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\Section::make()
+        return $schema
+            ->components([
+                Section::make()
                     ->schema([
-                        Forms\Components\Grid::make(2) // 👈 Dos columnas
+                        Grid::make(2) // 👈 Dos columnas
                             ->schema([
                                 TextInput::make('name')->label('Nombre')
                                     ->required()
                                     ->maxLength(255),
 
                                 // Impresora (izquierda)
-                                Forms\Components\Select::make('printer_id')
+                                Select::make('printer_id')
                                     ->label('Impresora asignada')
                                     ->relationship('printer', 'name')
                                     ->searchable()
@@ -49,7 +63,7 @@ class ProductionResource extends Resource
                                     ->columnSpan(1),
 
                                 // Status (derecha)
-                                Forms\Components\Toggle::make('status')
+                                Toggle::make('status')
                                     ->label('Publicado')
                                     ->default(true)
                                     ->inline(false) // se muestra como switch normal
@@ -63,19 +77,19 @@ class ProductionResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')
+                TextColumn::make('name')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('printer.name')
+                TextColumn::make('printer.name')
                     ->label('Impresora')
                     ->placeholder('Ninguna')
                     ->sortable(),
-                Tables\Columns\IconColumn::make('status')
+                IconColumn::make('status')
                     ->boolean(),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -83,12 +97,12 @@ class ProductionResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -103,9 +117,9 @@ class ProductionResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListProductions::route('/'),
-            'create' => Pages\CreateProduction::route('/create'),
-            'edit' => Pages\EditProduction::route('/{record}/edit'),
+            'index' => ListProductions::route('/'),
+            'create' => CreateProduction::route('/create'),
+            'edit' => EditProduction::route('/{record}/edit'),
         ];
     }
 }

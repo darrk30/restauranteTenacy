@@ -2,10 +2,19 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use App\Filament\Restaurants\Resources\PrinterResource\Pages\ListPrinters;
 use App\Filament\Restaurants\Resources\PrinterResource\Pages;
 use App\Models\Printer;
+use BackedEnum;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -14,9 +23,10 @@ class PrinterResource extends Resource
 {
     protected static ?string $model = Printer::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-printer';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
 
-    protected static ?string $navigationGroup = 'Configuración';
+
+    // protected static ?string $navigationGroup = 'Configuración';
 
     protected static ?int $navigationSort = 5;
 
@@ -26,15 +36,15 @@ class PrinterResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\TextInput::make('name')
+        return $schema
+            ->components([
+                TextInput::make('name')
                     ->required()
                     ->maxLength(255),
-                Forms\Components\TextInput::make('description'),
-                Forms\Components\Toggle::make('status')
+                TextInput::make('description'),
+                Toggle::make('status')
                     ->required()
                     ->default(true)
                     ->inline(false),
@@ -45,18 +55,18 @@ class PrinterResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')
+                TextColumn::make('name')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('description')
+                TextColumn::make('description')
                     ->placeholder('Ninguna')
                     ->searchable(),
-                Tables\Columns\IconColumn::make('status')
+                IconColumn::make('status')
                     ->boolean(),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -64,12 +74,12 @@ class PrinterResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -84,7 +94,7 @@ class PrinterResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListPrinters::route('/'),
+            'index' => ListPrinters::route('/'),
             // 'create' => Pages\CreatePrinter::route('/create'),
             // 'edit' => Pages\EditPrinter::route('/{record}/edit'),
         ];

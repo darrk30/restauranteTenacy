@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\{FromQuery, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithColumnFormatting, WithEvents};
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
@@ -59,7 +60,7 @@ class VentasExport implements FromQuery, WithHeadings, WithMapping, WithStyles, 
         $fila = [];
         foreach ($this->columnasSeleccionadas as $col) {
             $fila[] = match ($col) {
-                'fecha_emision'     => $venta->fecha_emision ? \Carbon\Carbon::parse($venta->fecha_emision)->format('d/m/Y H:i') : '',
+                'fecha_emision'     => $venta->fecha_emision ? Carbon::parse($venta->fecha_emision)->format('d/m/Y H:i') : '',
                 'documento_identidad' => "{$venta->tipo_documento}: {$venta->numero_documento}",
                 'comprobante'       => "{$venta->serie}-{$venta->correlativo}",
                 'total'             => (float) $venta->total,

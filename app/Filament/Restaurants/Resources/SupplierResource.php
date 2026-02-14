@@ -2,20 +2,27 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Actions\Action;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use App\Filament\Restaurants\Resources\SupplierResource\Pages\ListSuppliers;
+use App\Filament\Restaurants\Resources\SupplierResource\Pages\CreateSupplier;
+use App\Filament\Restaurants\Resources\SupplierResource\Pages\EditSupplier;
 use App\Filament\Restaurants\Resources\SupplierResource\Pages;
 use App\Models\Supplier;
 use App\Services\DocumentoService;
+use BackedEnum;
 use Filament\Facades\Filament;
-use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Filament\Forms\Components\Actions\Action;
 use Filament\Tables\Filters\SelectFilter;
 use Illuminate\Validation\Rules\Unique;
 
@@ -23,15 +30,16 @@ class SupplierResource extends Resource
 {
     protected static ?string $model = Supplier::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-user-group';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
+
     protected static ?string $navigationLabel = 'Proveedores';
     protected static ?string $pluralLabel = 'Proveedores';
     protected static ?string $modelLabel = 'Proveedor';
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->components([
                 Section::make('Datos generales')
                     ->description('Información básica del proveedor')
                     ->schema([
@@ -200,12 +208,12 @@ class SupplierResource extends Resource
                         'archivado' => 'Archivado',
                     ]),
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -220,9 +228,9 @@ class SupplierResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListSuppliers::route('/'),
-            'create' => Pages\CreateSupplier::route('/create'),
-            'edit' => Pages\EditSupplier::route('/{record}/edit'),
+            'index' => ListSuppliers::route('/'),
+            'create' => CreateSupplier::route('/create'),
+            'edit' => EditSupplier::route('/{record}/edit'),
         ];
     }
 }

@@ -79,9 +79,9 @@ class PromotionRule extends Model
         static::deleted(function ($rule) {
             // Verificamos si la regla borrada era de tipo Límite
             if ($rule->type === PromotionRuleType::Limit || $rule->key === 'daily_limit') {
-                
+
                 $promo = $rule->promotion;
-                
+
                 if ($promo) {
                     // Preguntamos a la Promoción: "¿Te queda alguna OTRA regla de límite?"
                     // Si la respuesta es NO, entonces reseteamos el contador a 0.

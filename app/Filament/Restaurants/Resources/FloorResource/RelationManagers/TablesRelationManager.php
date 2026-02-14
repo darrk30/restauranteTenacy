@@ -2,8 +2,17 @@
 
 namespace App\Filament\Restaurants\Resources\FloorResource\RelationManagers;
 
+use Filament\Schemas\Schema;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Actions\CreateAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -14,17 +23,17 @@ class TablesRelationManager extends RelationManager
 {
     protected static string $relationship = 'Tables';
 
-    public function form(Form $form): Form
+    public function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\TextInput::make('name')
+        return $schema
+            ->components([
+                TextInput::make('name')
                     ->label('Nombre de Mesa')
                     ->required(),
-                Forms\Components\TextInput::make('asientos')
+                TextInput::make('asientos')
                     ->label('Número de Asientos')
                     ->default(1),
-                Forms\Components\Toggle::make('status')
+                Toggle::make('status')
                     ->label('Disponible')
                     ->default(true)
                     ->inline(false),
@@ -36,24 +45,24 @@ class TablesRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('Pisos y Mesas')
             ->columns([
-                Tables\Columns\TextColumn::make('name')->label('Mesa'),
-                Tables\Columns\TextColumn::make('asientos')->label('Asientos'),
-                Tables\Columns\IconColumn::make('status')->boolean()->label('Disponible'),
-                Tables\Columns\TextColumn::make('created_at')->dateTime()->label('Creado'),
+                TextColumn::make('name')->label('Mesa'),
+                TextColumn::make('asientos')->label('Asientos'),
+                IconColumn::make('status')->boolean()->label('Disponible'),
+                TextColumn::make('created_at')->dateTime()->label('Creado'),
             ])
             ->filters([
                 //
             ])
             ->headerActions([
-                Tables\Actions\CreateAction::make(),
+                CreateAction::make(),
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+            ->recordActions([
+                EditAction::make(),
+                DeleteAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

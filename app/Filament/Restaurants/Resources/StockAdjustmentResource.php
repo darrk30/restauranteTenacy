@@ -2,6 +2,21 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Grid;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Repeater;
+use Filament\Schemas\Components\Utilities\Set;
+use App\Models\Warehouse;
+use Filament\Forms\Components\TextInput;
+use Filament\Tables\Columns\TextColumn;
+use Carbon\Carbon;
+use Filament\Actions\Action;
+use Filament\Tables\Filters\Filter;
+use Filament\Forms\Components\DateTimePicker;
+use App\Filament\Restaurants\Resources\StockAdjustmentResource\Pages\ListStockAdjustments;
+use App\Filament\Restaurants\Resources\StockAdjustmentResource\Pages\CreateStockAdjustment;
 use App\Enums\StatusProducto;
 use App\Enums\TipoProducto;
 use App\Filament\Restaurants\Resources\StockAdjustmentResource\Pages;
@@ -11,11 +26,10 @@ use App\Models\Variant;
 use App\Models\Unit;
 use App\Services\StockAdjustmentService;
 use App\Traits\ManjoStockProductos;
+use BackedEnum;
 use Filament\Forms;
 use Filament\Forms\Components\Select;
 use Filament\Tables;
-use Filament\Forms\Form;
-use Filament\Forms\Set;
 use Filament\Notifications\Notification;
 use Filament\Tables\Table;
 use Filament\Resources\Resource;
@@ -25,24 +39,24 @@ class StockAdjustmentResource extends Resource
     use ManjoStockProductos;
     protected static ?string $model = StockAdjustment::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-arrow-path-rounded-square';
-    protected static ?string $navigationGroup = 'Inventario';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-arrow-path-rounded-square';
+    // protected static ?string $navigationGroup = 'Inventario';
     protected static ?string $navigationLabel = 'Ajustes de Stock';
     protected static ?string $pluralLabel = 'Ajustes de Stock';
     protected static ?string $label = 'Ajuste de Stock';
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->components([
 
-                Forms\Components\Section::make('Información del ajuste')
+                Section::make('Información del ajuste')
                     ->schema([
-                        Forms\Components\Grid::make(2)
+                        Grid::make(2)
                             ->schema([
-                                Forms\Components\Grid::make(1)
+                                Grid::make(1)
                                     ->schema([
-                                        Forms\Components\Select::make('tipo')
+                                        Select::make('tipo')
                                             ->label('Tipo de ajuste')
                                             ->options([
                                                 'entrada' => 'Entrada',
@@ -51,7 +65,7 @@ class StockAdjustmentResource extends Resource
                                             ->required(),
                                     ])
                                     ->columnSpan(1),
-                                Forms\Components\Textarea::make('motivo')
+                                Textarea::make('motivo')
                                     ->label('Motivo del ajuste')
                                     ->rows(5)
                                     ->columnSpan(1),
@@ -59,9 +73,9 @@ class StockAdjustmentResource extends Resource
                             ]),
                     ]),
 
-                Forms\Components\Section::make('Items del ajuste')
+                Section::make('Items del ajuste')
                     ->schema([
-                        Forms\Components\Repeater::make('items')
+                        Repeater::make('items')
                             ->relationship()
                             ->label('')
                             ->schema([
@@ -112,19 +126,19 @@ class StockAdjustmentResource extends Resource
                                     ->preload()
                                     ->required()
                                     ->columnSpan(2),
-                                Forms\Components\Select::make('warehouse_id')
+                                Select::make('warehouse_id')
                                     ->label('Almacén')
                                     ->relationship('warehouse', 'name')
-                                    ->default(fn() => \App\Models\Warehouse::query()->first()?->id)
+                                    ->default(fn() => Warehouse::query()->first()?->id)
                                     ->required(),
 
-                                Forms\Components\TextInput::make('cantidad')
+                                TextInput::make('cantidad')
                                     ->label('Cantidad')
                                     ->numeric()
                                     ->minValue(0.01)
                                     ->required(),
 
-                                Forms\Components\Select::make('unit_id')
+                                Select::make('unit_id')
                                     ->label('Unidad')
                                     ->options(function (callable $get) {
                                         $product = Product::with('unit')->find($get('product_id'));
@@ -152,7 +166,7 @@ class StockAdjustmentResource extends Resource
         return $table
             ->searchPlaceholder('Busca por codigo y almacén')
             ->columns([
-                Tables\Columns\TextColumn::make('codigo')
+                TextColumn::make('codigo')
                     ->label('Código')
                     ->sortable()
                     ->searchable()
@@ -164,19 +178,19 @@ class StockAdjustmentResource extends Resource
                     })
                     ->html(),
 
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->label('Fecha')
                     ->sortable()
                     ->formatStateUsing(function ($state) {
                         return '
                     <div style="display:flex; flex-direction:column; line-height:1.2;">
-                        <span>' . \Carbon\Carbon::parse($state)->timezone('America/Lima')->format('d/m/Y') . '</span>
-                        <span>' . \Carbon\Carbon::parse($state)->timezone('America/Lima')->format('h:i A') . '</span>
+                        <span>' . Carbon::parse($state)->timezone('America/Lima')->format('d/m/Y') . '</span>
+                        <span>' . Carbon::parse($state)->timezone('America/Lima')->format('h:i A') . '</span>
                     </div>';
                     })
                     ->html(),
 
-                Tables\Columns\TextColumn::make('tipo')
+                TextColumn::make('tipo')
                     ->badge()
                     ->label('Tipo')
                     ->colors([
@@ -185,13 +199,13 @@ class StockAdjustmentResource extends Resource
                     ])
                     ->formatStateUsing(fn($state) => ucfirst($state)),
 
-                Tables\Columns\TextColumn::make('motivo')
+                TextColumn::make('motivo')
                     ->label('Motivo')
                     ->placeholder('Sin motivo')
                     ->sortable()
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('items_count')
+                TextColumn::make('items_count')
                     ->counts('items')
                     ->label('Items')
                     ->sortable()
@@ -199,7 +213,7 @@ class StockAdjustmentResource extends Resource
                     ->alignment('center')
                     ->html()
                     ->action(
-                        Tables\Actions\Action::make('verItems')
+                        Action::make('verItems')
                             ->modalHeading('Productos')
                             ->modalWidth('lg')
                             ->modalContent(function ($record) {
@@ -209,7 +223,7 @@ class StockAdjustmentResource extends Resource
                             })
                     ),
 
-                Tables\Columns\TextColumn::make('status')
+                TextColumn::make('status')
                     ->label('Estado')
                     ->badge()
                     ->colors([
@@ -219,14 +233,14 @@ class StockAdjustmentResource extends Resource
             ])
 
             ->filters([
-                Tables\Filters\Filter::make('created_at')
-                    ->form([
-                        Forms\Components\DateTimePicker::make('from')
+                Filter::make('created_at')
+                    ->schema([
+                        DateTimePicker::make('from')
                             ->label('Desde')
                             ->displayFormat('d/m/Y h:i A') // Vista 12h
                             ->format('Y-m-d h:i A'),       // Formato guardado
 
-                        Forms\Components\DateTimePicker::make('until')
+                        DateTimePicker::make('until')
                             ->label('Hasta')
                             ->displayFormat('d/m/Y h:i A') // Vista 12h
                             ->format('Y-m-d h:i A'),
@@ -237,8 +251,8 @@ class StockAdjustmentResource extends Resource
                             ->when($data['until'] ?? null, fn($q, $date) => $q->where('created_at', '<=', $date));
                     }),
             ])
-            ->actions([
-                Tables\Actions\Action::make('anular')
+            ->recordActions([
+                Action::make('anular')
                     ->tooltip('Anular')
                     ->icon('heroicon-m-trash')
                     ->color('danger')
@@ -261,7 +275,7 @@ class StockAdjustmentResource extends Resource
                     }),
             ])
 
-            ->bulkActions([
+            ->toolbarActions([
                 // Tables\Actions\DeleteBulkAction::make(),
             ]);
     }
@@ -276,8 +290,8 @@ class StockAdjustmentResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListStockAdjustments::route('/'),
-            'create' => Pages\CreateStockAdjustment::route('/create'),
+            'index' => ListStockAdjustments::route('/'),
+            'create' => CreateStockAdjustment::route('/create'),
             // 'edit' => Pages\EditStockAdjustment::route('/{record}/edit'),
         ];
     }

@@ -2,6 +2,8 @@
 
 namespace App\Filament\Restaurants\Pages;
 
+use BackedEnum;
+use Filament\Notifications\Notification;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
@@ -11,10 +13,11 @@ use Illuminate\Support\Facades\Cache;
 
 class RestaurantProfile extends Page
 {
-    protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
+
     protected static ?string $navigationLabel = 'Mi Restaurante';
     protected static ?string $title = 'Perfil del Local';
-    protected static string $view = 'filament.restaurants.restaurant-profile';
+    protected string $view = 'filament.restaurants.restaurant-profile';
 
     public $restaurant;
 
@@ -38,7 +41,7 @@ class RestaurantProfile extends Page
             Action::make('edit')
                 ->label('Editar Datos')
                 ->mountUsing(fn($form) => $form->fill($this->restaurant->toArray()))
-                ->form([
+                ->schema([
                     TextInput::make('name_comercial')
                         ->label('Nombre Comercial')
                         ->required(),
@@ -58,7 +61,7 @@ class RestaurantProfile extends Page
                     Cache::forget("restaurant_data_user_" . auth()->id());
                     $this->restaurant->refresh();
 
-                    \Filament\Notifications\Notification::make()
+                    Notification::make()
                         ->title('Datos actualizados')
                         ->success()
                         ->send();

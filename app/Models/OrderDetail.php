@@ -2,7 +2,8 @@
 
 namespace App\Models;
 
-use App\Enums\statusPedido; // Asegúrate de importar tu Enum
+use BackedEnum;
+use App\Enums\StatusPedido; // Asegúrate de importar tu Enum
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -67,7 +68,7 @@ class OrderDetail extends Model
         // 1. EVENTO CREATED (Sumar al crear)
         static::created(function ($detail) {
             if ($detail->promotion_id) {
-                $promo = \App\Models\Promotion::find($detail->promotion_id);
+                $promo = Promotion::find($detail->promotion_id);
 
                 // Verificamos si existe y si tiene límite configurado
                 // (Usamos el método que creamos en Promotion.php que usa ->exists() en la BD)
@@ -95,7 +96,7 @@ class OrderDetail extends Model
         static::updated(function ($detail) {
             if (!$detail->promotion_id) return;
 
-            $promo = \App\Models\Promotion::find($detail->promotion_id);
+            $promo = Promotion::find($detail->promotion_id);
 
             // Condiciones para abortar: No hay promo, no tiene límite, o la venta no es de HOY.
             if (
@@ -107,18 +108,18 @@ class OrderDetail extends Model
             }
 
             // --- PREPARAR VALORES NORMALIZADOS PARA COMPARAR ---
-            $enumCancelado = \App\Enums\statusPedido::Cancelado;
-            $valorCancelado = $enumCancelado instanceof \BackedEnum ? $enumCancelado->value : $enumCancelado;
+            $enumCancelado = StatusPedido::Cancelado;
+            $valorCancelado = $enumCancelado instanceof BackedEnum ? $enumCancelado->value : $enumCancelado;
 
             // Normalizamos el estado ACTUAL del modelo (puede ser Enum o Scalar)
-            $statusActual = $detail->status instanceof \BackedEnum ? $detail->status->value : $detail->status;
+            $statusActual = $detail->status instanceof BackedEnum ? $detail->status->value : $detail->status;
 
             // --- LÓGICA A: CAMBIO DE ESTADO A CANCELADO ---
             if ($detail->isDirty('status') && $statusActual == $valorCancelado) {
 
                 // Normalizamos el estado ANTERIOR
                 $rawAnterior = $detail->getOriginal('status');
-                $statusAnterior = $rawAnterior instanceof \BackedEnum ? $rawAnterior->value : $rawAnterior;
+                $statusAnterior = $rawAnterior instanceof BackedEnum ? $rawAnterior->value : $rawAnterior;
 
                 // Solo restamos si antes NO estaba cancelado
                 if ($statusAnterior != $valorCancelado) {
@@ -142,15 +143,15 @@ class OrderDetail extends Model
 
         // 3. EVENTO DELETED (Restar al Eliminar registro)
         static::deleted(function ($detail) {
-            $enumCancelado = \App\Enums\statusPedido::Cancelado;
-            $valorCancelado = $enumCancelado instanceof \BackedEnum ? $enumCancelado->value : $enumCancelado;
+            $enumCancelado = StatusPedido::Cancelado;
+            $valorCancelado = $enumCancelado instanceof BackedEnum ? $enumCancelado->value : $enumCancelado;
 
             // Normalizamos el status que tenía el registro antes de morir
-            $statusFinal = $detail->status instanceof \BackedEnum ? $detail->status->value : $detail->status;
+            $statusFinal = $detail->status instanceof BackedEnum ? $detail->status->value : $detail->status;
 
             // Si se borra y NO estaba cancelado, devolvemos el cupo
             if ($statusFinal != $valorCancelado && $detail->promotion_id) {
-                $promo = \App\Models\Promotion::find($detail->promotion_id);
+                $promo = Promotion::find($detail->promotion_id);
 
                 if (
                     $promo &&

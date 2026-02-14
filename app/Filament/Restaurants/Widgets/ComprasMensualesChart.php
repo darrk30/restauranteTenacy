@@ -13,9 +13,9 @@ class ComprasMensualesChart extends ChartWidget
 {
     use InteractsWithPageFilters;
 
-    protected static ?string $heading = 'Gastos en Compras de Insumos';
+    protected ?string $heading = 'Gastos en Compras de Insumos';
     protected static ?int $sort = 4;
-    protected static string $color = 'danger';
+    protected string $color = 'danger';
 
     protected function getData(): array
     {
