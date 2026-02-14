@@ -16,12 +16,20 @@ return new class extends Migration
             // Relaciones principales
             $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
             $table->foreignId('order_id')->unique()->constrained()->cascadeOnDelete();
+
+            //Cliente
             $table->foreignId('client_id')->nullable()->constrained()->nullOnDelete();
+            $table->string('nombre_cliente')->nullable();
+
+            //Mozo
             $table->foreignId('user_id')->constrained(); // Quién realizó la venta
-            
-            $table->string('nombre_cliente');
-            $table->string('tipo_documento');
-            $table->string('numero_documento');
+
+            //Delivery
+            $table->foreignId('delivery_id')->nullable()->constrained('users'); // Delivery
+            $table->string('nombre_delivery')->nullable();
+
+            $table->string('tipo_documento')->nullable();
+            $table->string('numero_documento')->nullable();
 
             // Datos del Comprobante
             $table->string('tipo_comprobante'); // Boleta, Factura, Nota de Venta
@@ -38,6 +46,7 @@ return new class extends Migration
             // Estado
             $table->string('status')->default('conpletado');
             $table->text('notas')->nullable();
+            $table->string('canal')->nullable();
             $table->dateTime('fecha_emision')->nullable();
 
 

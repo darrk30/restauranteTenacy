@@ -393,9 +393,9 @@
 /* 3. MÓVIL (Hasta 640px) */
 @media (max-width: 640px) {
     .products-grid { 
-        /* En celulares forzamos 2 columnas estrictas */
         grid-template-columns: repeat(2, 1fr); 
-        gap: 10px; /* Reducimos el espacio un poco */
+        gap: 8px; 
+        padding: 5px;
     }
 }
 /* BOTÓN FLOTANTE MÓVIL */

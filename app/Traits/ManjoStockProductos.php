@@ -38,6 +38,24 @@ trait ManjoStockProductos
         }
     }
 
+    /**
+     * Revierte el stock de una venta (Anulación).
+     */
+    public function reverseVenta($sale): void
+    {
+        foreach ($sale->details as $item) {
+            // Solo procesamos si el producto tiene activado el control de stock
+            if ($item->product && $item->product->control_stock) {
+                $this->reverseItem(
+                    item: $item,
+                    tipo: 'salida',
+                    comprobante: $sale->serie . '-' . $sale->correlativo,
+                    movimiento: 'Venta Anulada'
+                );
+            }
+        }
+    }
+
     public function applyPurchase($purchase, $movimiento = null): void
     {
         foreach ($purchase->details as $item) {
@@ -169,7 +187,7 @@ trait ManjoStockProductos
             'warehouse_id'   =>  $warehouse->id,
             'tipo_movimiento' => $movimiento ?? $this->getReverseMovementName($item, $tipo),
             'comprobante'     => $comprobante,   // ← YA VIENE LISTO
-            'cantidad'        => -$cantidadFinal,
+            'cantidad'        => $cantidadFinal,
             'stock_restante'  => $stock->stock_real,
             'modelo_type'     => get_class($item->modelo ?? $item),
             'modelo_id'       => $item->modelo->id ?? $item->id,

@@ -14,7 +14,13 @@ return new class extends Migration
         Schema::create('orders', function (Blueprint $table) {
             $table->id();
             $table->string('code');
+            $table->string('canal')->nullable();
+            $table->foreignId('client_id')->nullable()->constrained()->nullOnDelete();
+            $table->string('nombre_cliente')->nullable();
+            $table->foreignId('delivery_id')->nullable()->constrained('users'); // Delivery
+            $table->string('nombre_delivery')->nullable();
             $table->string('status')->default('pendiente');
+            $table->string('status_llevar_delivery')->default('preparando'); //LLEVAR y DELIVERY> PREPARANDO, LLEVAR> ENTREGADO, DELIVERY> ENVIADO, ENTREGADO
             $table->decimal('subtotal', 10, 2)->default(0);
             $table->decimal('igv', 10, 2)->default(0);
             $table->decimal('total', 10, 2)->default(0);

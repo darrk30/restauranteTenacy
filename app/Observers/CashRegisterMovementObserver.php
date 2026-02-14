@@ -51,6 +51,7 @@ class CashRegisterMovementObserver
          */ 
         $saldoSistema = CashRegisterMovement::where('session_cash_register_id', $movimiento->session_cash_register_id)
             ->where('payment_method_id', $movimiento->payment_method_id)
+            ->where('status', 'aprobado')
             ->selectRaw("SUM(
                 CASE 
                     WHEN tipo = 'ingreso' THEN monto 

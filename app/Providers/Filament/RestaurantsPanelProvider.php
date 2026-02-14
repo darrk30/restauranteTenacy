@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Restaurants\Pages\Dashboard;
 use App\Models\Restaurant;
 use Filament\FontProviders\GoogleFontProvider;
 use Filament\Http\Middleware\Authenticate;
@@ -11,6 +12,8 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\Support\Assets\Css;
+use Filament\Support\Assets\Js;
 use Filament\Support\Enums\FontFamily;
 use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -18,6 +21,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Njxqlus\FilamentProgressbar\FilamentProgressbarPlugin;
 
@@ -26,13 +30,21 @@ class RestaurantsPanelProvider extends PanelProvider
     public function panel(Panel $panel): Panel
     {
         return $panel
-            ->id('restaurants')
+            ->id('app')
             ->default()
-            ->brandName('Mi Restaurante')
-            ->brandLogo('/img/mi-restaurant.png')
-            ->brandLogoHeight('55px')
+            ->brandName(fn() => auth()->user()?->restaurants()->first()?->name_comercial ?? 'Mi Restaurante')
+            ->brandLogo(function () {
+                $user = Auth::user();
+                $restaurant = $user?->restaurants()->first();
+
+                if ($restaurant && $restaurant->logo) {
+                    return asset('storage/' . $restaurant->logo);
+                }
+                return asset('img/mi-restaurant.png');
+            })
+            ->brandLogoHeight('3.5rem')
             ->favicon('/img/restaurant-favicon.ico')
-            ->path('restaurants')
+            ->path('app')
             // ->profile()
             ->login()
             // ->colors([
@@ -126,7 +138,8 @@ class RestaurantsPanelProvider extends PanelProvider
             ->discoverResources(in: app_path('Filament/Restaurants/Resources'), for: 'App\\Filament\\Restaurants\\Resources')
             ->discoverPages(in: app_path('Filament/Restaurants/Pages'), for: 'App\\Filament\\Restaurants\\Pages')
             ->pages([
-                Pages\Dashboard::class,
+                // Pages\Dashboard::class,
+                Dashboard::class
             ])
             ->discoverWidgets(in: app_path('Filament/Restaurants/Widgets'), for: 'App\\Filament\\Restaurants\\Widgets')
             ->widgets([
@@ -147,8 +160,19 @@ class RestaurantsPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
+            ->spa()// para que las páginas se carguen sin refrescar toda la página
+            ->assets([
+            // Cargamos el script aquí para que esté disponible GLOBALMENTE
+                Js::make('mesas-script', asset('js/mesas.js')), 
+                Js::make('orden-mesa-script', asset('js/ordenmesa.js')), 
+            ])
+            ->globalSearch(true)
+            ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
+            ->unsavedChangesAlerts()//para mostrar alertas de cambios no guardados
+            ->databaseTransactions()//para realizar transacciones en las páginas de recursos
             ->discoverClusters(in: app_path('Filament/Clusters'), for: 'App\\Filament\\Clusters')
             ->tenant(Restaurant::class, slugAttribute: 'slug')
+            ->tenantDomain('{tenant:slug}.restaurantetenacy.test')
             ->plugin(FilamentProgressbarPlugin::make()->color('#29b'));
     }
 }

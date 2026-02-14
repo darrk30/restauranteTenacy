@@ -14,7 +14,7 @@
             @php
                 $restaurantSlug = $item->product->restaurant->slug;
                 $productSlug = $item->product->slug;
-                $productUrl = url("/restaurants/{$restaurantSlug}/gestion/products/{$productSlug}/edit");
+                $productUrl = url("/app/{$restaurantSlug}/gestion/products/{$productSlug}/edit");
             @endphp
 
             <tr>

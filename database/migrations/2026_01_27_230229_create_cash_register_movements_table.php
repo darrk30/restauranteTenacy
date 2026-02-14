@@ -27,7 +27,7 @@ return new class extends Migration
 
             // ¿Cuánto?
             $table->decimal('monto', 10, 2);
-
+            $table->string('status')->default('aprobado');
             // 3. DESCRIPCIÓN MANUAL
             $table->text('observacion')->nullable();
 

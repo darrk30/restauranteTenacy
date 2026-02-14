@@ -17,6 +17,7 @@ use Filament\Actions\Contracts\HasActions;
 use Filament\Pages\Page;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -35,16 +36,11 @@ class OrdenMesa extends Page implements HasActions
     public $itemsEliminados = [];
     public $lastUpdatedItemId = null;
 
-    // === PROPIEDADES DE URL ===
-    public int $mesa;
-    public ?int $pedido = null;
     public $codigoOrden = null;
     public $personas = 1;
-    // === FILTROS ===
     public $categoriaSeleccionada = null;
     public $search = '';
 
-    // === CONTROL DE CAMBIOS ===
     public $cantidadesOriginales = [];
     public $notasOriginales = [];
     public $preciosOriginales = [];
@@ -52,18 +48,14 @@ class OrdenMesa extends Page implements HasActions
     public $stockActualVariante = 0;
     public $stockReservaVariante = 0;
 
-    // === VARIABLES DEL MODAL (PRODUCTO SELECCIONADO) ===
-    // Esto permite que la variable guarde un Producto, una Promoción o Null
     public Product|Promotion|null $productoSeleccionado = null;
     public $variantSeleccionadaId = null;
     public $esCortesia = false;
     public $notaPedido = '';
 
-    // Lógica de Selección
     public $selectedAttributes = [];
     public $precioCalculado = 0.00;
 
-    // === NUEVA PROPIEDAD PARA LA COMANDA ===
     public $mostrarModalComanda = false;
     public ?Order $ordenGenerada = null;
 
@@ -71,12 +63,41 @@ class OrdenMesa extends Page implements HasActions
     public $cantidadesOriginalesPorVariante = [];
     public $tenantSlug;
 
-    public function mount(int $mesa, ?int $pedido = null)
+    public $canal = 'salon';
+    public $nombre_cliente = null;
+    public $nombre_repartidor = null;
+    public $direccion = null;
+    public $telefono = null;
+    public $delivery_id = null;
+    public $cliente_id = null;
+
+    public $mesa = null;
+    public ?int $pedido = null;
+
+    public function mount(Request $request, $mesa = null, ?int $pedido = null)
     {
-        $this->mesa = $mesa;
+        // Captura inicial de datos de la URL
+        $this->canal = $request->query('canal', 'salon');
+        $this->nombre_cliente = $request->query('nombre');
+        $this->cliente_id = $request->query('cliente_id');
+        $this->direccion = $request->query('direccion');
+        $this->telefono = $request->query('telefono');
+        $this->delivery_id = $request->query('delivery_id');
+        $this->nombre_repartidor = $request->query('nombre_delivery');
+
+        $this->mesa = ($mesa === 'nuevo' || $mesa == 0) ? null : $mesa;
         $this->pedido = $pedido;
         $this->tenantSlug = Filament::getTenant()->slug;
 
+        // Cargamos los datos del pedido (si existe)
+        $this->cargarDatosPedido();
+    }
+
+    /**
+     * Método extraído para evitar el error de Request en llamadas manuales
+     */
+    public function cargarDatosPedido()
+    {
         if (session()->has('personas_iniciales')) {
             $this->personas = session('personas_iniciales');
         }
@@ -90,56 +111,54 @@ class OrdenMesa extends Page implements HasActions
         }
 
         if ($this->pedido) {
-            $ordenExistente = Order::with(['details'])->find($this->pedido);
+            $ordenExistente = Order::with(['details.product'])->find($this->pedido);
+
             if (!$ordenExistente || $ordenExistente->status === statusPedido::Cancelado) {
-                return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
+                return redirect()->to("/app/point-of-sale");
             }
-            if ($ordenExistente) {
-                $this->codigoOrden = $ordenExistente->code;
-                $this->subtotal = $ordenExistente->subtotal;
-                $this->igv = $ordenExistente->igv;
-                $this->total = $ordenExistente->total;
 
-                $this->carrito = $ordenExistente->details->map(function ($detalle) {
-                    $this->cantidadesOriginales[$detalle->id] = $detalle->cantidad;
-                    $this->notasOriginales[$detalle->id] = $detalle->notes;
-                    $this->preciosOriginales[$detalle->id] = $detalle->price;
+            // Sincronizar datos de la orden
+            $this->cliente_id = $ordenExistente->cliente_id;
+            $this->canal = $ordenExistente->canal ?? 'salon';
+            $this->nombre_cliente = $ordenExistente->nombre_cliente;
+            $this->direccion = $ordenExistente->direccion;
+            $this->telefono = $ordenExistente->telefono;
+            $this->nombre_repartidor = $ordenExistente->nombre_delivery;
+            $this->delivery_id = $ordenExistente->delivery_id;
+            $this->codigoOrden = $ordenExistente->code;
+            $this->subtotal = $ordenExistente->subtotal;
+            $this->igv = $ordenExistente->igv;
+            $this->total = $ordenExistente->total;
 
-                    // --- CORRECCIÓN AQUÍ: DETECTAR TIPO CORRECTAMENTE ---
-                    $esPromocion = $detalle->item_type === TipoProducto::Promocion->value ||
-                        $detalle->item_type === 'promotion' || // Por si se guardó en minúscula
-                        !empty($detalle->promotion_id);
+            $this->carrito = $ordenExistente->details->map(function ($detalle) {
+                $this->cantidadesOriginales[$detalle->id] = $detalle->cantidad;
+                $this->notasOriginales[$detalle->id] = $detalle->notes;
+                $this->preciosOriginales[$detalle->id] = $detalle->price;
 
-                    $tipo = $esPromocion ? TipoProducto::Promocion->value : TipoProducto::Producto->value;
-                    $idReal = $esPromocion ? $detalle->promotion_id : $detalle->product_id;
-                    // Si por error promotion_id es null en BD pero es promo, usamos product_id
-                    if ($esPromocion && empty($idReal)) $idReal = $detalle->product_id;
+                $esPromocion = $detalle->item_type === TipoProducto::Promocion->value || !empty($detalle->promotion_id);
+                $tipo = $esPromocion ? TipoProducto::Promocion->value : TipoProducto::Producto->value;
+                $idReal = $esPromocion ? $detalle->promotion_id : $detalle->product_id;
 
-                    return [
-                        'item_id'     => $detalle->id,
-
-                        // Normalizamos: product_id en el carrito guarda el ID de la promo o del producto
-                        'product_id'  => $esPromocion ? null : $detalle->product_id,
-                        'variant_id'  => $detalle->variant_id,
-                        'promotion_id' => $esPromocion ? $detalle->promotion_id : null,
-                        // IMPORTANTE: Recuperar el TYPE
-                        'type'        => $tipo,
-
-                        'name'        => $detalle->product_name,
-                        'price'       => $detalle->price,
-                        'quantity'    => $detalle->cantidad,
-                        'total'       => $detalle->subTotal,
-                        'is_cortesia' => (bool) $detalle->cortesia,
-                        'notes'       => $detalle->notes,
-                        // Cargar imagen según corresponda (Promo o Producto)
-                        'image'       => $esPromocion
-                            ? (\App\Models\Promotion::find($idReal)?->image_path)
-                            : ($detalle->product ? $detalle->product->image_path : null),
-                        'guardado'    => true,
-                    ];
-                })->toArray();
-            }
+                return [
+                    'item_id'      => $detalle->id,
+                    'product_id'   => $esPromocion ? null : $detalle->product_id,
+                    'variant_id'   => $detalle->variant_id,
+                    'promotion_id' => $esPromocion ? $detalle->promotion_id : null,
+                    'type'         => $tipo,
+                    'name'         => $detalle->product_name,
+                    'price'        => $detalle->price,
+                    'quantity'     => $detalle->cantidad,
+                    'total'        => $detalle->subTotal,
+                    'is_cortesia'  => (bool) $detalle->cortesia,
+                    'notes'        => $detalle->notes,
+                    'image'        => $esPromocion
+                        ? (\App\Models\Promotion::find($idReal)?->image_path)
+                        : ($detalle->product ? $detalle->product->image_path : null),
+                    'guardado'     => true,
+                ];
+            })->toArray();
         }
+
         $this->hayCambios = false;
         $this->itemsEliminados = [];
     }
@@ -149,13 +168,7 @@ class OrdenMesa extends Page implements HasActions
     {
         $producto = Product::with('production.printer')->find($productId);
         $prod = $producto?->production;
-
-        // Validación flexible: Solo validamos que el área exista y esté activa
-        // Ignoramos el estado de la impresora para evitar falsos "GENERAL"
-        if ($prod && $prod->status) {
-            return ['id' => $prod->id, 'name' => $prod->name];
-        }
-
+        if ($prod && $prod->status) return ['id' => $prod->id, 'name' => $prod->name];
         return ['id' => 'general', 'name' => 'GENERAL'];
     }
 
@@ -167,19 +180,39 @@ class OrdenMesa extends Page implements HasActions
             return;
         }
 
+        // VALIDACIONES SEGÚN CANAL
+        if ($this->canal === 'llevar' && empty($this->nombre_cliente)) {
+            Notification::make()->title('El nombre del cliente es obligatorio para llevar')->danger()->send();
+            return;
+        }
+
+        if ($this->canal === 'delivery') {
+            if (empty($this->nombre_cliente) || empty($this->direccion) || empty($this->telefono)) {
+                Notification::make()->title('Nombre, Dirección y Teléfono son obligatorios para Delivery')->danger()->send();
+                return;
+            }
+        }
+
         try {
             DB::beginTransaction();
             $restaurantId = Filament::getTenant()->id;
+
+            // Generar Código
             $ultimoPedido = Order::where('restaurant_id', $restaurantId)->lockForUpdate()->orderBy('id', 'desc')->first();
-            $numeroSiguiente = 1;
-            if ($ultimoPedido) {
-                $numeroSiguiente = intval($ultimoPedido->code) + 1;
-            }
+            $numeroSiguiente = $ultimoPedido ? intval($ultimoPedido->code) + 1 : 1;
             $codigoFinal = str_pad($numeroSiguiente, 8, '0', STR_PAD_LEFT);
 
-            // 1. Crear Orden
+            // 1. Crear Orden con datos dinámicos
             $order = Order::create([
-                'table_id'      => $this->mesa,
+                'restaurant_id' => $restaurantId,
+                'table_id'      => ($this->canal === 'salon') ? $this->mesa : null, // Solo guarda mesa si es salón
+                'client_id'    => $this->cliente_id,
+                'canal'         => $this->canal,
+                'nombre_cliente' => $this->nombre_cliente,
+                'nombre_delivery' => $this->nombre_repartidor,
+                'delivery_id'   => $this->delivery_id,
+                'direccion'     => $this->direccion,
+                'telefono'      => $this->telefono,
                 'code'          => $codigoFinal,
                 'status'        => statusPedido::Pendiente,
                 'subtotal'      => $this->subtotal,
@@ -189,85 +222,51 @@ class OrdenMesa extends Page implements HasActions
                 'user_id'       => Auth::id(),
             ]);
 
-            // Array para impresión
-            $diffParaCocina = [
-                'nuevos' => [],
-                'cancelados' => []
-            ];
-
-            // 2. Detalles y Stock
+            // 2. Detalles y Stock (Se mantiene igual que tu lógica original)
             foreach ($this->carrito as $item) {
                 $esPromocion = isset($item['type']) && $item['type'] === TipoProducto::Promocion->value;
-
                 OrderDetail::create([
-                    'order_id'       => $order->id,
-
-                    // IMPORTANTE:
-                    // Guardamos el ID en 'product_id' SIEMPRE para que la BD no falle (Not Null Constraint).
-                    'product_id'     => $esPromocion ? null : $item['product_id'],
-
-                    // Guardamos el ID en 'promotion_id' SOLO si es promo.
-                    'promotion_id'   => $esPromocion ? $item['promotion_id'] : null,
-
-                    // Guardamos el TIPO correcto ('Promocion' o 'Producto')
-                    'item_type'      => $esPromocion ? TipoProducto::Promocion->value : TipoProducto::Producto->value,
-
-                    'variant_id'     => $item['variant_id'],
-                    'product_name'   => $item['name'],
-                    'price'          => $item['price'],
-                    'cantidad'       => $item['quantity'],
-                    'subTotal'       => $item['total'],
-                    'cortesia'       => $item['is_cortesia'] ? 1 : 0,
-                    'status'         => statusPedido::Pendiente,
-                    'notes'          => $item['notes'],
+                    'order_id'      => $order->id,
+                    'product_id'    => $esPromocion ? null : $item['product_id'],
+                    'promotion_id'  => $esPromocion ? $item['promotion_id'] : null,
+                    'item_type'     => $esPromocion ? TipoProducto::Promocion->value : TipoProducto::Producto->value,
+                    'variant_id'    => $item['variant_id'],
+                    'product_name'  => $item['name'],
+                    'price'         => $item['price'],
+                    'cantidad'      => $item['quantity'],
+                    'subTotal'      => $item['total'],
+                    'cortesia'      => $item['is_cortesia'] ? 1 : 0,
+                    'status'        => statusPedido::Pendiente,
+                    'notes'         => $item['notes'],
                     'fecha_envio_cocina' => now(),
                 ]);
 
-                // 2. Gestionar Stock MANUALMENTE solo si es PRODUCTO
-                // (Si es promo, el evento OrderDetail::booted lo hará automáticamente al ver item_type='Promocion')
                 if (!$esPromocion) {
-                    // Si es Producto individual
                     $this->gestionarStock($item['variant_id'], $item['quantity'], 'restar');
                 } else {
-                    // Si es Promoción -> Restamos sus ingredientes
                     $this->gestionarStockPromocion($item['promotion_id'], $item['quantity'], 'restar');
                 }
-
-                // --- CLASIFICACIÓN PARA EL TICKET ---
-                $areaData = $this->obtenerDatosArea($item['product_id']);
-
-                $diffParaCocina['nuevos'][] = [
-                    'cant' => $item['quantity'],
-                    'nombre' => $item['name'],
-                    'nota' => $item['notes'],
-                    'area_id' => $areaData['id'],
-                    'area_nombre' => $areaData['name']
-                ];
             }
 
-            // 3. Actualizar Mesa
-            $mesaModel = Table::where('id', $this->mesa);
-            if ($mesaModel) {
-                $mesaModel->update(['estado_mesa' => 'ocupada', 'order_id' => $order->id, 'asientos' => $this->personas]);
-            }
-
-            // 4. Guardar en Cache para Imprimir (con áreas)
-            if (!empty($diffParaCocina['nuevos'])) {
-                $jobId = 'print_new_' . $order->id . '_' . time();
-                Cache::put($jobId, $diffParaCocina, now()->addMinutes(5));
-                session()->flash('print_job_id', $jobId);
+            // 3. Actualizar Mesa solo si es Salón
+            if ($this->canal === 'salon' && $this->mesa) {
+                Table::where('id', $this->mesa)->update([
+                    'estado_mesa' => 'ocupada',
+                    'order_id' => $order->id,
+                    'asientos' => $this->personas
+                ]);
             }
 
             DB::commit();
 
-            $this->carrito = [];
+            // Redirección dinámica
+            $paramMesa = $this->mesa ?? 'nuevo';
             return redirect()
-                ->to("/restaurants/{$this->tenantSlug}/orden-mesa/{$this->mesa}/{$order->id}")
-                ->with('orden_creada_id', $order->id); // Flash ID para reabrir modal si es necesario
-
+                ->to("/app/orden-mesa/{$paramMesa}/{$order->id}")
+                ->with('orden_creada_id', $order->id);
         } catch (\Exception $e) {
             DB::rollBack();
-            Notification::make()->title('Error al procesar orden')->body($e->getMessage())->danger()->send();
+            Notification::make()->title('Error al procesar')->body($e->getMessage())->danger()->send();
         }
     }
 
@@ -448,19 +447,22 @@ class OrdenMesa extends Page implements HasActions
 
             DB::commit();
 
-            $this->hayCambios = false;
-            $this->itemsEliminados = [];
+            if (!empty($diffParaCocina['nuevos']) || !empty($diffParaCocina['cancelados'])) {
+                $jobId = 'print_' . $this->pedido . '_' . time();
+                Cache::put($jobId, $diffParaCocina, now()->addMinutes(5));
 
-            // Refrescamos y recargamos la página (mount se ejecutará de nuevo y actualizará notasOriginales)
-            $this->ordenGenerada = $order->refresh()->load(['details.product.production.printer', 'table', 'user']);
-
-            if (session()->has('print_job_id')) {
-                $this->mostrarModalComanda = true;
+                // Usamos session()->flash para que el x-modal-ticket lo detecte en este request
+                session()->flash('print_job_id', $jobId);
             }
+
+            // === PASO CLAVE 2: Refrescar el objeto para el modal ===
+            $this->ordenGenerada = $order->refresh()->load(['details.product.production.printer', 'table', 'user']);
+            $this->mostrarModalComanda = true; // Forzamos la visibilidad
+
             Notification::make()->title('Orden actualizada')->success()->send();
 
-            // Importante volver a llamar al mount para resetear originales
-            $this->mount($this->mesa, $this->pedido);
+            // === PASO CLAVE 3: Reiniciar estados del carrito sin recargar la página entera ===
+            $this->cargarDatosPedido();
         } catch (\Exception $e) {
             DB::rollBack();
             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
@@ -909,7 +911,7 @@ class OrdenMesa extends Page implements HasActions
                 ->success()
                 ->send();
 
-            return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
+            return redirect()->to("/app/point-of-sale");
         } catch (\Exception $e) {
             DB::rollBack();
             \Filament\Notifications\Notification::make()
@@ -1330,7 +1332,7 @@ class OrdenMesa extends Page implements HasActions
 
     public static function getSlug(): string
     {
-        return 'orden-mesa/{mesa}/{pedido?}';
+        return 'orden-mesa/{mesa?}/{pedido?}';
     }
 
     public function getHeading(): string

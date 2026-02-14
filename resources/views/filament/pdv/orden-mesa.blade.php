@@ -296,9 +296,26 @@
 
                 {{-- Agrupamos en columna alineada a la derecha --}}
                 <div class="flex flex-col items-end leading-tight">
-                    <span class="text-sm font-normal text-gray-500">
-                        Mesa: {{ $mesa }}
-                    </span>
+                    @if ($canal === 'salon')
+                        <span class="text-sm font-normal text-gray-500">
+                            Mesa: <span class="font-bold text-gray-800">{{ $mesa }}</span>
+                        </span>
+                    @else
+                        <div class="flex flex-col items-end">
+                            <span class="text-[10px] text-blue-500 uppercase font-bold tracking-tighter">
+                                {{ $canal === 'delivery' ? '🛵 Delivery' : ($canal === 'llevar' ? '🛍️ Llevar' : '🏢 Salón') }}
+                                {{-- Nombre del repartidor en línea pequeña --}}
+                                {!! $canal === 'delivery' && $nombre_repartidor
+                                    ? " | <span class='text-gray-400'>$nombre_repartidor</span>"
+                                    : '' !!}
+                            </span>
+                            <span class="text-sm font-bold text-gray-800 dark:text-white truncate max-w-[150px]"
+                                title="{{ $nombre_cliente }}">
+                                {{ $nombre_cliente ?? 'Publico en general' }}
+                            </span>
+                        </div>
+                    @endif
+
                     @if ($codigoOrden)
                         <span class="text-xs font-bold text-blue-600 mt-1">
                             N° {{ $codigoOrden }}
@@ -489,7 +506,18 @@
         <div class="mobile-cart-content" @click.stop>
             <div class="mobile-cart-header">
                 <div class="flex items-center gap-3">
-                    <span>Orden Actual</span>
+                    <div class="flex flex-col">
+                        <span class="text-[10px] text-blue-500 uppercase font-bold tracking-tighter">
+                            {{ $canal === 'delivery' ? '🛵 Delivery' : ($canal === 'llevar' ? '🛍️ Llevar' : '🏢 Salón') }}
+                            {{-- Nombre del repartidor en línea pequeña --}}
+                            {!! $canal === 'delivery' && $nombre_repartidor
+                                ? " | <span class='text-gray-400'>$nombre_repartidor</span>"
+                                : '' !!}
+                        </span>
+                        <span class="text-sm font-bold text-gray-800 dark:text-white">
+                            {{ $canal === 'salon' ? 'Mesa ' . $mesa : $nombre_cliente ?? 'Cliente' }}
+                        </span>
+                    </div>
                     @if ($pedido && !(count($carrito) === 0))
                         {{ $this->anularPedidoAction }}
                     @endif
@@ -710,7 +738,7 @@
 
     @push('scripts')
         <script>
-            let scrollAnimation;
+            window.scrollAnimation = window.scrollAnimation || null;
 
             function scrollCategories(direction) {
                 const container = document.getElementById('categoryList');
@@ -720,18 +748,17 @@
                 const start = container.scrollLeft;
                 const change = direction === 'left' ? -distance : distance;
                 const startTime = performance.now();
-                cancelAnimationFrame(scrollAnimation);
-
+                cancelAnimationFrame(window.scrollAnimation);
                 function animate(currentTime) {
                     const elapsed = currentTime - startTime;
                     const progress = Math.min(elapsed / duration, 1);
                     const ease = 1 - (1 - progress) * (1 - progress);
                     container.scrollLeft = start + (change * ease);
                     if (elapsed < duration) {
-                        scrollAnimation = requestAnimationFrame(animate);
+                        window.scrollAnimation = requestAnimationFrame(animate);
                     }
                 }
-                scrollAnimation = requestAnimationFrame(animate);
+                window.scrollAnimation = requestAnimationFrame(animate);
             }
         </script>
     @endpush

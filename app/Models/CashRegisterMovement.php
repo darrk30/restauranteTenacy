@@ -13,10 +13,11 @@ class CashRegisterMovement extends Model
         'session_cash_register_id',
         'payment_method_id',
         'usuario_id',
-        'tipo', //Ingreso, Salida
+        'tipo',
         'motivo',
         'monto',
         'observacion',
+        'status',
         'referencia_type',
         'referencia_id',
     ];
@@ -36,6 +37,8 @@ class CashRegisterMovement extends Model
         return $this->belongsTo(User::class);
     }
 
-
-
+    public function referencia()
+    {
+        return $this->morphTo();
+    }
 }

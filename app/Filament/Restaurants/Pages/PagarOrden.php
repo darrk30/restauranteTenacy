@@ -70,11 +70,13 @@ class PagarOrden extends Page implements HasForms, HasActions
 
     public $ventaExitosaId = null; // ID de la venta recién creada
     public $mostrarPantallaExito = false;
+    public $canal_orden;
 
     public function mount($record)
     {
         $this->tenantSlug = Filament::getTenant()->slug;
         $this->order = Order::with(['details.product.unit', 'details.variant'])->findOrFail($record);
+        $this->canal_orden = $this->order->canal;
         $this->items = $this->order->details;
 
         $this->cargarSeries();
@@ -303,16 +305,18 @@ class PagarOrden extends Page implements HasForms, HasActions
             if (!$serieConfig) throw new \Exception("Serie no válida.");
 
             $correlativo = $this->obtenerCorrelativoFinal($this->serie_id);
-
+            $nombreFinalCliente = $this->cliente_seleccionado 
+            ? ($this->cliente_seleccionado->razon_social ?? ($this->cliente_seleccionado->nombres . ' ' . $this->cliente_seleccionado->apellidos))
+            : 'CLIENTES VARIOS';
             // Crear Venta (Cabecera)
             $sale = Sale::create([
                 'restaurant_id'    => $tenantId,
                 'order_id'         => $order->id,
                 'client_id'        => $this->cliente_seleccionado?->id,
                 'user_id'          => $userId,
-                'nombre_cliente'   => $this->cliente_seleccionado?->full_name ?? 'Cliente Varios',
+                'nombre_cliente'   => $nombreFinalCliente,
                 'tipo_documento'   => $this->cliente_seleccionado?->tipo_documento ?? 'DNI',
-                'numero_documento' => $this->cliente_seleccionado?->numero ?? '00000000',
+                'numero_documento' => $this->cliente_seleccionado?->numero ?? '99999999',
                 'tipo_comprobante' => $this->tipo_comprobante,
                 'serie'            => $serieConfig->serie,
                 'correlativo'      => $correlativo,
@@ -321,6 +325,9 @@ class PagarOrden extends Page implements HasForms, HasActions
                 'monto_igv'        => $this->monto_igv,
                 'total'            => $this->total_final,
                 'status'           => 'completado',
+                'canal'            => $order->canal, // Ej: 'delivery', 'llevar', 'salon'
+                'delivery_id'      => $order->delivery_id, // ID del repartidor
+                'nombre_delivery'  => $order->nombre_delivery, // Nombre del repartidor
                 'fecha_emision'    => now(),
             ]);
 
@@ -367,11 +374,24 @@ class PagarOrden extends Page implements HasForms, HasActions
             // 4. INSERCIONES MASIVAS (BATCH)
             DB::table('sale_details')->insert($detallesParaInsertar);
 
+            $detallesReales = \App\Models\SaleDetail::where('sale_id', $sale->id)
+                ->orderBy('id', 'asc') // El orden del insert masivo se respeta en los IDs
+                ->get();
+
+            // Sincronizamos los IDs con tus objetos de Kardex
+            foreach ($detallesParaKardex as $index => $tempDetail) {
+                if (isset($detallesReales[$index])) {
+                    // Le "tatuamos" el ID real al objeto temporal antes de ir al Trait
+                    $tempDetail->id = $detallesReales[$index]->id;
+                    $tempDetail->exists = true; // Le decimos a Eloquent que ya existe en la DB
+                }
+            }
+
+            // Ahora, cuando applyVentaMasiva lea $item->id, ya no será null
             if ($detallesParaKardex->isNotEmpty()) {
                 $this->applyVentaMasiva($detallesParaKardex, 'salida', "{$sale->serie}-{$sale->correlativo}", 'Venta');
             }
 
-            // 5. REGISTRAR PAGOS EN CAJA (Batch)
             // 5. REGISTRAR PAGOS EN CAJA (Batch)
             $movimientosCaja = collect($this->pagos_agregados)->map(function ($pago) use ($sale, $userId) {
 
@@ -411,7 +431,7 @@ class PagarOrden extends Page implements HasForms, HasActions
             Notification::make()->title('Venta exitosa')->success()->send();
             $this->ventaExitosaId = $sale->id;
             $this->mostrarPantallaExito = true;
-            // return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
+            // return redirect()->to("/app/point-of-sale");
         } catch (\Exception $e) {
             DB::rollBack();
             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
@@ -420,7 +440,7 @@ class PagarOrden extends Page implements HasForms, HasActions
 
     public function terminarProcesoVenta()
     {
-        return redirect()->to("/restaurants/{$this->tenantSlug}/point-of-sale");
+        return redirect()->to("/app/point-of-sale");
     }
 
     public function getHeading(): string
