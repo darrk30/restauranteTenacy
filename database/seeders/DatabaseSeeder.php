@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Restaurant;
 use App\Models\User;
+use App\Models\Warehouse;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -33,6 +34,7 @@ class DatabaseSeeder extends Seeder
 
             User::first()->restaurants()->attach($restaurant);
         }
+
 
         // 🧩 Ejecutar seeders adicionales
         $this->call([

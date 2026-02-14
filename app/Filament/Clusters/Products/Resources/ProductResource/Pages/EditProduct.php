@@ -14,23 +14,6 @@ class EditProduct extends EditRecord
 
     protected static string $resource = ProductResource::class;
 
-    // protected function afterSave(): void
-    // {
-    //     $data = $this->form->getState();
-    //     $attributeValues = collect($data['attribute_values'] ?? [])
-    //         ->filter(fn($item) => isset($item['attribute_id']) && !empty($item['values']));
-
-    //     if ($attributeValues->isEmpty()) {
-    //         $this->record->attributes()->sync([]);
-    //         Variant::where('product_id', $this->record->id)
-    //             ->update(['status' => 'archivado']);
-    //         return;
-    //     }
-
-    //     $valuesByAttribute = $this->syncProductAttributes($attributeValues->toArray(), $this->record);
-    //     $this->syncVariants($valuesByAttribute, $this->record);
-    // }
-
     protected function afterSave(): void
     {
         $data = $this->form->getState();
@@ -67,20 +50,24 @@ class EditProduct extends EditRecord
     protected function mutateFormDataBeforeFill(array $data): array
     {
         $product = $this->record->load('attributes');
-
+        /** @var Product $product */
         if ($product->attributes->isEmpty()) {
             return $data;
         }
 
         $data['attribute_values'] = $product->attributes->map(function ($attr) {
             $decoded = json_decode($attr->pivot->values ?? '[]', true);
-
+            // dd($decoded);
             return [
                 'attribute_id' => $attr->id,
                 // extrae solo los IDs de los valores asociados
                 'values' => collect($decoded)->pluck('id')->filter()->values()->toArray() ?: [],
+                'extra_prices' => collect($decoded)->mapWithKeys(function ($item) {
+                    return [$item['id'] => $item['extra'] ?? 0];
+                })->toArray(),
             ];
         })->values()->toArray();
+        // dd($data['attribute_values']);
 
         return $data;
     }

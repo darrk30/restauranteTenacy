@@ -14,14 +14,11 @@ return new class extends Migration
         Schema::create('variants', function (Blueprint $table) {
             $table->id();
             $table->string('image_path')->nullable();
-            $table->string('sku')->nullable();
+            $table->string('codigo_barras')->nullable();
             $table->string('internal_code')->nullable();
-            $table->decimal('extra_price')->nullable()->default(0);
-            $table->integer('stock_real')->nullable()->default(0);        // Stock total
-            $table->integer('stock_virtual')->nullable()->default(0);        // Stock virtual
-            $table->integer('stock_minimo')->nullable()->default(0); // Stock mínimo
-            $table->boolean('venta_sin_stock')->default(false);  // Permitir pedidos sin stock
-            $table->string('status')->default('Activo');
+            // $table->decimal('extra_price')->nullable()->default(0);
+            $table->string('status')->default('activo');
+            $table->boolean('stock_inicial')->default(false);
             $table->foreignId('product_id')->constrained()->onDelete('cascade');
             $table->foreignId('restaurant_id')->constrained()->onDelete('cascade');
             $table->timestamps();

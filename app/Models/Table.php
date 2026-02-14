@@ -7,11 +7,16 @@ use Illuminate\Database\Eloquent\Builder;
 
 class Table extends Model
 {
-    protected $fillable = ['name', 'status', 'floor_id'];
+    protected $fillable = ['name', 'estado_mesa', 'status', 'asientos', 'floor_id', 'restaurant_id', 'order_id'];
 
     public function restaurant()
     {
         return $this->belongsTo(Restaurant::class);
+    }
+
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
     }
 
     protected static function booted(): void
@@ -23,6 +28,9 @@ class Table extends Model
         });
 
         static::creating(function ($table) {
+            if (app()->has('bypass_tenant_scope')) {
+                return; // omitir asignación
+            }
             if (filament()->getTenant()) {
                 $table->restaurant_id = filament()->getTenant()->id;
             }

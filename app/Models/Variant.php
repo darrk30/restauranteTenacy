@@ -2,22 +2,22 @@
 
 namespace App\Models;
 
+use App\Observers\VariantObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 
+#[ObservedBy([VariantObserver::class])]
 class Variant extends Model
 {
     protected $fillable = [
         'image_path',
-        'sku',
+        'codigo_barras',
         'internal_code',
-        'extra_price',
-        'stock_real',
-        'stock_virtual',
-        'stock_minimo',
-        'venta_sin_stock',
+        'stock_inicial',
         'product_id',
-        'status'
+        'status',
+        'restaurant_id'
     ];
     
     public function product()
@@ -35,6 +35,51 @@ class Variant extends Model
         return $this->belongsToMany(Value::class, 'variant_value');
     }
 
+    public function promotionproducts()
+    {
+        return $this->hasMany(PromotionProduct::class);
+    }
+
+    public function stocks()
+    {
+        return $this->hasMany(WarehouseStock::class);
+    }
+
+    public function ajustesitems()
+    {
+        return $this->hasMany(StockAdjustmentItem::class);
+    }
+
+    public function purchaseDetails()
+    {
+        return $this->hasMany(PurchaseDetail::class);
+    }
+
+    public function kardexes()
+    {
+        return $this->hasMany(Kardex::class);
+    }
+
+    public function orderDetails()
+    {
+        return $this->hasMany(OrderDetail::class);
+    }
+
+    public function saleDetails()
+    {
+        return $this->hasMany(SaleDetail::class);
+    }
+
+
+    public function getFullNameAttribute()
+    {
+        $values = $this->values->map(function ($value) {
+            return $value->attribute->name . ': ' . $value->name;
+        })->implode(', ');
+
+        return ($values ? " ({$values})" : ' (Unica)');
+    }
+
     protected static function booted(): void
     {
         static::addGlobalScope('restaurant', function (Builder $query) {
@@ -43,9 +88,9 @@ class Variant extends Model
             }
         });
 
-        static::creating(function ($production) {
+        static::creating(function ($variant) {
             if (filament()->getTenant()) {
-                $production->restaurant_id = filament()->getTenant()->id;
+                $variant->restaurant_id = filament()->getTenant()->id;
             }
         });
     }

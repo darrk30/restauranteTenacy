@@ -23,6 +23,8 @@ class BrandResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    protected static ?string $pluralModelLabel = 'Marcas';
+
     protected static ?string $cluster = ProductsCluster::class;
 
     protected static ?int $navigationSort = 3;

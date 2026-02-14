@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class Printer extends Model
 {
-    protected $fillable = ['name', 'status'];
+    protected $fillable = ['name', 'description' ,'status'];
 
     public function restaurant()
     {

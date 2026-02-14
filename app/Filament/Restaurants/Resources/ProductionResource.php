@@ -3,7 +3,6 @@
 namespace App\Filament\Restaurants\Resources;
 
 use App\Filament\Restaurants\Resources\ProductionResource\Pages;
-use App\Filament\Restaurants\Resources\ProductionResource\RelationManagers;
 use App\Models\Production;
 use Filament\Forms;
 use Filament\Forms\Components\TextInput;
@@ -11,14 +10,20 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Forms\Set;
-use Illuminate\Support\Str;
 
 class ProductionResource extends Resource
 {
     protected static ?string $model = Production::class;
 
     protected static ?string $navigationIcon = 'heroicon-m-squares-plus';
+
+    protected static ?string $navigationGroup = 'Configuración';
+
+    protected static ?int $navigationSort = 5;
+
+    protected static ?string $navigationLabel = 'Areas de Producción';
+
+    protected static ?string $pluralModelLabel = 'Areas de Producción';
 
     protected static ?string $recordTitleAttribute = 'name';
 
@@ -32,23 +37,14 @@ class ProductionResource extends Resource
                             ->schema([
                                 TextInput::make('name')->label('Nombre')
                                     ->required()
-                                    ->maxLength(255)
-                                    ->reactive() // necesario para afterStateUpdated
-                                    ->lazy() // 👈 genera el slug solo cuando terminas de escribir
-                                    ->afterStateUpdated(fn($state, callable $set) => $set('slug', \Illuminate\Support\Str::slug($state))),
+                                    ->maxLength(255),
 
-                                TextInput::make('slug')
-                                    ->label('Slug')
-                                    ->required()
-                                    ->maxLength(255)
-                                    ->disabled()
-                                    ->dehydrated(),
                                 // Impresora (izquierda)
                                 Forms\Components\Select::make('printer_id')
                                     ->label('Impresora asignada')
                                     ->relationship('printer', 'name')
-                                    ->required()
                                     ->searchable()
+                                    ->placeholder('Ninguna')
                                     ->preload()
                                     ->columnSpan(1),
 
@@ -69,10 +65,9 @@ class ProductionResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('slug')
-                    ->searchable(),
                 Tables\Columns\TextColumn::make('printer.name')
-                    ->searchable()
+                    ->label('Impresora')
+                    ->placeholder('Ninguna')
                     ->sortable(),
                 Tables\Columns\IconColumn::make('status')
                     ->boolean(),

@@ -1,0 +1,84 @@
+/* === COMPONENTE CARD PRODUCT === */
+.detail-card {
+    background-color: var(--card-bg); border-radius: 16px; overflow: hidden;
+    display: flex; flex-direction: column; width: 100%; max-width: 500px;
+    margin: 0 auto; border: 1px solid var(--card-border); color: var(--pos-text);
+}
+
+/* Imagen */
+.detail-image-container {
+    width: 100%; height: 200px; background-color: var(--secondary-bg);
+    position: relative; overflow: hidden;
+}
+.detail-img { width: 100%; height: 100%; object-fit: cover; }
+.no-image-placeholder {
+    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #9ca3af;
+}
+.no-image-placeholder svg { width: 64px; height: 64px; }
+
+.detail-title-overlay {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%);
+    padding: 30px 20px 15px; color: white;
+}
+.detail-product-name { font-size: 1.4rem; font-weight: 800; margin: 0; line-height: 1.1; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+.detail-product-price { font-size: 1.1rem; font-weight: 600; color: #fbbf24; margin-top: 4px; }
+
+/* Cuerpo */
+.detail-body { padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+.section-label { font-size: 0.8rem; font-weight: 700; color: #9ca3af; text-transform: uppercase; margin-bottom: 8px; display: block; letter-spacing: 0.5px; }
+
+/* Switch Cortesía */
+.courtesy-row {
+    display: flex; justify-content: space-between; align-items: center;
+    background-color: var(--secondary-bg); padding: 12px 16px; 
+    border-radius: 12px; border: 1px solid var(--card-border);
+}
+.courtesy-label { font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
+.icon-gift { width: 20px; height: 20px; color: var(--primary-color); }
+
+.switch { position: relative; display: inline-block; width: 46px; height: 24px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #cbd5e1; transition: .3s; border-radius: 34px;
+}
+.slider:before {
+    position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
+    background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+input:checked + .slider { background-color: var(--primary-color); }
+input:checked + .slider:before { transform: translateX(22px); }
+
+/* Variantes */
+.variants-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.variant-option-btn {
+    background-color: var(--card-bg); border: 2px solid var(--card-border);
+    padding: 12px 8px; border-radius: 10px; cursor: pointer; text-align: center;
+    transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.variant-option-btn:hover { border-color: var(--primary-color); background-color: var(--hover-bg); }
+.variant-option-btn.selected {
+    border-color: var(--primary-color); background-color: rgba(217, 119, 6, 0.08); color: var(--primary-color);
+}
+.variant-name { font-weight: 700; font-size: 0.9rem; }
+.extra-price-badge { font-size: 0.7rem; background-color: var(--pos-text); color: var(--pos-bg); padding: 2px 6px; border-radius: 4px; font-weight: 700; }
+
+/* Textarea */
+.notes-area {
+    width: 100%; background-color: var(--secondary-bg); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 12px; color: var(--pos-text); font-size: 0.95rem;
+    resize: none; outline: none; transition: border-color 0.2s; font-family: inherit;
+}
+.notes-area:focus { border-color: var(--primary-color); background-color: var(--card-bg); }
+
+/* Footer */
+.detail-footer { padding: 20px; border-top: 1px solid var(--card-border); background-color: var(--card-bg); }
+.btn-confirm {
+    width: 100%; background-color: var(--primary-color); color: var(--primary-text);
+    border: none; padding: 16px; border-radius: 12px; font-size: 1.1rem; font-weight: 800;
+    cursor: pointer; transition: transform 0.1s, opacity 0.2s; display: flex; justify-content: center; align-items: center; gap: 8px;
+    box-shadow: 0 4px 6px -1px rgba(217, 119, 6, 0.3);
+}
+.btn-confirm:hover { opacity: 0.95; transform: translateY(-1px); }
+.btn-confirm:active { transform: translateY(1px); }

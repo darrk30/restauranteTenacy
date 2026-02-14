@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class Floor extends Model
 {
-    protected $fillable = ['name', 'status', 'printer_id'];
+    protected $fillable = ['name', 'status', 'printer_id', 'restaurant_id'];
 
     public function restaurant()
     {
@@ -33,6 +33,9 @@ class Floor extends Model
         });
 
         static::creating(function ($floor) {
+            if (app()->has('bypass_tenant_scope')) {
+                return; // omitir asignación
+            }
             if (filament()->getTenant()) {
                 $floor->restaurant_id = filament()->getTenant()->id;
             }

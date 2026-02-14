@@ -21,6 +21,9 @@ class TablesRelationManager extends RelationManager
                 Forms\Components\TextInput::make('name')
                     ->label('Nombre de Mesa')
                     ->required(),
+                Forms\Components\TextInput::make('asientos')
+                    ->label('Número de Asientos')
+                    ->default(1),
                 Forms\Components\Toggle::make('status')
                     ->label('Disponible')
                     ->default(true)
@@ -34,12 +37,9 @@ class TablesRelationManager extends RelationManager
             ->recordTitleAttribute('Pisos y Mesas')
             ->columns([
                 Tables\Columns\TextColumn::make('name')->label('Mesa'),
-                Tables\Columns\IconColumn::make('status')
-                    ->boolean()
-                    ->label('Disponible'),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
-                    ->label('Creado'),
+                Tables\Columns\TextColumn::make('asientos')->label('Asientos'),
+                Tables\Columns\IconColumn::make('status')->boolean()->label('Disponible'),
+                Tables\Columns\TextColumn::make('created_at')->dateTime()->label('Creado'),
             ])
             ->filters([
                 //

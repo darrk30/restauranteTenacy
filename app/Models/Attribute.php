@@ -10,6 +10,7 @@ class Attribute extends Model
     protected $fillable = [
         'name',
         'tipo',
+        'restaurant_id',
     ];
 
     public function restaurant()
@@ -30,9 +31,9 @@ class Attribute extends Model
             }
         });
 
-        static::creating(function ($printer) {
+        static::creating(function ($atribute) {
             if (filament()->getTenant()) {
-                $printer->restaurant_id = filament()->getTenant()->id;
+                $atribute->restaurant_id = filament()->getTenant()->id;
             }
         });
     }

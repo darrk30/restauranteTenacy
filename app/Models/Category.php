@@ -10,7 +10,6 @@ class Category extends Model
 {
     protected $fillable = ['name', 'status'];
 
-
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);
@@ -19,6 +18,11 @@ class Category extends Model
     public function products()
     {
         return $this->belongsToMany(Product::class, 'category_product');
+    }
+
+    public function promotion()
+    {
+        return $this->belongsTo(Promotion::class);
     }
 
     protected static function booted(): void

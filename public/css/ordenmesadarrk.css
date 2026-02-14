@@ -1,0 +1,190 @@
+/* ===================== */
+/* 🌑 DARK MODE */
+/* ===================== */
+
+html.dark,
+body.dark {
+    background: #000000;
+    color: #ffffff;
+}
+
+/* ===== LEFT PANEL ===== */
+.dark .left-panel {
+    background: #0b0b0b;
+}
+
+.dark .product-search input {
+    background: #111111;
+    border-color: #2a2a2a;
+    color: #ffffff;
+}
+
+.dark .product-search input::placeholder {
+    color: #9ca3af;
+}
+
+.dark .categories {
+    border-color: #1f1f1f;
+}
+
+.dark .category-btn {
+    background: #1a1a1a;
+    color: #ffffff;
+}
+
+.dark .category-btn.active {
+    background: #2563eb;
+    color: #ffffff;
+}
+
+/* ===== PRODUCT CARD ===== */
+.dark .product-card {
+    background: #0b0b0b;
+    box-shadow: 0 8px 24px rgba(0,0,0,.8);
+}
+
+.dark .product-name {
+    color: #ffffff;
+}
+
+.dark .product-price {
+    color: #3b82f6;
+}
+
+.dark .product-image {
+    background: #0b0b0b;
+}
+
+/* STOCK */
+.dark .product-stock {
+    background: #2563eb;
+}
+
+/* ===== RIGHT PANEL ===== */
+.dark .right-panel {
+    background: #0b0b0b;
+}
+
+.dark .order-header,
+.dark .order-footer {
+    border-color: #1f1f1f;
+}
+
+.dark .order-item {
+    border-color: #1f1f1f;
+}
+
+.dark .order-name {
+    color: #ffffff;
+}
+
+.dark .order-note {
+    color: #9ca3af;
+}
+
+.dark .order-qty {
+    color: #3b82f6;
+}
+
+/* ===== MODAL ===== */
+.dark .modal {
+    background: #0b0b0b;
+    color: #ffffff;
+}
+
+.dark .modal-header,
+.dark .modal-footer {
+    border-color: #1f1f1f;
+}
+
+.dark .modal-backdrop {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+/* IMAGEN VARIANTE */
+.dark .variant-image {
+    border-color: #1f1f1f;
+    background: #000000;
+}
+
+/* ===== VARIANT BUTTON ===== */
+.dark .variant-btn {
+    background: #111111;
+    border-color: #2a2a2a;
+    color: #ffffff;
+}
+
+.dark .variant-btn:hover {
+    background: #1a1a1a;
+    border-color: #3b82f6;
+}
+
+.dark .variant-btn.active {
+    background: #1a1a1a;
+    border-color: #2563eb;
+    color: #ffffff;
+}
+
+.dark .variant-label {
+    color: #ffffff;
+}
+
+.dark .price-badge {
+    background: #333333;
+    color: #ffffff;
+}
+
+/* ===== INPUTS ===== */
+.dark .note-input,
+.dark .qty-input {
+    background: #111111;
+    border-color: #2a2a2a;
+    color: #ffffff;
+}
+
+.dark .note-input::placeholder {
+    color: #9ca3af;
+}
+
+/* ===== BOTONES ===== */
+.dark .btn-confirm {
+    background: #2563eb;
+    color: #ffffff;
+}
+
+.dark .btn-cancel {
+    background: #dc2626;
+    color: #ffffff;
+}
+
+.dark .btn-confirm:disabled {
+    opacity: .4;
+}
+
+/* ===== CART FAB ===== */
+.dark .cart-fab {
+    background: #2563eb;
+    color: #ffffff;
+}
+
+/* ===== EMPTY STATE ===== */
+.dark .empty-state h3 {
+    color: #ffffff;
+}
+
+.dark .empty-state p {
+    color: #9ca3af;
+}
+
+
+.dark .modal-confirm {
+    background: #2a2a2a;
+}
+
+.dark .modal-confirm h3 {
+    color: #ffffff;
+}
+
+.dark .modal-confirm p {
+    color: #ffffff;
+}

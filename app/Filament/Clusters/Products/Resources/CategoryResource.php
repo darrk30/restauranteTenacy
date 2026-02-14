@@ -16,7 +16,6 @@ use Filament\Tables\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Support\Str;
 
 class CategoryResource extends Resource
 {
@@ -27,6 +26,8 @@ class CategoryResource extends Resource
     protected static ?string $recordTitleAttribute = 'name';
 
     protected static ?string $cluster = ProductsCluster::class;
+
+    protected static ?string $pluralModelLabel = 'Categorías';
 
     protected static ?int $navigationSort = 2;
 

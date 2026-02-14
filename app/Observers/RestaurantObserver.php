@@ -4,7 +4,11 @@ namespace App\Observers;
 
 use App\Models\Restaurant;
 use App\Models\UnitCategory;
+use Database\Seeders\ConfiguracionInicial;
+use Database\Seeders\FloorSeeder;
+use Database\Seeders\TypeDocumentSeeder;
 use Database\Seeders\UnitSeeder;
+use Database\Seeders\WarehouseSeeder;
 
 class RestaurantObserver
 {
@@ -16,6 +20,10 @@ class RestaurantObserver
     {
         app()->instance('bypass_tenant_scope', true);
         (new UnitSeeder())->runForRestaurant($restaurant);
+        (new WarehouseSeeder())->runForRestaurant($restaurant);
+        (new FloorSeeder())->runForRestaurant($restaurant);
+        (new TypeDocumentSeeder())->runForRestaurant($restaurant);
+        (new ConfiguracionInicial())->runForRestaurant($restaurant);
         app()->forgetInstance('bypass_tenant_scope');
     }
 
