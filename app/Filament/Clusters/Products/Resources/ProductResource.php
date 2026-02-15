@@ -69,7 +69,7 @@ class ProductResource extends Resource
                                                 ->label('Imagen del producto')
                                                 ->image()
                                                 ->disk('public')
-                                                ->directory('tenants/' . Filament::getTenant()->slug. '/products')
+                                                ->directory('tenants/' . Filament::getTenant()->slug . '/products')
                                                 ->visibility('public')
                                                 ->preserveFilenames()
                                                 ->columnSpanFull(),
@@ -104,7 +104,21 @@ class ProductResource extends Resource
                                     ToggleButtons::make('type')
                                         ->label('Tipo de Producto')
                                         ->inline()
-                                        ->options(TipoProducto::class)
+                                        ->options(
+                                            fn() => collect(TipoProducto::cases())
+                                                ->reject(fn($type) => $type === TipoProducto::Promocion)
+                                                ->mapWithKeys(fn($type) => [$type->value => $type->getLabel()])
+                                        )
+                                        ->icons(
+                                            fn() => collect(TipoProducto::cases())
+                                                ->reject(fn($type) => $type === TipoProducto::Promocion)
+                                                ->mapWithKeys(fn($type) => [$type->value => $type->getIcon()])
+                                        )
+                                        ->colors(
+                                            fn() => collect(TipoProducto::cases())
+                                                ->reject(fn($type) => $type === TipoProducto::Promocion)
+                                                ->mapWithKeys(fn($type) => [$type->value => $type->getColor()])
+                                        )
                                         ->required()
                                         ->validationMessages([
                                             'required' => 'Tipo de producto requerido',

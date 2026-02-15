@@ -15,6 +15,7 @@ class Variant extends Model
         'codigo_barras',
         'internal_code',
         'stock_inicial',
+        'costo',
         'product_id',
         'status',
         'restaurant_id'

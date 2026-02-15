@@ -12,6 +12,7 @@ use Filament\Forms;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Forms\Components\Actions\Action;
+use Filament\Forms\Components\Toggle;
 
 class ProductVariants extends Page implements Tables\Contracts\HasTable
 {
@@ -67,29 +68,24 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
 
                 Tables\Columns\TextColumn::make('product.name')
                     ->label('Producto'),
-
-                Tables\Columns\TextColumn::make('values')
+                    
+                    Tables\Columns\TextColumn::make('values')
                     ->label('Variante de producto')
                     ->getStateUsing(
                         fn($record) =>
                         $record->values && $record->values->isNotEmpty()
-                            ? $record->values
-                            ->map(fn($value) => "{$value->attribute->name}: {$value->name}")
-                            ->toArray()
-                            : ['Sin variantes']
-                    )
-                    ->badge()
-                    ->colors(['primary']),
-
-
-                Tables\Columns\TextColumn::make('precio_extra')
-                    ->label('Precio extra')
-                    ->getStateUsing(function ($record) {
-                        $extraPrice = $record->extra_price ?? 0;
-                        return 'S/ ' . number_format($extraPrice, 2);
-                    }),
-
-                Tables\Columns\TextColumn::make('status')
+                        ? $record->values
+                        ->map(fn($value) => "{$value->attribute->name}: {$value->name}")
+                        ->toArray()
+                        : ['Sin variantes']
+                        )
+                        ->badge()
+                        ->colors(['primary']),
+                        
+                    Tables\Columns\TextColumn::make('costo')
+                        ->formatStateUsing(fn($state) => 'S/ ' . number_format($state, 2))
+                        ->label('Costo'),
+                    Tables\Columns\TextColumn::make('status')
                     ->label('Estado')
                     ->badge()
                     ->colors([
@@ -121,59 +117,57 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                             ->directory('products/variants')
                             ->disk('public')
                             ->preserveFilenames()
-                            ->previewable(true),
-                        Forms\Components\TextInput::make('codigo_barras')
-                            ->label('Codigo de barras')
-                            ->maxLength(100),
+                            ->previewable(true)
+                            ->columnSpanFull(), // Para que ocupe todo el ancho arriba
 
-                        Forms\Components\TextInput::make('internal_code')
-                            ->label('Código interno')
-                            ->maxLength(100),
+                        // --- FILA 1: Códigos (2 Columnas) ---
+                        Forms\Components\Grid::make(2)
+                            ->schema([
+                                Forms\Components\TextInput::make('codigo_barras')
+                                    ->label('Código de barras')
+                                    ->maxLength(100),
 
-                        Forms\Components\TextInput::make('extra_price')
-                            ->label('Precio adicional')
-                            ->numeric()
-                            ->prefix('S/'),
+                                Forms\Components\TextInput::make('internal_code')
+                                    ->label('Código interno')
+                                    ->maxLength(100),
+                            ]),
 
-                        Forms\Components\TextInput::make('stock_inicial')
-                            ->label(
-                                fn($record) =>
-                                $record?->product?->unit?->name
-                                    ? "Stock inicial ({$record->product->unit->name})"
-                                    : "Stock inicial"
-                            )
-                            ->default(0)
-                            ->visible(function ($record) {
-                                if (!$record?->product?->control_stock) return false;           // Controla stock
-                                if ($record?->product?->unit?->code === 'ZZ') return false;     // No es servicio
-                                if ($record->stock_inicial != false) return false;           // Solo 1 vez
+                        // --- FILA 2: Stock, Costo y Estado (3 Columnas) ---
+                        Forms\Components\Grid::make(3)
+                            ->schema([
+                                // 1. Stock Inicial (Tu lógica original intacta)
+                                Forms\Components\TextInput::make('stock_inicial')
+                                    ->label(fn($record) => $record?->product?->unit?->name ? "Stock inicial ({$record->product->unit->name})" : "Stock inicial")
+                                    ->default(0)
+                                    ->visible(function ($record) {
+                                        if (!$record?->product?->control_stock) return false;
+                                        if ($record?->product?->unit?->code === 'ZZ') return false;
+                                        if ($record->stock_inicial != false) return false;
+                                        return true;
+                                    })
+                                    ->numeric()
+                                    ->step(fn($record) => $record?->product?->unit?->code === 'NIU' ? 1 : 'any')
+                                    ->rules(fn($record) => $record?->product?->unit?->code === 'NIU' ? ['required', 'integer', 'min:0'] : ['required', 'numeric', 'min:0'])
+                                    ->helperText("Solo se ingresa una vez."),
 
-                                return true;
-                            })
-                            ->numeric()
-                            ->step(
-                                fn($record) =>
-                                $record?->product?->unit?->code === 'NIU' ? 1 : 'any'
-                            )
-                            ->rules(
-                                fn($record) =>
-                                $record?->product?->unit?->code === 'NIU'
-                                    ? ['required', 'integer', 'min:0']
-                                    : ['required', 'numeric', 'min:0']
-                            )
-                            ->helperText("El stock inicial solo se podrá ingresar una única vez."),
+                                // 2. Costo (Agregado según tu petición)
+                                Forms\Components\TextInput::make('costo')
+                                    ->label('Costo')
+                                    ->numeric()
+                                    ->prefix('S/.') // Opcional: símbolo de moneda
+                                    ->default(0),
 
-                        Forms\Components\ToggleButtons::make('status')
-                            ->label('Estado')
-                            ->options([
-                                'activo' => 'Activo',
-                                'inactivo' => 'Inactivo',
-                            ])
-                            ->colors([
-                                'activo' => 'success',
-                                'inactivo' => 'danger',
-                            ])
-                            ->inline(),
+                                // 3. Estado (Switch)
+                                Toggle::make('status')
+                                    ->label('Estado')
+                                    ->onColor('success')
+                                    ->offColor('danger')
+                                    ->inline(false) // Pone la etiqueta ARRIBA del switch, alineándolo visualmente con los inputs de texto
+                                    // 1. Al LEER: Convertimos 'activo' a true, cualquier otra cosa a false
+                                    ->formatStateUsing(fn($state) => $state === 'activo')
+                                    // 2. Al GUARDAR: Si es true guardamos 'activo', si es false guardamos 'inactivo'
+                                    ->dehydrateStateUsing(fn($state) => $state ? 'activo' : 'inactivo'),
+                            ]),
                     ])
                     ->fillForm(fn($record) => $record->toArray())
                     ->action(function (array $data, $record): void {

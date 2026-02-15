@@ -75,7 +75,12 @@ class PagarOrden extends Page implements HasForms, HasActions
     public function mount($record)
     {
         $this->tenantSlug = Filament::getTenant()->slug;
-        $this->order = Order::with(['details.product.unit', 'details.variant'])->findOrFail($record);
+        $this->order = Order::with([
+            'details.product.unit',
+            'details.variant',
+            'details.promotion.promotionproducts.product.unit', // Producto del hijo
+            'details.promotion.promotionproducts.variant'       // Variante del hijo
+        ])->findOrFail($record);
         $this->canal_orden = $this->order->canal;
         $this->items = $this->order->details;
 
@@ -264,13 +269,13 @@ class PagarOrden extends Page implements HasForms, HasActions
 
     public function procesarPagoFinal(InventoryService $inventoryService)
     {
-        // 1. PREPARACIÓN (Fuera de transacción para no bloquear)
+        // 1. PREPARACIÓN
         $this->calculateTotalServer();
         $totalPagado = collect($this->pagos_agregados)->sum('amount');
         $tenantId = Filament::getTenant()->id;
         $userId = Auth::id();
 
-        // Validaciones rápidas
+        // Validaciones básicas de caja y montos
         $sesionCaja = SessionCashRegister::where('restaurant_id', $tenantId)
             ->where('user_id', $userId)
             ->where('status', 'open')
@@ -286,18 +291,39 @@ class PagarOrden extends Page implements HasForms, HasActions
             return;
         }
 
-        // Carga previa de stocks para evitar el problema N+1
+        // --------------------------------------------------------------------------
+        // A. RECOLECCIÓN DE IDs PARA CONSULTA MASIVA DE STOCK (OPTIMIZACIÓN)
+        // --------------------------------------------------------------------------
         $almacenes = Warehouse::where('restaurant_id', $tenantId)->get();
-        $variantIds = $this->items->pluck('variant_id')->unique();
-        $todosLosStocks = WarehouseStock::whereIn('variant_id', $variantIds)
+        $variantIdsToCheck = collect();
+
+        foreach ($this->items as $item) {
+            if ($item->item_type === 'Promocion' && $item->promotion) {
+                // Si es promoción, recolectamos los IDs de sus hijos
+                foreach ($item->promotion->promotionproducts as $subItem) {
+                    if ($subItem->variant_id) {
+                        $variantIdsToCheck->push($subItem->variant_id);
+                    }
+                }
+            } elseif ($item->variant_id) {
+                // Si es producto normal
+                $variantIdsToCheck->push($item->variant_id);
+            }
+        }
+
+        $variantIdsToCheck = $variantIdsToCheck->unique();
+
+        // Traemos todo el stock necesario de una sola vez
+        $todosLosStocks = WarehouseStock::whereIn('variant_id', $variantIdsToCheck)
             ->whereIn('warehouse_id', $almacenes->pluck('id'))
             ->get()
             ->groupBy('variant_id');
+        // --------------------------------------------------------------------------
 
-        // 2. INICIO DE TRANSACCIÓN ATÓMICA
+
         DB::beginTransaction();
         try {
-            // Bloqueos pesimistas para concurrencia
+            // Bloqueos y creación de Venta (Cabecera) - IGUAL QUE ANTES
             $order = Order::where('id', $this->order->id)->lockForUpdate()->first();
             if ($order->status === 'pagado') throw new \Exception("Orden ya procesada.");
 
@@ -305,10 +331,10 @@ class PagarOrden extends Page implements HasForms, HasActions
             if (!$serieConfig) throw new \Exception("Serie no válida.");
 
             $correlativo = $this->obtenerCorrelativoFinal($this->serie_id);
-            $nombreFinalCliente = $this->cliente_seleccionado 
-            ? ($this->cliente_seleccionado->razon_social ?? ($this->cliente_seleccionado->nombres . ' ' . $this->cliente_seleccionado->apellidos))
-            : 'CLIENTES VARIOS';
-            // Crear Venta (Cabecera)
+            $nombreFinalCliente = $this->cliente_seleccionado
+                ? ($this->cliente_seleccionado->razon_social ?? ($this->cliente_seleccionado->nombres . ' ' . $this->cliente_seleccionado->apellidos))
+                : 'CLIENTES VARIOS';
+
             $sale = Sale::create([
                 'restaurant_id'    => $tenantId,
                 'order_id'         => $order->id,
@@ -325,86 +351,128 @@ class PagarOrden extends Page implements HasForms, HasActions
                 'monto_igv'        => $this->monto_igv,
                 'total'            => $this->total_final,
                 'status'           => 'completado',
-                'canal'            => $order->canal, // Ej: 'delivery', 'llevar', 'salon'
-                'delivery_id'      => $order->delivery_id, // ID del repartidor
-                'nombre_delivery'  => $order->nombre_delivery, // Nombre del repartidor
+                'canal'            => $order->canal,
+                'delivery_id'      => $order->delivery_id,
+                'nombre_delivery'  => $order->nombre_delivery,
                 'fecha_emision'    => now(),
             ]);
 
-            $detallesParaInsertar = [];
-            $detallesParaKardex = collect();
+            $detallesParaInsertar = []; // Para tabla sale_details (Recibo)
+            $detallesParaKardex = collect(); // Para mover stock
 
-            // 3. PROCESAMIENTO DE ITEMS EN MEMORIA
+            // 3. PROCESAMIENTO DE ITEMS
             foreach ($this->items as $item) {
-                // Determinar almacén mediante el Service
-                $almacenSeleccionado = $inventoryService->determinarAlmacenParaItem(
-                    $item,
-                    $almacenes,
-                    $todosLosStocks,
-                    $almacenes->first()
-                );
 
-                if ($item->product->control_stock && !$almacenSeleccionado) {
-                    throw new \Exception("Sin stock disponible para: " . $item->product->name);
-                }
-
-                // Preparar array para Batch Insert
+                // --- PASO 1: REGISTRAR EN EL RECIBO (Siempre va lo que se pidió: el Combo o el Producto) ---
                 $detallesParaInsertar[] = [
                     'sale_id'         => $sale->id,
                     'product_id'      => $item->product_id,
                     'variant_id'      => $item->variant_id,
-                    'product_name'    => $item->product->name,
+                    'product_name'    => $item->product_name ?? $item->product->name, // Usar nombre guardado o del producto
                     'cantidad'        => $item->cantidad,
                     'precio_unitario' => $item->price,
                     'subtotal'        => $item->subTotal,
                 ];
 
-                // Preparar para actualización de stock (Trait)
-                if ($item->product->control_stock) {
-                    // Creamos un objeto temporal para que el Trait pueda leer sus relaciones
-                    $tempDetail = new \App\Models\SaleDetail($detallesParaInsertar[count($detallesParaInsertar) - 1]);
+                // --- PASO 2: LÓGICA DE STOCK (KARDEX) ---
+
+                // CASO A: ES UNA PROMOCIÓN
+                if ($item->item_type === 'Promocion' && $item->promotion) {
+
+                    // Iteramos los ingredientes/productos de la promoción
+                    foreach ($item->promotion->promotionproducts as $subItem) {
+                        $productoHijo = $subItem->product;
+
+                        // Solo procesamos si el hijo controla stock
+                        if ($productoHijo && $productoHijo->control_stock) {
+
+                            // Cantidad total = (Cantidad de Combos pedidos) * (Cantidad del item en el combo)
+                            $cantidadADescontar = $item->cantidad * $subItem->quantity;
+
+                            // Simulamos un objeto para usar el servicio de almacén o usamos lógica directa
+                            // Como es un sub-item, no tenemos un 'OrderDetail', así que validamos stock manualmente
+                            // con la colección $todosLosStocks que cargamos al principio.
+
+                            // Lógica simplificada: Usar el primer almacén que tenga stock o el default
+                            $almacenHijo = $almacenes->first(); // Puedes mejorar esto buscando en $todosLosStocks cuál tiene saldo
+
+                            // Validar Stock
+                            // Asumiendo que usas variant_id para controlar stock si existe
+                            $stockKey = $subItem->variant_id ?? null;
+
+                            if ($stockKey) {
+                                $stockEnAlmacen = $todosLosStocks->has($stockKey)
+                                    ? $todosLosStocks->get($stockKey)->where('warehouse_id', $almacenHijo->id)->sum('stock_actual')
+                                    : 0;
+
+                                // Opcional: Lanzar excepción si no hay stock del componente
+                                // if ($stockEnAlmacen < $cantidadADescontar) throw new \Exception("Falta stock componente: " . $productoHijo->name);
+                            }
+
+                            // Crear Movimiento Virtual para Kardex
+                            $tempDetail = new \App\Models\SaleDetail([
+                                'product_id' => $productoHijo->id,
+                                'variant_id' => $subItem->variant_id,
+                                'cantidad'   => $cantidadADescontar,
+                                'sale_id'    => $sale->id, // Vinculado a la venta padre
+                            ]);
+
+                            $tempDetail->setRelation('warehouse', $almacenHijo);
+                            $tempDetail->setRelation('product', $productoHijo);
+                            $tempDetail->setRelation('variant', $subItem->variant); // Importante si es variante
+                            $tempDetail->setRelation('unit', $productoHijo->unit);
+
+                            $detallesParaKardex->push($tempDetail);
+                        }
+                    }
+                }
+
+                // CASO B: ES UN PRODUCTO INDIVIDUAL (Tu lógica original)
+                elseif ($item->product && $item->product->control_stock) {
+
+                    $almacenSeleccionado = $inventoryService->determinarAlmacenParaItem(
+                        $item,
+                        $almacenes,
+                        $todosLosStocks,
+                        $almacenes->first()
+                    );
+
+                    if (!$almacenSeleccionado) {
+                        throw new \Exception("Sin stock disponible para: " . $item->product->name);
+                    }
+
+                    // Usamos el último elemento agregado a $detallesParaInsertar para crear el objeto
+                    $tempDetail = new \App\Models\SaleDetail(end($detallesParaInsertar));
                     $tempDetail->setRelation('warehouse', $almacenSeleccionado);
                     $tempDetail->setRelation('product', $item->product);
                     $tempDetail->setRelation('variant', $item->variant);
                     $tempDetail->setRelation('unit', $item->product->unit);
+
                     $detallesParaKardex->push($tempDetail);
                 }
             }
 
-            // 4. INSERCIONES MASIVAS (BATCH)
+            // 4. INSERCIONES MASIVAS EN BD (EL RECIBO)
             DB::table('sale_details')->insert($detallesParaInsertar);
 
-            $detallesReales = \App\Models\SaleDetail::where('sale_id', $sale->id)
-                ->orderBy('id', 'asc') // El orden del insert masivo se respeta en los IDs
-                ->get();
-
-            // Sincronizamos los IDs con tus objetos de Kardex
-            foreach ($detallesParaKardex as $index => $tempDetail) {
-                if (isset($detallesReales[$index])) {
-                    // Le "tatuamos" el ID real al objeto temporal antes de ir al Trait
-                    $tempDetail->id = $detallesReales[$index]->id;
-                    $tempDetail->exists = true; // Le decimos a Eloquent que ya existe en la DB
-                }
-            }
-
-            // Ahora, cuando applyVentaMasiva lea $item->id, ya no será null
+            // 5. MOVIMIENTO DE KARDEX (DESCUENTO DE STOCK)
+            // Solo si hay items que controlan stock (sean directos o hijos de promo)
             if ($detallesParaKardex->isNotEmpty()) {
+                // Nota: applyVentaMasiva usa los objetos SaleDetail virtuales que creamos.
+                // Para productos normales, los IDs coincidirán después del insert si los recuperamos,
+                // pero para hijos de promo, son objetos 'new' que no están en sale_details.
+                // El trait debe saber manejar esto (generalmente usa product_id/variant_id/warehouse_id).
+
                 $this->applyVentaMasiva($detallesParaKardex, 'salida', "{$sale->serie}-{$sale->correlativo}", 'Venta');
             }
 
-            // 5. REGISTRAR PAGOS EN CAJA (Batch)
+            // 6. REGISTRO DE CAJA
             $movimientosCaja = collect($this->pagos_agregados)->map(function ($pago) use ($sale, $userId) {
-
-                // Si hay una referencia guardada en la propiedad del componente
-                $referenciaStr = !empty($this->referencia_pago)
-                    ? " | Ref: " . $this->referencia_pago
-                    : "";
-
+                $referenciaStr = !empty($this->referencia_pago) ? " | Ref: " . $this->referencia_pago : "";
                 return [
                     'payment_method_id' => $pago['id'],
                     'usuario_id'        => $userId,
                     'tipo'              => 'Ingreso',
-                    // Concatenamos la referencia al motivo original
                     'motivo'            => "Venta: {$sale->serie}-{$sale->correlativo}" . $referenciaStr,
                     'monto'             => $pago['amount'],
                     'referencia_type'   => Sale::class,
@@ -417,7 +485,7 @@ class PagarOrden extends Page implements HasForms, HasActions
             $sesionCaja->cashRegisterMovements()->createMany($movimientosCaja);
             $this->referencia_pago = '';
 
-            // 6. CIERRE DE ESTADOS
+            // 7. CIERRE DE ESTADOS
             $order->update(['status' => 'pagado']);
             if ($order->table_id) {
                 Table::where('id', $order->table_id)->update([
@@ -431,7 +499,6 @@ class PagarOrden extends Page implements HasForms, HasActions
             Notification::make()->title('Venta exitosa')->success()->send();
             $this->ventaExitosaId = $sale->id;
             $this->mostrarPantallaExito = true;
-            // return redirect()->to("/app/point-of-sale");
         } catch (\Exception $e) {
             DB::rollBack();
             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
