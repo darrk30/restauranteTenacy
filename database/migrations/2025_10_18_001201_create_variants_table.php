@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('image_path')->nullable();
             $table->string('codigo_barras')->nullable();
             $table->string('internal_code')->nullable();
-            // $table->decimal('extra_price')->nullable()->default(0);
+            $table->decimal('costo')->nullable()->default(0);
             $table->string('status')->default('activo');
             $table->boolean('stock_inicial')->default(false);
             $table->foreignId('product_id')->constrained()->onDelete('cascade');
