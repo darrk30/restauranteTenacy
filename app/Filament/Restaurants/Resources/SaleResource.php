@@ -5,7 +5,6 @@ namespace App\Filament\Restaurants\Resources;
 use App\Filament\Restaurants\Resources\SaleResource\Pages;
 use App\Models\CashRegisterMovement;
 use App\Models\Sale;
-use App\Models\Kardex;
 use App\Models\SessionCashRegister;
 use Filament\Forms;
 use Filament\Forms\Components\DateTimePicker;
@@ -133,7 +132,6 @@ class SaleResource extends Resource
                     ->requiresConfirmation()
                     ->modalHeading('Anular Venta')
                     ->modalDescription('¿Está seguro de que desea anular esta venta?')
-                    // RESTRICCIÓN DE SEGURIDAD
                     ->hidden(
                         fn(Sale $record) =>
                         $record->status === 'anulado' ||
@@ -141,10 +139,27 @@ class SaleResource extends Resource
                             $record->created_at < $sesionAbierta->created_at
                     )
                     ->form(function (Sale $record) {
-                        $tieneProductosConStock = $record->details()->whereHas('product', fn($q) => $q->where('control_stock', true))->exists();
-                        return $tieneProductosConStock ? [
+                        $detalles = $record->details()->with([
+                            'product',
+                            'promotion.promotionproducts.product',
+                            'promotion.promotionproducts.variant'
+                        ])->get();
+
+                        $hayStockParaRestablecer = $detalles->contains(function ($detalle) {
+                            if ($detalle->promotion_id && $detalle->promotion) {
+                                return $detalle->promotion->promotionproducts->contains(function ($hijo) {
+                                    $prod = $hijo->product;
+                                    $varProd = $hijo->variant?->product;
+                                    return ($prod && $prod->control_stock) || ($varProd && $varProd->control_stock);
+                                });
+                            }
+                            return $detalle->product && $detalle->product->control_stock;
+                        });
+
+                        return $hayStockParaRestablecer ? [
                             Forms\Components\Toggle::make('restablecer_stock')
                                 ->label('¿Desea restablecer el stock?')
+                                ->helperText('Se devolverán los productos y componentes de promociones al inventario.')
                                 ->default(true)
                                 ->onColor('success')
                                 ->offColor('danger'),
@@ -155,51 +170,177 @@ class SaleResource extends Resource
                         try {
                             $record->update(['status' => 'anulado']);
 
-                            // Lógica de reversión de stock
                             if ($data['restablecer_stock'] ?? false) {
+
+                                // --- CLASE ANÓNIMA ADAPTADA A TU TRAIT REAL ---
                                 $stockManager = new class {
                                     use \App\Traits\ManjoStockProductos;
-                                    public function ejecutarReverseVenta($sale)
+
+                                    // Exponemos 'processItem' para hacer una ENTRADA de devolución
+                                    public function restaurarStock($item, $comprobante, $movimiento)
                                     {
-                                        $this->reverseVenta($sale);
+                                        // Llamamos a processItem con tipo 'entrada' para que SUME al stock
+                                        $this->processItem($item, 'entrada', $comprobante, $movimiento);
                                     }
                                 };
+                                // ------------------------------------------------
 
-                                foreach ($record->details as $item) {
-                                    if ($item->product?->control_stock) {
-                                        $kardexEntry = Kardex::where('modelo_type', get_class($item))
-                                            ->where('modelo_id', $item->id)
-                                            ->whereIn('tipo_movimiento', ['Venta', 'salida'])
-                                            ->first();
-                                        if ($kardexEntry?->warehouse) $item->setRelation('warehouse', $kardexEntry->warehouse);
-                                        if (!$item->unit) $item->setRelation('unit', $item->product->unit);
+                                $referencia = "{$record->serie}-{$record->correlativo}";
+
+                                // Almacén por defecto (o lógica personalizada si la tienes)
+                                $almacenDefault = \App\Models\Warehouse::where('restaurant_id', $record->restaurant_id)->first();
+
+                                if (!$almacenDefault) {
+                                    throw new \Exception("No se encontró un almacén para devolver el stock.");
+                                }
+
+                                foreach ($record->details as $detalle) {
+
+                                    // --- CASO 1: ES UNA PROMOCIÓN ---
+                                    if ($detalle->promotion_id) {
+                                        $promo = \App\Models\Promotion::with('promotionproducts.product', 'promotionproducts.variant')
+                                            ->find($detalle->promotion_id);
+
+                                        if ($promo) {
+                                            foreach ($promo->promotionproducts as $hijo) {
+                                                $productoHijo = $hijo->product;
+
+                                                if ($productoHijo && $productoHijo->control_stock) {
+
+                                                    $cantidadTotal = $detalle->cantidad * $hijo->quantity;
+
+                                                    // Objeto virtual
+                                                    $itemVirtual = new \App\Models\SaleDetail([
+                                                        'product_id' => $hijo->product_id,
+                                                        'variant_id' => $hijo->variant_id,
+                                                        'cantidad'   => $cantidadTotal,
+                                                        // Importante: ID para que el Kardex guarde referencia
+                                                        'id'         => $detalle->id,
+                                                    ]);
+
+                                                    $itemVirtual->setRelation('product', $productoHijo);
+                                                    $itemVirtual->setRelation('variant', $hijo->variant);
+                                                    $itemVirtual->setRelation('warehouse', $almacenDefault);
+                                                    $itemVirtual->setRelation('unit', $productoHijo->unit);
+
+                                                    $stockManager->restaurarStock(
+                                                        $itemVirtual,
+                                                        $referencia,
+                                                        "Anulación: {$promo->name} (Componente)"
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // --- CASO 2: ES UN PRODUCTO NORMAL ---
+                                    elseif ($detalle->product_id && $detalle->product && $detalle->product->control_stock) {
+
+                                        $detalle->setRelation('warehouse', $almacenDefault);
+
+                                        if (!$detalle->relationLoaded('unit')) {
+                                            $detalle->setRelation('unit', $detalle->product->unit);
+                                        }
+
+                                        $stockManager->restaurarStock(
+                                            $detalle,
+                                            $referencia,
+                                            "Anulación: {$detalle->product_name}"
+                                        );
                                     }
                                 }
-                                $stockManager->ejecutarReverseVenta($record);
                             }
 
-                            // Anulación de movimientos de caja
-                            // 1. Obtener los movimientos
-                            $movimientos = CashRegisterMovement::where('referencia_type', get_class($record))
+                            // Anulación de Movimientos de Caja
+                            $movimientosCaja = CashRegisterMovement::where('referencia_type', Sale::class)
                                 ->where('referencia_id', $record->id)
                                 ->where('status', 'aprobado')
                                 ->get();
 
-                            // 2. Iterar y actualizar individualmente
-                            foreach ($movimientos as $movimiento) {
-                                // Al usar este update() sobre la instancia, SÍ se dispara el Observer
-                                $movimiento->update([
-                                    'status' => 'anulado'
-                                ]);
+                            foreach ($movimientosCaja as $movimiento) {
+                                $movimiento->update(['status' => 'anulado']);
                             }
 
                             DB::commit();
-                            Notification::make()->title('Venta Anulada')->success()->send();
+                            Notification::make()->title('Venta anulada correctamente')->success()->send();
                         } catch (\Exception $e) {
                             DB::rollBack();
-                            Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
+                            Notification::make()->title('Error al anular')->body($e->getMessage())->danger()->send();
                         }
                     }),
+                // Tables\Actions\Action::make('anular')
+                //     ->label('Anular')
+                //     ->icon('heroicon-o-x-circle')
+                //     ->color('danger')
+                //     ->requiresConfirmation()
+                //     ->modalHeading('Anular Venta')
+                //     ->modalDescription('¿Está seguro de que desea anular esta venta?')
+                //     // RESTRICCIÓN DE SEGURIDAD
+                //     ->hidden(
+                //         fn(Sale $record) =>
+                //         $record->status === 'anulado' ||
+                //             !$sesionAbierta ||
+                //             $record->created_at < $sesionAbierta->created_at
+                //     )
+                //     ->form(function (Sale $record) {
+                //         $tieneProductosConStock = $record->details()->whereHas('product', fn($q) => $q->where('control_stock', true))->exists();
+                //         return $tieneProductosConStock ? [
+                //             Forms\Components\Toggle::make('restablecer_stock')
+                //                 ->label('¿Desea restablecer el stock?')
+                //                 ->default(true)
+                //                 ->onColor('success')
+                //                 ->offColor('danger'),
+                //         ] : [];
+                //     })
+                //     ->action(function (Sale $record, array $data) {
+                //         DB::beginTransaction();
+                //         try {
+                //             $record->update(['status' => 'anulado']);
+
+                //             // Lógica de reversión de stock
+                //             if ($data['restablecer_stock'] ?? false) {
+                //                 $stockManager = new class {
+                //                     use \App\Traits\ManjoStockProductos;
+                //                     public function ejecutarReverseVenta($sale)
+                //                     {
+                //                         $this->reverseVenta($sale);
+                //                     }
+                //                 };
+
+                //                 foreach ($record->details as $item) {
+                //                     if ($item->product?->control_stock) {
+                //                         $kardexEntry = Kardex::where('modelo_type', get_class($item))
+                //                             ->where('modelo_id', $item->id)
+                //                             ->whereIn('tipo_movimiento', ['Venta', 'salida'])
+                //                             ->first();
+                //                         if ($kardexEntry?->warehouse) $item->setRelation('warehouse', $kardexEntry->warehouse);
+                //                         if (!$item->unit) $item->setRelation('unit', $item->product->unit);
+                //                     }
+                //                 }
+                //                 $stockManager->ejecutarReverseVenta($record);
+                //             }
+
+                //             // Anulación de movimientos de caja
+                //             // 1. Obtener los movimientos
+                //             $movimientos = CashRegisterMovement::where('referencia_type', get_class($record))
+                //                 ->where('referencia_id', $record->id)
+                //                 ->where('status', 'aprobado')
+                //                 ->get();
+
+                //             // 2. Iterar y actualizar individualmente
+                //             foreach ($movimientos as $movimiento) {
+                //                 // Al usar este update() sobre la instancia, SÍ se dispara el Observer
+                //                 $movimiento->update([
+                //                     'status' => 'anulado'
+                //                 ]);
+                //             }
+
+                //             DB::commit();
+                //             Notification::make()->title('Venta Anulada')->success()->send();
+                //         } catch (\Exception $e) {
+                //             DB::rollBack();
+                //             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
+                //         }
+                //     }),
 
                 Tables\Actions\ViewAction::make(),
             ]);

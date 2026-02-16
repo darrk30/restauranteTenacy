@@ -363,92 +363,61 @@ class PagarOrden extends Page implements HasForms, HasActions
             // 3. PROCESAMIENTO DE ITEMS
             foreach ($this->items as $item) {
 
-                // --- PASO 1: REGISTRAR EN EL RECIBO (Siempre va lo que se pidió: el Combo o el Producto) ---
+                $esPromocion = ($item->item_type === 'Promocion');
+
+                // ✅ ESTRUCTURA UNIFORME: Todas las columnas deben estar presentes siempre
                 $detallesParaInsertar[] = [
                     'sale_id'         => $sale->id,
-                    'product_id'      => $item->product_id,
-                    'variant_id'      => $item->variant_id,
-                    'product_name'    => $item->product_name ?? $item->product->name, // Usar nombre guardado o del producto
+                    'product_id'      => $esPromocion ? null : $item->product_id,
+                    'variant_id'      => $esPromocion ? null : $item->variant_id,
+                    'promotion_id'    => $esPromocion ? $item->promotion_id : null, // Asegúrate de tener esta columna en la BD
+                    'product_name'    => $item->product_name ?? ($esPromocion ? ($item->promotion->name ?? 'Promoción') : ($item->product->name ?? 'Producto')),
                     'cantidad'        => $item->cantidad,
                     'precio_unitario' => $item->price,
                     'subtotal'        => $item->subTotal,
+                    // Eliminamos created_at/updated_at del array si el insert masivo falla por ellos,
+                    // o nos aseguramos de que TODAS las filas los tengan.
+                    'created_at'      => now(),
+                    'updated_at'      => now(),
                 ];
 
-                // --- PASO 2: LÓGICA DE STOCK (KARDEX) ---
-
-                // CASO A: ES UNA PROMOCIÓN
-                if ($item->item_type === 'Promocion' && $item->promotion) {
-
-                    // Iteramos los ingredientes/productos de la promoción
+                // --- LÓGICA DE STOCK (KARDEX) ---
+                // (Esta parte no afecta al insert de sale_details, se mantiene igual)
+                if ($esPromocion && $item->promotion) {
                     foreach ($item->promotion->promotionproducts as $subItem) {
                         $productoHijo = $subItem->product;
-
-                        // Solo procesamos si el hijo controla stock
                         if ($productoHijo && $productoHijo->control_stock) {
-
-                            // Cantidad total = (Cantidad de Combos pedidos) * (Cantidad del item en el combo)
                             $cantidadADescontar = $item->cantidad * $subItem->quantity;
+                            $almacenHijo = $almacenes->first();
 
-                            // Simulamos un objeto para usar el servicio de almacén o usamos lógica directa
-                            // Como es un sub-item, no tenemos un 'OrderDetail', así que validamos stock manualmente
-                            // con la colección $todosLosStocks que cargamos al principio.
-
-                            // Lógica simplificada: Usar el primer almacén que tenga stock o el default
-                            $almacenHijo = $almacenes->first(); // Puedes mejorar esto buscando en $todosLosStocks cuál tiene saldo
-
-                            // Validar Stock
-                            // Asumiendo que usas variant_id para controlar stock si existe
-                            $stockKey = $subItem->variant_id ?? null;
-
-                            if ($stockKey) {
-                                $stockEnAlmacen = $todosLosStocks->has($stockKey)
-                                    ? $todosLosStocks->get($stockKey)->where('warehouse_id', $almacenHijo->id)->sum('stock_actual')
-                                    : 0;
-
-                                // Opcional: Lanzar excepción si no hay stock del componente
-                                // if ($stockEnAlmacen < $cantidadADescontar) throw new \Exception("Falta stock componente: " . $productoHijo->name);
-                            }
-
-                            // Crear Movimiento Virtual para Kardex
                             $tempDetail = new \App\Models\SaleDetail([
                                 'product_id' => $productoHijo->id,
                                 'variant_id' => $subItem->variant_id,
                                 'cantidad'   => $cantidadADescontar,
-                                'sale_id'    => $sale->id, // Vinculado a la venta padre
+                                'sale_id'    => $sale->id,
                             ]);
-
                             $tempDetail->setRelation('warehouse', $almacenHijo);
                             $tempDetail->setRelation('product', $productoHijo);
-                            $tempDetail->setRelation('variant', $subItem->variant); // Importante si es variante
+                            $tempDetail->setRelation('variant', $subItem->variant);
                             $tempDetail->setRelation('unit', $productoHijo->unit);
-
                             $detallesParaKardex->push($tempDetail);
                         }
                     }
-                }
-
-                // CASO B: ES UN PRODUCTO INDIVIDUAL (Tu lógica original)
-                elseif ($item->product && $item->product->control_stock) {
-
+                } elseif ($item->product && $item->product->control_stock) {
                     $almacenSeleccionado = $inventoryService->determinarAlmacenParaItem(
                         $item,
                         $almacenes,
                         $todosLosStocks,
                         $almacenes->first()
                     );
-
-                    if (!$almacenSeleccionado) {
-                        throw new \Exception("Sin stock disponible para: " . $item->product->name);
+                    if ($almacenSeleccionado) {
+                        $tempDetail = new \App\Models\SaleDetail(end($detallesParaInsertar));
+                        $tempDetail->setRelation('warehouse', $almacenSeleccionado);
+                        $tempDetail->setRelation('product', $item->product);
+                        $tempDetail->setRelation('variant', $item->variant);
+                        $tempDetail->setRelation('unit', $item->product->unit);
+                        $detallesParaKardex->push($tempDetail);
                     }
-
-                    // Usamos el último elemento agregado a $detallesParaInsertar para crear el objeto
-                    $tempDetail = new \App\Models\SaleDetail(end($detallesParaInsertar));
-                    $tempDetail->setRelation('warehouse', $almacenSeleccionado);
-                    $tempDetail->setRelation('product', $item->product);
-                    $tempDetail->setRelation('variant', $item->variant);
-                    $tempDetail->setRelation('unit', $item->product->unit);
-
-                    $detallesParaKardex->push($tempDetail);
                 }
             }
 

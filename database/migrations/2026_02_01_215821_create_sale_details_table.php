@@ -17,6 +17,7 @@ return new class extends Migration
             $table->foreignId('sale_id')->constrained()->cascadeOnDelete();
             $table->foreignId('product_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('variant_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('promotion_id')->nullable()->constrained()->nullOnDelete();
 
             // 1. Índice para el nombre si vas a buscar o agrupar por texto
             $table->string('product_name')->index();

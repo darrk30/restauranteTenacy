@@ -11,6 +11,7 @@ class SaleDetail extends Model
         'sale_id',
         'product_id',
         'variant_id',
+        'promotion_id',
         'product_name',
         'cantidad',
         'precio_unitario',
@@ -31,4 +32,10 @@ class SaleDetail extends Model
     {
         return $this->belongsTo(Variant::class);
     }
+
+    public function promotion()
+    {
+        return $this->belongsTo(Promotion::class);
+    }
+
 }
