@@ -266,15 +266,192 @@ class PagarOrden extends Page implements HasForms, HasActions
         return str_pad($nuevoNumero, 8, '0', STR_PAD_LEFT);
     }
 
+    // public function procesarPagoFinal()
+    // {
+    //     // 1. PREPARACIÓN Y VALIDACIONES DE CAJA
+    //     $this->calculateTotalServer();
+    //     $totalPagado = collect($this->pagos_agregados)->sum('amount');
+    //     $tenantId = Filament::getTenant()->id;
+    //     $userId = Auth::id();
+
+    //     // Validar que la caja esté abierta
+    //     $sesionCaja = SessionCashRegister::where('restaurant_id', $tenantId)
+    //         ->where('user_id', $userId)
+    //         ->where('status', 'open')
+    //         ->first();
+
+    //     if (!$sesionCaja) {
+    //         Notification::make()->title('Caja Cerrada')->danger()->send();
+    //         return;
+    //     }
+
+    //     // Validar montos completos
+    //     if ($totalPagado < ($this->total_final - 0.01)) {
+    //         Notification::make()->title('Pago incompleto')->danger()->send();
+    //         return;
+    //     }
+
+    //     DB::beginTransaction();
+    //     try {
+    //         // 2. BLOQUEOS Y CREACIÓN DE LA VENTA (CABECERA)
+    //         $order = Order::where('id', $this->order->id)->lockForUpdate()->first();
+    //         if ($order->status === 'pagado') throw new \Exception("Orden ya procesada.");
+
+    //         $serieConfig = DocumentSerie::where('id', $this->serie_id)->lockForUpdate()->first();
+    //         if (!$serieConfig) throw new \Exception("Serie no válida.");
+
+    //         $correlativo = $this->obtenerCorrelativoFinal($this->serie_id);
+    //         $nombreFinalCliente = $this->cliente_seleccionado
+    //             ? ($this->cliente_seleccionado->razon_social ?? ($this->cliente_seleccionado->nombres . ' ' . $this->cliente_seleccionado->apellidos))
+    //             : 'CLIENTES VARIOS';
+
+    //         // Crear la Venta
+    //         $sale = Sale::create([
+    //             'restaurant_id'    => $tenantId,
+    //             'order_id'         => $order->id,
+    //             'client_id'        => $this->cliente_seleccionado?->id,
+    //             'user_id'          => $userId,
+    //             'nombre_cliente'   => $nombreFinalCliente,
+    //             'tipo_documento'   => $this->cliente_seleccionado?->tipo_documento ?? 'DNI',
+    //             'numero_documento' => $this->cliente_seleccionado?->numero ?? '99999999',
+    //             'tipo_comprobante' => $this->tipo_comprobante,
+    //             'serie'            => $serieConfig->serie,
+    //             'correlativo'      => $correlativo,
+    //             'monto_descuento'  => $this->monto_descuento,
+    //             'op_gravada'       => $this->op_gravada,
+    //             'monto_igv'        => $this->monto_igv,
+    //             'total'            => $this->total_final,
+    //             'status'           => 'completado',
+    //             'canal'            => $order->canal,
+    //             'delivery_id'      => $order->delivery_id,
+    //             'nombre_delivery'  => $order->nombre_delivery,
+    //             'fecha_emision'    => now(),
+    //         ]);
+
+    //         $detallesParaInsertar = [];
+    //         $detallesParaKardex = collect();
+
+    //         // 3. PROCESAMIENTO DE ITEMS (RECIBO Y PREPARACIÓN KARDEX)
+    //         foreach ($this->items as $item) {
+    //             $esPromocion = ($item->item_type === 'Promocion');
+
+    //             // A. Preparar datos para 'sale_details' (El recibo visual)
+    //             $detallesParaInsertar[] = [
+    //                 'sale_id'         => $sale->id,
+    //                 'product_id'      => $esPromocion ? null : $item->product_id,
+    //                 'variant_id'      => $esPromocion ? null : $item->variant_id,
+    //                 'promotion_id'    => $esPromocion ? $item->promotion_id : null,
+    //                 'product_name'    => $item->product_name ?? ($esPromocion ? ($item->promotion->name ?? 'Promoción') : ($item->product->name ?? 'Producto')),
+    //                 'cantidad'        => $item->cantidad,
+    //                 'precio_unitario' => $item->price,
+    //                 'subtotal'        => $item->subTotal,
+    //                 'created_at'      => now(),
+    //                 'updated_at'      => now(),
+    //             ];
+
+    //             // B. Preparar objetos virtuales para el Trait de Stock (Kardex)
+    //             if ($esPromocion && $item->promotion) {
+    //                 // Desglosar la promoción para descontar ingredientes/productos
+    //                 foreach ($item->promotion->promotionproducts as $subItem) {
+    //                     $productoHijo = $subItem->product;
+
+    //                     if ($productoHijo && $productoHijo->control_stock) {
+    //                         $cantidadADescontar = $item->cantidad * $subItem->quantity;
+
+    //                         $tempDetail = new \App\Models\SaleDetail([
+    //                             'product_id' => $productoHijo->id,
+    //                             'variant_id' => $subItem->variant_id,
+    //                             'cantidad'   => $cantidadADescontar,
+    //                             'sale_id'    => $sale->id,
+    //                         ]);
+    //                         $tempDetail->setRelation('product', $productoHijo);
+    //                         $tempDetail->setRelation('variant', $subItem->variant);
+    //                         $tempDetail->setRelation('unit', $productoHijo->unit);
+
+    //                         $detallesParaKardex->push($tempDetail);
+    //                     }
+    //                 }
+    //             } elseif ($item->product && $item->product->control_stock) {
+    //                 // Producto normal con control de stock
+    //                 $tempDetail = new \App\Models\SaleDetail([
+    //                     'product_id' => $item->product_id,
+    //                     'variant_id' => $item->variant_id,
+    //                     'cantidad'   => $item->cantidad,
+    //                     'sale_id'    => $sale->id,
+    //                 ]);
+
+    //                 $tempDetail->setRelation('product', $item->product);
+    //                 $tempDetail->setRelation('variant', $item->variant);
+    //                 $tempDetail->setRelation('unit', $item->product->unit);
+
+    //                 $detallesParaKardex->push($tempDetail);
+    //             }
+    //         }
+
+    //         // 4. INSERCIÓN MASIVA DEL DETALLE DE VENTA
+    //         DB::table('sale_details')->insert($detallesParaInsertar);
+
+    //         // 5. MOVIMIENTO DE STOCK (KARDEX) - Centralizado
+    //         if ($detallesParaKardex->isNotEmpty()) {
+    //             // El Trait buscará el stock por variant_id directamente
+    //             $this->applyVentaMasiva(
+    //                 $detallesParaKardex,
+    //                 'salida',
+    //                 "{$sale->serie}-{$sale->correlativo}",
+    //                 'Venta'
+    //             );
+    //         }
+
+    //         // 6. REGISTRO DE MOVIMIENTOS EN CAJA
+    //         $movimientosCaja = collect($this->pagos_agregados)->map(function ($pago) use ($sale, $userId) {
+    //             $referenciaStr = !empty($this->referencia_pago) ? " | Ref: " . $this->referencia_pago : "";
+    //             return [
+    //                 'payment_method_id' => $pago['id'],
+    //                 'usuario_id'        => $userId,
+    //                 'tipo'              => 'Ingreso',
+    //                 'motivo'            => "Venta: {$sale->serie}-{$sale->correlativo}" . $referenciaStr,
+    //                 'monto'             => $pago['amount'],
+    //                 'referencia_type'   => Sale::class,
+    //                 'referencia_id'     => $sale->id,
+    //                 'created_at'        => now(),
+    //                 'updated_at'        => now(),
+    //             ];
+    //         })->toArray();
+
+    //         $sesionCaja->cashRegisterMovements()->createMany($movimientosCaja);
+    //         $this->referencia_pago = '';
+
+    //         // 7. ACTUALIZACIÓN DE ESTADOS (Orden y Mesa)
+    //         $order->update(['status' => 'pagado']);
+
+    //         if ($order->table_id) {
+    //             Table::where('id', $order->table_id)->update([
+    //                 'estado_mesa' => 'libre',
+    //                 'order_id'    => null,
+    //                 'asientos'    => 0
+    //             ]);
+    //         }
+
+    //         DB::commit();
+
+    //         // Finalización exitosa
+    //         Notification::make()->title('Venta exitosa')->success()->send();
+    //         $this->ventaExitosaId = $sale->id;
+    //         $this->mostrarPantallaExito = true;
+    //     } catch (\Exception $e) {
+    //         DB::rollBack();
+    //         Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
+    //     }
+    // }
+
     public function procesarPagoFinal()
     {
-        // 1. PREPARACIÓN Y VALIDACIONES DE CAJA
+        // 1. VALIDACIONES PREVIAS (Caja, Montos, etc.)
         $this->calculateTotalServer();
         $totalPagado = collect($this->pagos_agregados)->sum('amount');
         $tenantId = Filament::getTenant()->id;
         $userId = Auth::id();
 
-        // Validar que la caja esté abierta
         $sesionCaja = SessionCashRegister::where('restaurant_id', $tenantId)
             ->where('user_id', $userId)
             ->where('status', 'open')
@@ -285,7 +462,6 @@ class PagarOrden extends Page implements HasForms, HasActions
             return;
         }
 
-        // Validar montos completos
         if ($totalPagado < ($this->total_final - 0.01)) {
             Notification::make()->title('Pago incompleto')->danger()->send();
             return;
@@ -293,7 +469,7 @@ class PagarOrden extends Page implements HasForms, HasActions
 
         DB::beginTransaction();
         try {
-            // 2. BLOQUEOS Y CREACIÓN DE LA VENTA (CABECERA)
+            // 2. BLOQUEOS Y CABECERA DE VENTA
             $order = Order::where('id', $this->order->id)->lockForUpdate()->first();
             if ($order->status === 'pagado') throw new \Exception("Orden ya procesada.");
 
@@ -305,7 +481,6 @@ class PagarOrden extends Page implements HasForms, HasActions
                 ? ($this->cliente_seleccionado->razon_social ?? ($this->cliente_seleccionado->nombres . ' ' . $this->cliente_seleccionado->apellidos))
                 : 'CLIENTES VARIOS';
 
-            // Crear la Venta
             $sale = Sale::create([
                 'restaurant_id'    => $tenantId,
                 'order_id'         => $order->id,
@@ -328,15 +503,15 @@ class PagarOrden extends Page implements HasForms, HasActions
                 'fecha_emision'    => now(),
             ]);
 
-            $detallesParaInsertar = [];
             $detallesParaKardex = collect();
 
-            // 3. PROCESAMIENTO DE ITEMS (RECIBO Y PREPARACIÓN KARDEX)
+            // 3. PROCESAMIENTO DE ITEMS
             foreach ($this->items as $item) {
                 $esPromocion = ($item->item_type === 'Promocion');
 
-                // A. Preparar datos para 'sale_details' (El recibo visual)
-                $detallesParaInsertar[] = [
+                // A. Guardamos el detalle visual (SaleDetail)
+                // Se guarda lo que se vendió: "1 Ceviche" o "1 Gaseosa"
+                $saleDetail = new \App\Models\SaleDetail([
                     'sale_id'         => $sale->id,
                     'product_id'      => $esPromocion ? null : $item->product_id,
                     'variant_id'      => $esPromocion ? null : $item->variant_id,
@@ -345,55 +520,25 @@ class PagarOrden extends Page implements HasForms, HasActions
                     'cantidad'        => $item->cantidad,
                     'precio_unitario' => $item->price,
                     'subtotal'        => $item->subTotal,
-                    'created_at'      => now(),
-                    'updated_at'      => now(),
-                ];
+                ]);
 
-                // B. Preparar objetos virtuales para el Trait de Stock (Kardex)
-                if ($esPromocion && $item->promotion) {
-                    // Desglosar la promoción para descontar ingredientes/productos
-                    foreach ($item->promotion->promotionproducts as $subItem) {
-                        $productoHijo = $subItem->product;
+                // Guardamos inmediatamente para tener ID y relaciones listas para el Kardex
+                $saleDetail->save();
 
-                        if ($productoHijo && $productoHijo->control_stock) {
-                            $cantidadADescontar = $item->cantidad * $subItem->quantity;
-
-                            $tempDetail = new \App\Models\SaleDetail([
-                                'product_id' => $productoHijo->id,
-                                'variant_id' => $subItem->variant_id,
-                                'cantidad'   => $cantidadADescontar,
-                                'sale_id'    => $sale->id,
-                            ]);
-                            $tempDetail->setRelation('product', $productoHijo);
-                            $tempDetail->setRelation('variant', $subItem->variant);
-                            $tempDetail->setRelation('unit', $productoHijo->unit);
-
-                            $detallesParaKardex->push($tempDetail);
-                        }
-                    }
-                } elseif ($item->product && $item->product->control_stock) {
-                    // Producto normal con control de stock
-                    $tempDetail = new \App\Models\SaleDetail([
-                        'product_id' => $item->product_id,
-                        'variant_id' => $item->variant_id,
-                        'cantidad'   => $item->cantidad,
-                        'sale_id'    => $sale->id,
-                    ]);
-
-                    $tempDetail->setRelation('product', $item->product);
-                    $tempDetail->setRelation('variant', $item->variant);
-                    $tempDetail->setRelation('unit', $item->product->unit);
-
-                    $detallesParaKardex->push($tempDetail);
+                // Cargamos relaciones para que el Trait no tenga que consultar de nuevo
+                if (!$esPromocion) {
+                    $saleDetail->load(['product', 'variant', 'product.unit']);
+                } else {
+                    $saleDetail->load(['promotion.promotionproducts.product', 'promotion.promotionproducts.variant']);
                 }
+
+                // B. Lo agregamos a la colección para procesar STOCK
+                // Pasamos el objeto COMPLETO. El Trait decidirá si descuenta directo o busca receta.
+                $detallesParaKardex->push($saleDetail);
             }
 
-            // 4. INSERCIÓN MASIVA DEL DETALLE DE VENTA
-            DB::table('sale_details')->insert($detallesParaInsertar);
-
-            // 5. MOVIMIENTO DE STOCK (KARDEX) - Centralizado
+            // 4. MOVIMIENTO DE STOCK (KARDEX) - LLAMADA AL TRAIT INTELIGENTE
             if ($detallesParaKardex->isNotEmpty()) {
-                // El Trait buscará el stock por variant_id directamente
                 $this->applyVentaMasiva(
                     $detallesParaKardex,
                     'salida',
@@ -402,7 +547,7 @@ class PagarOrden extends Page implements HasForms, HasActions
                 );
             }
 
-            // 6. REGISTRO DE MOVIMIENTOS EN CAJA
+            // 5. REGISTRO CAJA
             $movimientosCaja = collect($this->pagos_agregados)->map(function ($pago) use ($sale, $userId) {
                 $referenciaStr = !empty($this->referencia_pago) ? " | Ref: " . $this->referencia_pago : "";
                 return [
@@ -421,7 +566,7 @@ class PagarOrden extends Page implements HasForms, HasActions
             $sesionCaja->cashRegisterMovements()->createMany($movimientosCaja);
             $this->referencia_pago = '';
 
-            // 7. ACTUALIZACIÓN DE ESTADOS (Orden y Mesa)
+            // 6. ACTUALIZACIÓN ESTADOS
             $order->update(['status' => 'pagado']);
 
             if ($order->table_id) {
@@ -434,7 +579,6 @@ class PagarOrden extends Page implements HasForms, HasActions
 
             DB::commit();
 
-            // Finalización exitosa
             Notification::make()->title('Venta exitosa')->success()->send();
             $this->ventaExitosaId = $sale->id;
             $this->mostrarPantallaExito = true;

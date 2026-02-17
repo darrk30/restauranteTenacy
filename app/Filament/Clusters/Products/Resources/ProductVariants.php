@@ -20,6 +20,7 @@ use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Filament\Notifications\Notification;
 use Filament\Forms\Components\Toggle;
+use Icetalker\FilamentTableRepeater\Forms\Components\TableRepeater;
 
 class ProductVariants extends Page implements Tables\Contracts\HasTable
 {
@@ -101,7 +102,6 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                     ->button()
                     ->visible(fn() => $this->record->receta)
                     ->modalHeading(fn($record) => "Receta: " . $this->record->name . ($record->values->isNotEmpty() ? ' - ' . $record->full_name : ''))
-                    ->modalWidth('4xl')
                     ->fillForm(fn($record) => [
                         'recetas' => $record->recetas->map(function ($receta) {
                             return [
@@ -112,64 +112,77 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                         })->toArray()
                     ])
                     ->form([
-                        Repeater::make('recetas')
+                        TableRepeater::make('recetas')
                             ->label('Ingredientes')
-                            ->schema([
-                                Forms\Components\Grid::make(3)->schema([
-                                    Select::make('insumo_id')
-                                        ->label('Insumo')
-                                        ->options(function () {
-                                            return \App\Models\Variant::query()
-                                                ->whereHas('product', function ($query) {
-                                                    $query->where('type', \App\Enums\TipoProducto::Insumo)
-                                                        ->where('status', \App\Enums\StatusProducto::Activo);
-                                                })
-                                                ->where('status', 'activo')
-                                                ->get()
-                                                ->mapWithKeys(function ($variant) {
-                                                    return [$variant->id => $variant->product->name . ' ' . $variant->full_name];
-                                                });
-                                        })
-                                        ->searchable()
-                                        ->preload()
-                                        ->required()
-                                        ->reactive()
-                                        ->afterStateUpdated(function (Set $set) {
-                                            $set('unit_id', null);
-                                        })
-                                        ->columnSpan(1),
-
-                                    Select::make('unit_id')
-                                        ->label('Unidad')
-                                        ->options(function (Get $get) {
-                                            $insumoId = $get('insumo_id');
-                                            if (!$insumoId) return [];
-                                            $insumo = \App\Models\Variant::with('product.unit')->find($insumoId);
-                                            $unidadBase = $insumo?->product?->unit;
-                                            if (!$unidadBase) return [];
-                                            if ($unidadBase->unit_category_id) {
-                                                return \App\Models\Unit::where('unit_category_id', $unidadBase->unit_category_id)->pluck('name', 'id');
-                                            }
-                                            return \App\Models\Unit::where('id', $unidadBase->id)
-                                                ->orWhere('reference_unit_id', $unidadBase->id)
-                                                ->orWhere('id', $unidadBase->reference_unit_id)
-                                                ->pluck('name', 'id');
-                                        })
-                                        ->searchable()
-                                        ->required()
-                                        ->columnSpan(1),
-
-                                    // 3. CANTIDAD
-                                    TextInput::make('cantidad')
-                                        ->label('Cantidad')
-                                        ->numeric()
-                                        ->required()
-                                        ->columnSpan(1),
-                                ]),
-                            ])
-                            ->defaultItems(0)
                             ->addActionLabel('Agregar ingrediente')
-                            ->columns(1)
+                            ->defaultItems(0)
+                            ->schema([
+
+                                // COLUMNA 1: INSUMO
+                                Select::make('insumo_id')
+                                    ->label('Insumo') // Se mantiene el label para la vista móvil
+                                    ->placeholder('Seleccionar insumo...')
+                                    ->options(function () {
+                                        return \App\Models\Variant::query()
+                                            ->whereHas('product', function ($query) {
+                                                $query->where('type', \App\Enums\TipoProducto::Insumo)
+                                                    ->where('status', \App\Enums\StatusProducto::Activo);
+                                            })
+                                            ->where('status', 'activo')
+                                            ->get()
+                                            ->mapWithKeys(function ($variant) {
+                                                return [$variant->id => $variant->product->name];
+                                            });
+                                    })
+                                    // ESTO ES CLAVE: Permite ver el nombre guardado en lugar del ID "2"
+                                    ->getOptionLabelUsing(function ($value) {
+                                        $variant = \App\Models\Variant::with('product')->find($value);
+                                        return $variant ? $variant->product->name : null;
+                                    })
+                                    ->searchable()
+                                    ->preload()
+                                    ->required()
+                                    ->reactive()
+                                    ->afterStateUpdated(fn(Set $set) => $set('unit_id', null))
+                                    ->native(false), // false = Diseño bonito de Filament
+
+                                // COLUMNA 2: UNIDAD
+                                Select::make('unit_id')
+                                    ->label('Unidad')
+                                    ->placeholder('Selec.')
+                                    ->options(function (Get $get) {
+                                        $insumoId = $get('insumo_id');
+                                        if (!$insumoId) return [];
+
+                                        $insumo = \App\Models\Variant::with('product.unit')->find($insumoId);
+                                        $unidadBase = $insumo?->product?->unit;
+
+                                        if (!$unidadBase) return [];
+
+                                        // Lógica para traer unidades de la misma categoría o conversiones
+                                        if ($unidadBase->unit_category_id) {
+                                            return \App\Models\Unit::where('unit_category_id', $unidadBase->unit_category_id)
+                                                ->pluck('name', 'id');
+                                        }
+
+                                        return \App\Models\Unit::where('id', $unidadBase->id)
+                                            ->orWhere('reference_unit_id', $unidadBase->id)
+                                            ->orWhere('id', $unidadBase->reference_unit_id)
+                                            ->pluck('name', 'id');
+                                    })
+                                    // ESTO ES CLAVE: Permite ver el nombre de la unidad guardada
+                                    ->getOptionLabelUsing(fn($value) => \App\Models\Unit::find($value)?->name)
+                                    ->searchable()
+                                    ->required()
+                                    ->native(false),
+
+                                // COLUMNA 3: CANTIDAD
+                                TextInput::make('cantidad')
+                                    ->label('Cantidad')
+                                    ->placeholder('0.00')
+                                    ->numeric()
+                                    ->required(),
+                            ])
                     ])
                     ->action(function (Variant $record, array $data) {
                         // $record aquí es la Variante de la fila (el plato)

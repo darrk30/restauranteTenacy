@@ -161,9 +161,9 @@ class SaleResource extends Resource
                             Forms\Components\Toggle::make('restablecer_stock')
                                 ->label('¿Desea restablecer el stock?')
                                 ->helperText('Se devolverán los productos al inventario.')
-                                ->default(true)
+                                ->default(false)
                                 ->onColor('success')
-                                ->offColor('danger'),
+                                ->offColor('gray'),
                         ] : [];
                     })
                     ->action(function (Sale $record, array $data) {
