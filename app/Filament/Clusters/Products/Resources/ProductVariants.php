@@ -4,7 +4,7 @@ namespace App\Filament\Clusters\Products\Resources;
 
 use App\Filament\Clusters\Products\Resources\ProductResource;
 use App\Models\Product;
-use App\Services\BarcodeLookupService;
+use App\Models\WarehouseStock; // Asegúrate de importar el modelo de Stock
 use Filament\Resources\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -43,11 +43,10 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
 
     public function setBarcode($data)
     {
-        $this->form->fill([
-            'barcode' => $data['code'],
-        ]);
+        // Nota: Esto solo funciona si el formulario está montado en la página principal,
+        // pero en esta vista de tabla, el formulario está dentro de un modal (Action).
+        // Si necesitas escanear dentro del modal, la lógica es diferente.
     }
-
 
     public function table(Table $table): Table
     {
@@ -55,7 +54,7 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
             ->query(
                 fn() => $this->record
                     ->variants()
-                    ->with('product')
+                    ->with('product', 'stock') // Cargamos la relación de stock único
                     ->whereIn('status', ['activo', 'inactivo'])
             )
             ->columns([
@@ -68,24 +67,30 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
 
                 Tables\Columns\TextColumn::make('product.name')
                     ->label('Producto'),
-                    
-                    Tables\Columns\TextColumn::make('values')
-                    ->label('Variante de producto')
+
+                Tables\Columns\TextColumn::make('values')
+                    ->label('Variante')
                     ->getStateUsing(
                         fn($record) =>
                         $record->values && $record->values->isNotEmpty()
-                        ? $record->values
-                        ->map(fn($value) => "{$value->attribute->name}: {$value->name}")
-                        ->toArray()
-                        : ['Sin variantes']
-                        )
-                        ->badge()
-                        ->colors(['primary']),
-                        
-                    Tables\Columns\TextColumn::make('costo')
-                        ->formatStateUsing(fn($state) => 'S/ ' . number_format($state, 2))
-                        ->label('Costo'),
-                    Tables\Columns\TextColumn::make('status')
+                            ? $record->values->map(fn($value) => "{$value->attribute->name}: {$value->name}")->toArray()
+                            : ['Sin variantes']
+                    )
+                    ->badge()
+                    ->colors(['primary']),
+
+                // 🟢 STOCK ACTUALIZADO (Sin almacenes)
+                Tables\Columns\TextColumn::make('stock.stock_real')
+                    ->label('Stock Actual')
+                    ->numeric()
+                    ->alignCenter()
+                    ->placeholder('0'),
+
+                Tables\Columns\TextColumn::make('costo')
+                    ->formatStateUsing(fn($state) => 'S/ ' . number_format($state, 2))
+                    ->label('Costo'),
+
+                Tables\Columns\TextColumn::make('status')
                     ->label('Estado')
                     ->badge()
                     ->colors([
@@ -101,13 +106,13 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                     ->color('primary')
                     ->modalHeading('Editar Variante')
                     ->fillForm(fn($record) => [
-                        'image' => $record->image,
+                        // Llenamos los datos existentes
+                        'image_path' => $record->image_path,
                         'codigo_barras' => $record->codigo_barras,
                         'internal_code' => $record->internal_code,
-                        'extra_price' => $record->extra_price,
-                        'sale_without_stock' => $record->sale_without_stock,
+                        'costo' => $record->costo,
                         'status' => $record->status,
-                        'unit' => $record->unit,
+                        // No llenamos 'stock_inicial' porque es un campo de un solo uso
                     ])
                     ->form([
                         Forms\Components\FileUpload::make('image_path')
@@ -117,10 +122,8 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                             ->directory('products/variants')
                             ->disk('public')
                             ->preserveFilenames()
-                            ->previewable(true)
-                            ->columnSpanFull(), // Para que ocupe todo el ancho arriba
+                            ->columnSpanFull(),
 
-                        // --- FILA 1: Códigos (2 Columnas) ---
                         Forms\Components\Grid::make(2)
                             ->schema([
                                 Forms\Components\TextInput::make('codigo_barras')
@@ -132,92 +135,79 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                                     ->maxLength(100),
                             ]),
 
-                        // --- FILA 2: Stock, Costo y Estado (3 Columnas) ---
                         Forms\Components\Grid::make(3)
                             ->schema([
-                                // 1. Stock Inicial (Tu lógica original intacta)
+                                // 1. STOCK INICIAL (Simplificado)
                                 Forms\Components\TextInput::make('stock_inicial')
                                     ->label(fn($record) => $record?->product?->unit?->name ? "Stock inicial ({$record->product->unit->name})" : "Stock inicial")
                                     ->default(0)
-                                    ->visible(function ($record) {
-                                        if (!$record?->product?->control_stock) return false;
-                                        if ($record?->product?->unit?->code === 'ZZ') return false;
-                                        if ($record->stock_inicial != false) return false;
-                                        return true;
-                                    })
+                                    // Solo visible si controla stock Y nunca se ha asignado stock inicial
+                                    ->visible(fn($record) => $record->product->control_stock && !$record->stock_inicial)
                                     ->numeric()
                                     ->step(fn($record) => $record?->product?->unit?->code === 'NIU' ? 1 : 'any')
                                     ->rules(fn($record) => $record?->product?->unit?->code === 'NIU' ? ['required', 'integer', 'min:0'] : ['required', 'numeric', 'min:0'])
                                     ->helperText("Solo se ingresa una vez."),
 
-                                // 2. Costo (Agregado según tu petición)
+                                // 2. COSTO
                                 Forms\Components\TextInput::make('costo')
                                     ->label('Costo')
                                     ->numeric()
-                                    ->prefix('S/.') // Opcional: símbolo de moneda
+                                    ->prefix('S/.')
                                     ->default(0),
 
-                                // 3. Estado (Switch)
+                                // 3. ESTADO
                                 Toggle::make('status')
                                     ->label('Estado')
                                     ->onColor('success')
                                     ->offColor('danger')
-                                    ->inline(false) // Pone la etiqueta ARRIBA del switch, alineándolo visualmente con los inputs de texto
-                                    // 1. Al LEER: Convertimos 'activo' a true, cualquier otra cosa a false
+                                    ->inline(false)
                                     ->formatStateUsing(fn($state) => $state === 'activo')
-                                    // 2. Al GUARDAR: Si es true guardamos 'activo', si es false guardamos 'inactivo'
                                     ->dehydrateStateUsing(fn($state) => $state ? 'activo' : 'inactivo'),
                             ]),
                     ])
-                    ->fillForm(fn($record) => $record->toArray())
                     ->action(function (array $data, $record): void {
 
-                        // Guardar stock inicial solo si viene en el formulario
-                        if (isset($data['stock_inicial']) && $record->stock_inicial_asignado == false) {
-
-                            $cantidad = (int) $data['stock_inicial'];
+                        // --- LÓGICA DE STOCK INICIAL CENTRALIZADO ---
+                        if (isset($data['stock_inicial']) && !$record->stock_inicial) {
+                            $cantidad = (float) $data['stock_inicial'];
 
                             if ($cantidad > 0) {
-                                $warehouse = \App\Models\Warehouse::where('restaurant_id', filament()->getTenant()->id)
-                                    ->orderBy('order')
-                                    ->first();
+                                // Buscamos o creamos el stock único de la variante
+                                $stock = WarehouseStock::firstOrCreate(
+                                    ['variant_id' => $record->id],
+                                    [
+                                        'stock_real' => 0,
+                                        'stock_reserva' => 0,
+                                        'min_stock' => 0,
+                                        'restaurant_id' => filament()->getTenant()->id,
+                                    ]
+                                );
 
-                                if ($warehouse) {
-                                    $stock = \App\Models\WarehouseStock::firstOrCreate(
-                                        [
-                                            'warehouse_id' => $warehouse->id,
-                                            'variant_id' => $record->id,
-                                        ],
-                                        [
-                                            'stock_real' => 0,
-                                            'stock_reserva' => 0,
-                                            'min_stock' => 0,
-                                            'restaurant_id' => filament()->getTenant()->id,
-                                        ]
-                                    );
-                                    $stock->update([
-                                        'stock_real' => $stock->stock_real + $cantidad,
-                                        'stock_reserva' => $stock->stock_real + $cantidad
-                                    ]);
+                                // Actualizamos los valores
+                                $stock->increment('stock_real', $cantidad);
+                                $stock->increment('stock_reserva', $cantidad);
 
-                                    $record->kardexes()->create([
-                                        'product_id'      => $record->product_id,
-                                        'variant_id'      => $record->id,
-                                        'restaurant_id'   => filament()->getTenant()->id,
-                                        'tipo_movimiento' => 'Stock Inicial',
-                                        'cantidad'        => $cantidad,
-                                        'stock_restante'  => $stock->stock_real,
-                                        'modelo_type'     => ProductVariants::class,
-                                        'modelo_id'       => $record->id,
-                                        'comprobante'     => 'STOCK-INICIAL',
-                                    ]);
-                                }
-                                $record->update(['stock_inicial' => true,]);
+                                // Registramos en Kardex (Sin almacén)
+                                $record->kardexes()->create([
+                                    'product_id'      => $record->product_id,
+                                    'variant_id'      => $record->id,
+                                    'restaurant_id'   => filament()->getTenant()->id,
+                                    'tipo_movimiento' => 'Stock Inicial',
+                                    'cantidad'        => $cantidad,
+                                    'stock_restante'  => $stock->stock_real,
+                                    'modelo_type'     => get_class($record), // Ojo: esto guardará App\Filament...ProductVariants
+                                    'modelo_id'       => $record->id,
+                                    'comprobante'     => 'STOCK-INICIAL',
+                                ]);
+
+                                // Marcamos que ya se asignó stock inicial
+                                $record->stock_inicial = true;
                             }
-
-                            // No permitir guardar este dato nuevamente
+                            // Limpiamos el dato para que no intente guardarse en la tabla variants
                             unset($data['stock_inicial']);
                         }
+
+                        // Actualizamos la variante con el resto de datos
                         $record->update($data);
 
                         Notification::make()

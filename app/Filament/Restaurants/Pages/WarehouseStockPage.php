@@ -3,24 +3,21 @@
 namespace App\Filament\Restaurants\Pages;
 
 use App\Models\Variant;
-use App\Models\WarehouseStock;
 use Filament\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Tables\Actions\Action;
 
 class WarehouseStockPage extends Page implements Tables\Contracts\HasTable
 {
     use Tables\Concerns\InteractsWithTable;
 
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
-
     protected static ?string $navigationLabel = 'Existencias';
-
     protected static ?string $navigationGroup = 'Inventarios';
-
     protected static ?string $title = 'Existencias de Almacén';
 
+    // Si tu vista existencias.blade.php solo tenía la tabla, puedes borrar esta línea
+    // y usar el layout por defecto de Filament. Si tienes contenido extra, mantenla.
     protected static string $view = 'filament.warehouse.pages.existencias';
 
     public function table(Table $table): Table
@@ -28,66 +25,57 @@ class WarehouseStockPage extends Page implements Tables\Contracts\HasTable
         return $table
             ->query(
                 Variant::query()
-                    ->with([
-                        'product',
-                        'values.attribute',
-                        'stocks.warehouse',
-                    ])
+                    ->with(['product.unit', 'stock']) // Cargamos la relación única 'stock'
                     ->where('status', 'activo')
                     ->whereHas('product', function ($q) {
-                        $q->where('status', 'activo')->where('control_stock', true);
+                        $q->where('status', 'activo')
+                            ->where('control_stock', true);
                     })
-                    ->whereHas('stocks')
+                    // Opcional: Solo mostrar si tiene registro de stock creado
+                    ->whereHas('stock')
             )
             ->columns([
                 Tables\Columns\TextColumn::make('product.name')
                     ->label('Producto')
-                    ->searchable(),
+                    ->searchable()
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('full_name')
                     ->label('Variante')
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('min_stock_promedio')
-                    ->label('Stock Min. Promedio')
-                    ->getStateUsing(
-                        fn($record) =>
-                        $record->stocks->avg('min_stock') ? number_format($record->stocks->avg('min_stock'), 2) : 0
-                    )
+                // 1. STOCK MINIMO (Directo de la tabla warehouse_stocks)
+                Tables\Columns\TextColumn::make('stock.min_stock')
+                    ->label('Stock Mínimo')
+                    ->numeric()
                     ->badge()
-                    ->color('warning'),
+                    ->color('warning')
+                    ->sortable(),
 
-
-                Tables\Columns\TextColumn::make('stock_total')
-                    ->label('Stock Total')
-                    ->getStateUsing(
-                        fn($record) =>
-                        $record->stocks->sum(fn($s) => $s->stock_real ?? $s->stock ?? 0)
+                // 2. STOCK REAL (Directo y único)
+                Tables\Columns\TextColumn::make('stock.stock_real')
+                    ->label('Stock Actual')
+                    ->numeric()
+                    ->sortable()
+                    ->weight('bold')
+                    ->color(
+                        fn($record) => ($record->stock?->stock_real <= $record->stock?->min_stock) ? 'danger' : 'primary'
                     )
-                    ->icon('heroicon-o-eye') // icono bonito opcional
-                    ->color('primary')
-                    ->action(
-                        Action::make('ver_stock')
-                            ->label('Detalles')
-                            ->modalHeading(fn($record) => "STOCK POR ALMACEN")
-                            ->modalSubmitAction(false)
-                            ->modalCancelActionLabel('Cerrar')
-                            ->modalContent(function ($record) {
-                                $stocks = $record->stocks;
-                                return view('filament.warehouse.pages.stock-modal', [
-                                    'variant' => $record,
-                                    'stocks' => $stocks,
-                                ]);
-                            })
+                    ->description(
+                        fn($record) => ($record->stock?->stock_real <= $record->stock?->min_stock) ? 'Stock Bajo' : null
                     ),
+
+                // 3. UNIDAD
                 Tables\Columns\TextColumn::make('product.unit.name')
                     ->label('Unidad')
-                    ->sortable()
-                    ->toggleable()
                     ->badge()
-                    ->color('info'),
+                    ->color('info')
+                    ->sortable(),
             ])
-            ->actions([])
+            ->defaultSort('product.name')
+            ->actions([
+                // Ya no necesitas el botón "Ver detalles por almacén"
+            ])
             ->bulkActions([]);
     }
 }

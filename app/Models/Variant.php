@@ -20,7 +20,7 @@ class Variant extends Model
         'status',
         'restaurant_id'
     ];
-    
+
     public function product()
     {
         return $this->belongsTo(Product::class);
@@ -41,9 +41,15 @@ class Variant extends Model
         return $this->hasMany(PromotionProduct::class);
     }
 
-    public function stocks()
+    // public function stocks()
+    // {
+    //     return $this->hasMany(WarehouseStock::class);
+    // }
+
+    public function stock()
     {
-        return $this->hasMany(WarehouseStock::class);
+        // Cambiamos hasMany por hasOne ya que solo hay un registro de stock
+        return $this->hasOne(WarehouseStock::class);
     }
 
     public function ajustesitems()

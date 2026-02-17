@@ -14,7 +14,7 @@ trait ManjoStockProductos
     public function applyAdjustment($adjustment): void
     {
         foreach ($adjustment->items as $item) {
-            $this->processItem($item, $adjustment->tipo, comprobante: $adjustment->codigo);
+            $this->processItem($item, $adjustment->tipo, $adjustment->codigo);
         }
     }
 
@@ -24,7 +24,7 @@ trait ManjoStockProductos
     public function reverseAdjustment($adjustment): void
     {
         foreach ($adjustment->items as $item) {
-            $this->reverseItem($item, $adjustment->tipo);
+            $this->reverseItem($item, $adjustment->tipo, $adjustment->codigo);
         }
     }
 
@@ -44,7 +44,6 @@ trait ManjoStockProductos
     public function reverseVenta($sale): void
     {
         foreach ($sale->details as $item) {
-            // Solo procesamos si el producto tiene activado el control de stock
             if ($item->product && $item->product->control_stock) {
                 $this->reverseItem(
                     item: $item,
@@ -82,61 +81,55 @@ trait ManjoStockProductos
         }
     }
 
+    /**
+     * Lógica centralizada para procesar stock (Entradas/Salidas)
+     */
     private function processItem($item, string $tipo, ?string $comprobante = null, ?string $movimiento = null): void
     {
-        $warehouse = $item->warehouse;
-        if (!$warehouse) return;
         $variant = $item->variant;
+        if (!$variant) return;
+
+        // Conversión de unidades
         $unitProduct = $item->product->unit;
         $unitSelected = $item->unit ?? $unitProduct;
-
         $cantidadFinal = $this->convertirCantidad($unitSelected, $unitProduct, $item->cantidad);
 
-        // BLOQUEO PESIMISTA: Espera a que termine cualquier otra actualización de este stock
+        // BLOQUEO PESIMISTA sobre el stock único de la variante
         $stock = WarehouseStock::where('variant_id', $variant->id)
-            ->where('warehouse_id', $warehouse->id)
             ->lockForUpdate()
             ->first();
 
         if (!$stock) {
             $stock = WarehouseStock::create([
                 'variant_id' => $variant->id,
-                'warehouse_id' => $warehouse->id,
                 'stock_real' => 0,
                 'stock_reserva' => 0,
+                'restaurant_id' => filament()->getTenant()->id,
             ]);
         }
 
         if ($tipo === 'entrada') {
-            if (!$variant->stock_inicial) {
-                $variant->update(['stock_inicial' => true]);
-            }
             $stock->increment('stock_real', $cantidadFinal);
             $stock->increment('stock_reserva', $cantidadFinal);
         }
 
         if ($tipo === 'salida') {
-            // Permitir negativos si el producto está configurado para ello
-            if ($item->product->venta_sin_stock) {
-                $nuevoStock = $stock->stock_real - $cantidadFinal;
-            } else {
-                $nuevoStock = max(0, $stock->stock_real - $cantidadFinal);
-            }
+            $nuevoStock = $item->product->venta_sin_stock
+                ? $stock->stock_real - $cantidadFinal
+                : max(0, $stock->stock_real - $cantidadFinal);
 
             $stock->update(['stock_real' => $nuevoStock]);
 
-            // Solo actualizar reserva si NO es una venta final (para otros movimientos)
+            // Solo actualizar reserva si NO es una venta final
             if ($movimiento !== 'Venta') {
                 $stock->update(['stock_reserva' => $nuevoStock]);
             }
         }
 
-        // REGISTRO DE KARDEX: Ahora con el stock_real bloqueado y exacto
         $variant->kardexes()->create([
             'product_id'      => $variant->product_id,
             'variant_id'      => $variant->id,
             'restaurant_id'   => filament()->getTenant()->id,
-            'warehouse_id'    => $warehouse->id,
             'tipo_movimiento' => $movimiento ?? $tipo,
             'comprobante'     => $comprobante,
             'cantidad'        => $tipo === 'salida' ? -$cantidadFinal : $cantidadFinal,
@@ -147,55 +140,53 @@ trait ManjoStockProductos
     }
 
     /**
-     * Reverso del ajuste.
+     * Reverso del ajuste (Anulaciones)
      */
     private function reverseItem($item, string $tipo, ?string $comprobante = null, ?string $movimiento = null): void
     {
-        $warehouse = $item->warehouse;
-        if (! $warehouse) return;
-
         $variant = $item->variant;
-        $unitProduct = $item->product->unit;
-        $unitSelected = $item->unit;
-        $cantidadFinal = $this->convertirCantidad($unitSelected, $unitProduct, $item->cantidad);
-        $stock = WarehouseStock::firstOrCreate(
-            [
-                'variant_id' => $variant->id,
-                'warehouse_id' => $warehouse->id,
-            ],
-            ['stock_real' => 0]
-        );
+        if (!$variant) return;
 
-        // REVERSO
+        $unitProduct = $item->product->unit;
+        $unitSelected = $item->unit ?? $unitProduct;
+        $cantidadFinal = $this->convertirCantidad($unitSelected, $unitProduct, $item->cantidad);
+
+        $stock = WarehouseStock::where('variant_id', $variant->id)->lockForUpdate()->first();
+
+        if (!$stock) return;
+
+        // REVERSO DE LÓGICA
         if ($tipo === 'entrada') {
-            // Si fue entrada, ahora restamos
+            // Si era entrada (sumó), ahora restamos
             $nuevo = max(0, $stock->stock_real - $cantidadFinal);
-            $stock->update(['stock_real' => $nuevo]);
-            $stock->update(['stock_reserva' => $nuevo]);
+            $stock->update([
+                'stock_real' => $nuevo,
+                'stock_reserva' => $nuevo
+            ]);
         }
 
         if ($tipo === 'salida') {
-            // Si fue salida, ahora sumamos
+            // Si era salida (restó), ahora sumamos
             $stock->increment('stock_real', $cantidadFinal);
             $stock->increment('stock_reserva', $cantidadFinal);
         }
 
+        // Registro de KARDEX de anulación
         $variant->kardexes()->create([
             'product_id'      => $variant->product_id,
             'variant_id'      => $variant->id,
             'restaurant_id'   => filament()->getTenant()->id,
-            'warehouse_id'   =>  $warehouse->id,
             'tipo_movimiento' => $movimiento ?? $this->getReverseMovementName($item, $tipo),
-            'comprobante'     => $comprobante,   // ← YA VIENE LISTO
-            'cantidad'        => $cantidadFinal,
+            'comprobante'     => $comprobante,
+            'cantidad'        => $tipo === 'salida' ? $cantidadFinal : -$cantidadFinal,
             'stock_restante'  => $stock->stock_real,
-            'modelo_type'     => get_class($item->modelo ?? $item),
-            'modelo_id'       => $item->modelo->id ?? $item->id,
+            'modelo_type'     => get_class($item),
+            'modelo_id'       => $item->id,
         ]);
     }
 
     /**
-     * Conversión de unidades → base del producto.
+     * Conversión de unidades
      */
     public function convertirCantidad(Unit $unidadSeleccionada, Unit $unidadProducto, float $cantidad): float
     {
@@ -204,9 +195,6 @@ trait ManjoStockProductos
         return ($cantidad * $factorSeleccionado) / $factorProducto;
     }
 
-    /**
-     * Factor total hasta unidad base raíz.
-     */
     public function factorHastaBase(Unit $unidad): float
     {
         $factor = 1;
@@ -220,11 +208,11 @@ trait ManjoStockProductos
 
     private function getReverseMovementName($item, string $tipo): string
     {
-        $modelName = class_basename($item->modelo ?? $item);
+        $modelName = class_basename($item);
         return match ($modelName) {
             'StockAdjustmentItem' => 'ajuste-anulado',
             'PurchaseDetail'      => 'compra-anulada',
-            'SaleItem'            => 'venta-anulada',
+            'SaleDetail'          => 'venta-anulada',
             default               => 'movimiento-anulado',
         };
     }

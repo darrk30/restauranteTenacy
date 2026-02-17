@@ -11,7 +11,6 @@ class PurchaseDetail extends Model
         'purchase_id',
         'product_id',
         'variant_id',
-        'warehouse_id',
         'subtotal',
         'unit_id',
         'cantidad',

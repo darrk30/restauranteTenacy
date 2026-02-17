@@ -8,17 +8,16 @@ use Illuminate\Database\Eloquent\Builder;
 class WarehouseStock extends Model
 {
     protected $fillable = [
-        'warehouse_id',
         'variant_id',
         'stock_real',
         'stock_reserva',
         'min_stock',
     ];
 
-    public function warehouse()
-    {
-        return $this->belongsTo(Warehouse::class);
-    }
+    // public function warehouse()
+    // {
+    //     return $this->belongsTo(Warehouse::class);
+    // }
 
     public function variant()
     {

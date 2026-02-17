@@ -470,40 +470,18 @@ class OrdenMesa extends Page implements HasActions
     }
 
     // --- GESTIÓN DE STOCK ---
+    // --- GESTIÓN DE STOCK (CORREGIDO PARA INVENTARIO CENTRALIZADO) ---
     private function gestionarStock($variantId, $cantidad, $operacion = 'restar')
     {
-        $variant = Variant::with(['stocks' => function ($q) {
-            $q->orderBy('id', 'asc');
-        }])->find($variantId);
-
-        if (!$variant) return;
-
+        $variant = Variant::with('stock')->find($variantId);
+        if (!$variant || !$variant->stock) return;
         $product = $variant->product;
         if ($product && $product->control_stock == 0) return;
-
-        $pendiente = $cantidad;
-
-        foreach ($variant->stocks as $stock) {
-            if ($pendiente <= 0) break;
-
-            if ($operacion === 'restar') {
-                $disponible = $stock->stock_reserva;
-                if ($disponible >= $pendiente) {
-                    $stock->decrement('stock_reserva', $pendiente);
-                    $pendiente = 0;
-                } else {
-                    if ($disponible > 0) {
-                        $stock->decrement('stock_reserva', $disponible);
-                        $pendiente -= $disponible;
-                    }
-                }
-            } else {
-                $stock->increment('stock_reserva', $pendiente);
-                $pendiente = 0;
-            }
-        }
-        if ($operacion === 'restar' && $pendiente > 0 && $variant->stocks->isNotEmpty()) {
-            $variant->stocks->last()->decrement('stock_reserva', $pendiente);
+        $stockRegistro = $variant->stock;
+        if ($operacion === 'restar') {
+            $stockRegistro->decrement('stock_reserva', $cantidad);
+        } else {
+            $stockRegistro->increment('stock_reserva', $cantidad);
         }
     }
 
@@ -524,8 +502,8 @@ class OrdenMesa extends Page implements HasActions
             $varianteUnica = $producto->variants->first();
             if ($varianteUnica) {
                 $this->variantSeleccionadaId = $varianteUnica->id;
-                $this->stockActualVariante = $varianteUnica->stocks->sum('stock_real');
-                $this->stockReservaVariante = $varianteUnica->stocks->sum('stock_reserva');
+                $this->stockActualVariante = $varianteUnica->stock->sum('stock_real');
+                $this->stockReservaVariante = $varianteUnica->stock->sum('stock_reserva');
             }
         } else {
             foreach ($producto->attributes as $attr) {
@@ -579,8 +557,8 @@ class OrdenMesa extends Page implements HasActions
 
         if ($matchVariant) {
             $this->variantSeleccionadaId = $matchVariant->id;
-            $this->stockActualVariante = $matchVariant->stocks->sum('stock_real');
-            $this->stockReservaVariante = $matchVariant->stocks->sum('stock_reserva');
+            $this->stockActualVariante = $matchVariant->stock->stock_real ?? 0;
+            $this->stockReservaVariante = $matchVariant->stock->stock_reserva ?? 0;
         } else {
             $this->variantSeleccionadaId = null;
             $this->stockActualVariante = 0;
@@ -748,8 +726,8 @@ class OrdenMesa extends Page implements HasActions
             $producto = Product::find($productoId);
 
             if ($producto && $producto->control_stock == 1 && $producto->venta_sin_stock == 0) {
-                $variante = Variant::with('stocks')->find($variantId);
-                $stockMaximo = $variante ? $variante->stocks->sum('stock_reserva') : 0;
+                $variante = Variant::with('stock')->find($variantId);
+                $stockMaximo = ($variante && $variante->stock) ? $variante->stock->stock_reserva : 0;
 
                 // CORRECCIÓN RÁPIDA: También deberías verificar si este producto ya se gastó en promos
                 // Pero si solo quieres mantener tu lógica actual:
@@ -995,7 +973,7 @@ class OrdenMesa extends Page implements HasActions
 
                 if ($item->variants->isNotEmpty()) {
                     foreach ($item->variants as $variant) {
-                        $stockDb += $variant->stocks->sum('stock_reserva');
+                        $stockDb += ($variant->stock->stock_reserva ?? 0);
                         $impacto += ($consumoVariantes[$variant->id] ?? 0);
                     }
                 } else {
@@ -1061,7 +1039,7 @@ class OrdenMesa extends Page implements HasActions
                         $impactoNeto = 0;
 
                         if ($detalle->variant_id && $detalle->variant) {
-                            $stockTotalBD = $detalle->variant->stocks->sum('stock_reserva');
+                            $stockTotalBD = $detalle->variant->stock->sum('stock_reserva');
                             $impactoNeto = $consumoVariantes[$detalle->variant_id] ?? 0;
                         } elseif ($producto) {
                             $stockTotalBD = $producto->stock ?? 0;
@@ -1143,8 +1121,8 @@ class OrdenMesa extends Page implements HasActions
 
             if ($pp->variant_id) {
                 // Stock Total en BD
-                $variant = \App\Models\Variant::with('stocks')->find($pp->variant_id);
-                $stockBD = $variant->stocks->sum('stock_reserva');
+                $variant = \App\Models\Variant::with('stock')->find($pp->variant_id);
+                $stockBD = $variant->stock->stock_reserva ?? 0;
 
                 // Consumo de TODO el carrito actual (Deltas)
                 foreach ($this->carrito as $c) {
@@ -1233,7 +1211,7 @@ class OrdenMesa extends Page implements HasActions
         // 4. Preparamos el Precio (para que aparezca en el Input Editable)
         $this->precioCalculado = $promocion->price;
 
-        // 5. Stocks visuales (Opcional: podrías calcular el límite aquí si quieres mostrarlo en el modal)
+        // 5. stock visuales (Opcional: podrías calcular el límite aquí si quieres mostrarlo en el modal)
         $this->stockActualVariante = 0;
         $this->stockReservaVariante = 0;
     }

@@ -25,7 +25,7 @@ class OrdenService
                     $q->where('status', 'activo');
                 },
                 'variants.values.attribute',
-                'variants.stocks',
+                'variants.stock',
             ])
             ->activos()
             ->porCategoria($categoriaId)
@@ -50,7 +50,7 @@ class OrdenService
             ->with([
                 'rules',                       // 1. Para validar días, horas y límites diarios
                 'promotionproducts.product',   // 2. Para ver la configuración "control_stock" del producto padre
-                'promotionproducts.variant.stocks' // 3. CRÍTICO: Para poder sumar el stock de la tabla warehouse_stocks
+                'promotionproducts.variant.stock' // 3. CRÍTICO: Para poder sumar el stock de la tabla warehouse_stock
             ])
             // ->where('status', 'activo') // Puedes descomentar esto si ya arreglaste mayúsculas/minúsculas en BD
             // ->where('visible', true)
@@ -80,7 +80,7 @@ class OrdenService
 
     public static function obtenerProductoId(int $id): Product | null
     {
-        $producto = Product::with(['attributes', 'variants.values', 'variants.stocks'])->find($id);
+        $producto = Product::with(['attributes', 'variants.values', 'variants.stock'])->find($id);
 
         if (!$producto) {
             return null;

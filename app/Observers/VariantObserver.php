@@ -15,20 +15,14 @@ class VariantObserver
     {
         // Verificar si el producto controla stock
         if ($variant->product->control_stock == true) {
-            // Obtener el almacén ordenado por "order" ASC
-            $warehouse = Warehouse::orderBy('order', 'asc')->first();
 
-            if (!$warehouse) {
-                return; // No hay almacén, no hacemos nada
-            }
-
-            // Crear registro en warehouse_stock
+            // Crear el registro de stock único para esta variante
             WarehouseStock::create([
-                'warehouse_id' => $warehouse->id,
-                'variant_id'   => $variant->id,
-                'stock_real'   => 0,
+                'variant_id'    => $variant->id,
+                'stock_real'    => 0,
                 'stock_reserva' => 0,
-                'min_stock'    => 0,
+                'min_stock'     => 0,
+                'restaurant_id' => $variant->restaurant_id,
             ]);
         }
     }

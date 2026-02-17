@@ -267,15 +267,15 @@ class PagarOrden extends Page implements HasForms, HasActions
         return str_pad($nuevoNumero, 8, '0', STR_PAD_LEFT);
     }
 
-    public function procesarPagoFinal(InventoryService $inventoryService)
+    public function procesarPagoFinal()
     {
-        // 1. PREPARACIÓN
+        // 1. PREPARACIÓN Y VALIDACIONES DE CAJA
         $this->calculateTotalServer();
         $totalPagado = collect($this->pagos_agregados)->sum('amount');
         $tenantId = Filament::getTenant()->id;
         $userId = Auth::id();
 
-        // Validaciones básicas de caja y montos
+        // Validar que la caja esté abierta
         $sesionCaja = SessionCashRegister::where('restaurant_id', $tenantId)
             ->where('user_id', $userId)
             ->where('status', 'open')
@@ -286,44 +286,15 @@ class PagarOrden extends Page implements HasForms, HasActions
             return;
         }
 
+        // Validar montos completos
         if ($totalPagado < ($this->total_final - 0.01)) {
             Notification::make()->title('Pago incompleto')->danger()->send();
             return;
         }
 
-        // --------------------------------------------------------------------------
-        // A. RECOLECCIÓN DE IDs PARA CONSULTA MASIVA DE STOCK (OPTIMIZACIÓN)
-        // --------------------------------------------------------------------------
-        $almacenes = Warehouse::where('restaurant_id', $tenantId)->get();
-        $variantIdsToCheck = collect();
-
-        foreach ($this->items as $item) {
-            if ($item->item_type === 'Promocion' && $item->promotion) {
-                // Si es promoción, recolectamos los IDs de sus hijos
-                foreach ($item->promotion->promotionproducts as $subItem) {
-                    if ($subItem->variant_id) {
-                        $variantIdsToCheck->push($subItem->variant_id);
-                    }
-                }
-            } elseif ($item->variant_id) {
-                // Si es producto normal
-                $variantIdsToCheck->push($item->variant_id);
-            }
-        }
-
-        $variantIdsToCheck = $variantIdsToCheck->unique();
-
-        // Traemos todo el stock necesario de una sola vez
-        $todosLosStocks = WarehouseStock::whereIn('variant_id', $variantIdsToCheck)
-            ->whereIn('warehouse_id', $almacenes->pluck('id'))
-            ->get()
-            ->groupBy('variant_id');
-        // --------------------------------------------------------------------------
-
-
         DB::beginTransaction();
         try {
-            // Bloqueos y creación de Venta (Cabecera) - IGUAL QUE ANTES
+            // 2. BLOQUEOS Y CREACIÓN DE LA VENTA (CABECERA)
             $order = Order::where('id', $this->order->id)->lockForUpdate()->first();
             if ($order->status === 'pagado') throw new \Exception("Orden ya procesada.");
 
@@ -335,6 +306,7 @@ class PagarOrden extends Page implements HasForms, HasActions
                 ? ($this->cliente_seleccionado->razon_social ?? ($this->cliente_seleccionado->nombres . ' ' . $this->cliente_seleccionado->apellidos))
                 : 'CLIENTES VARIOS';
 
+            // Crear la Venta
             $sale = Sale::create([
                 'restaurant_id'    => $tenantId,
                 'order_id'         => $order->id,
@@ -357,38 +329,35 @@ class PagarOrden extends Page implements HasForms, HasActions
                 'fecha_emision'    => now(),
             ]);
 
-            $detallesParaInsertar = []; // Para tabla sale_details (Recibo)
-            $detallesParaKardex = collect(); // Para mover stock
+            $detallesParaInsertar = [];
+            $detallesParaKardex = collect();
 
-            // 3. PROCESAMIENTO DE ITEMS
+            // 3. PROCESAMIENTO DE ITEMS (RECIBO Y PREPARACIÓN KARDEX)
             foreach ($this->items as $item) {
-
                 $esPromocion = ($item->item_type === 'Promocion');
 
-                // ✅ ESTRUCTURA UNIFORME: Todas las columnas deben estar presentes siempre
+                // A. Preparar datos para 'sale_details' (El recibo visual)
                 $detallesParaInsertar[] = [
                     'sale_id'         => $sale->id,
                     'product_id'      => $esPromocion ? null : $item->product_id,
                     'variant_id'      => $esPromocion ? null : $item->variant_id,
-                    'promotion_id'    => $esPromocion ? $item->promotion_id : null, // Asegúrate de tener esta columna en la BD
+                    'promotion_id'    => $esPromocion ? $item->promotion_id : null,
                     'product_name'    => $item->product_name ?? ($esPromocion ? ($item->promotion->name ?? 'Promoción') : ($item->product->name ?? 'Producto')),
                     'cantidad'        => $item->cantidad,
                     'precio_unitario' => $item->price,
                     'subtotal'        => $item->subTotal,
-                    // Eliminamos created_at/updated_at del array si el insert masivo falla por ellos,
-                    // o nos aseguramos de que TODAS las filas los tengan.
                     'created_at'      => now(),
                     'updated_at'      => now(),
                 ];
 
-                // --- LÓGICA DE STOCK (KARDEX) ---
-                // (Esta parte no afecta al insert de sale_details, se mantiene igual)
+                // B. Preparar objetos virtuales para el Trait de Stock (Kardex)
                 if ($esPromocion && $item->promotion) {
+                    // Desglosar la promoción para descontar ingredientes/productos
                     foreach ($item->promotion->promotionproducts as $subItem) {
                         $productoHijo = $subItem->product;
+
                         if ($productoHijo && $productoHijo->control_stock) {
                             $cantidadADescontar = $item->cantidad * $subItem->quantity;
-                            $almacenHijo = $almacenes->first();
 
                             $tempDetail = new \App\Models\SaleDetail([
                                 'product_id' => $productoHijo->id,
@@ -396,46 +365,48 @@ class PagarOrden extends Page implements HasForms, HasActions
                                 'cantidad'   => $cantidadADescontar,
                                 'sale_id'    => $sale->id,
                             ]);
-                            $tempDetail->setRelation('warehouse', $almacenHijo);
+
+                            // Solo relaciones necesarias para el Trait (Producto, Variante, Unidad)
+                            // YA NO usamos Warehouse
                             $tempDetail->setRelation('product', $productoHijo);
                             $tempDetail->setRelation('variant', $subItem->variant);
                             $tempDetail->setRelation('unit', $productoHijo->unit);
+
                             $detallesParaKardex->push($tempDetail);
                         }
                     }
                 } elseif ($item->product && $item->product->control_stock) {
-                    $almacenSeleccionado = $inventoryService->determinarAlmacenParaItem(
-                        $item,
-                        $almacenes,
-                        $todosLosStocks,
-                        $almacenes->first()
-                    );
-                    if ($almacenSeleccionado) {
-                        $tempDetail = new \App\Models\SaleDetail(end($detallesParaInsertar));
-                        $tempDetail->setRelation('warehouse', $almacenSeleccionado);
-                        $tempDetail->setRelation('product', $item->product);
-                        $tempDetail->setRelation('variant', $item->variant);
-                        $tempDetail->setRelation('unit', $item->product->unit);
-                        $detallesParaKardex->push($tempDetail);
-                    }
+                    // Producto normal con control de stock
+                    $tempDetail = new \App\Models\SaleDetail([
+                        'product_id' => $item->product_id,
+                        'variant_id' => $item->variant_id,
+                        'cantidad'   => $item->cantidad,
+                        'sale_id'    => $sale->id,
+                    ]);
+
+                    $tempDetail->setRelation('product', $item->product);
+                    $tempDetail->setRelation('variant', $item->variant);
+                    $tempDetail->setRelation('unit', $item->product->unit);
+
+                    $detallesParaKardex->push($tempDetail);
                 }
             }
 
-            // 4. INSERCIONES MASIVAS EN BD (EL RECIBO)
+            // 4. INSERCIÓN MASIVA DEL DETALLE DE VENTA
             DB::table('sale_details')->insert($detallesParaInsertar);
 
-            // 5. MOVIMIENTO DE KARDEX (DESCUENTO DE STOCK)
-            // Solo si hay items que controlan stock (sean directos o hijos de promo)
+            // 5. MOVIMIENTO DE STOCK (KARDEX) - Centralizado
             if ($detallesParaKardex->isNotEmpty()) {
-                // Nota: applyVentaMasiva usa los objetos SaleDetail virtuales que creamos.
-                // Para productos normales, los IDs coincidirán después del insert si los recuperamos,
-                // pero para hijos de promo, son objetos 'new' que no están en sale_details.
-                // El trait debe saber manejar esto (generalmente usa product_id/variant_id/warehouse_id).
-
-                $this->applyVentaMasiva($detallesParaKardex, 'salida', "{$sale->serie}-{$sale->correlativo}", 'Venta');
+                // El Trait buscará el stock por variant_id directamente
+                $this->applyVentaMasiva(
+                    $detallesParaKardex,
+                    'salida',
+                    "{$sale->serie}-{$sale->correlativo}",
+                    'Venta'
+                );
             }
 
-            // 6. REGISTRO DE CAJA
+            // 6. REGISTRO DE MOVIMIENTOS EN CAJA
             $movimientosCaja = collect($this->pagos_agregados)->map(function ($pago) use ($sale, $userId) {
                 $referenciaStr = !empty($this->referencia_pago) ? " | Ref: " . $this->referencia_pago : "";
                 return [
@@ -454,17 +425,20 @@ class PagarOrden extends Page implements HasForms, HasActions
             $sesionCaja->cashRegisterMovements()->createMany($movimientosCaja);
             $this->referencia_pago = '';
 
-            // 7. CIERRE DE ESTADOS
+            // 7. ACTUALIZACIÓN DE ESTADOS (Orden y Mesa)
             $order->update(['status' => 'pagado']);
+
             if ($order->table_id) {
                 Table::where('id', $order->table_id)->update([
                     'estado_mesa' => 'libre',
-                    'order_id' => null,
-                    'asientos' => 0
+                    'order_id'    => null,
+                    'asientos'    => 0
                 ]);
             }
 
             DB::commit();
+
+            // Finalización exitosa
             Notification::make()->title('Venta exitosa')->success()->send();
             $this->ventaExitosaId = $sale->id;
             $this->mostrarPantallaExito = true;

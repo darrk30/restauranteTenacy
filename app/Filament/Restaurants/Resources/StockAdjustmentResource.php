@@ -112,11 +112,6 @@ class StockAdjustmentResource extends Resource
                                     ->preload()
                                     ->required()
                                     ->columnSpan(2),
-                                Forms\Components\Select::make('warehouse_id')
-                                    ->label('Almacén')
-                                    ->relationship('warehouse', 'name')
-                                    ->default(fn() => \App\Models\Warehouse::query()->first()?->id)
-                                    ->required(),
 
                                 Forms\Components\TextInput::make('cantidad')
                                     ->label('Cantidad')

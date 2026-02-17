@@ -18,7 +18,6 @@ return new class extends Migration
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
             $table->foreignId('variant_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('warehouse_id')->nullable()->constrained('warehouses')->restrictOnDelete();
             // Tipo de movimiento (compra, ajuste, venta, etc)
             $table->string('tipo_movimiento');
             $table->string('comprobante');
