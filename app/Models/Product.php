@@ -27,6 +27,7 @@ class Product extends Model
         'price',
         'control_stock',
         'venta_sin_stock',
+        'receta',
         'cortesia',
         'visible',
         'order',

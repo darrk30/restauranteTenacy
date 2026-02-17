@@ -41,14 +41,8 @@ class Variant extends Model
         return $this->hasMany(PromotionProduct::class);
     }
 
-    // public function stocks()
-    // {
-    //     return $this->hasMany(WarehouseStock::class);
-    // }
-
     public function stock()
     {
-        // Cambiamos hasMany por hasOne ya que solo hay un registro de stock
         return $this->hasOne(WarehouseStock::class);
     }
 
@@ -77,6 +71,10 @@ class Variant extends Model
         return $this->hasMany(SaleDetail::class);
     }
 
+    public function recetas()
+    {
+        return $this->hasMany(Receta::class, 'variant_id');
+    }
 
     public function getFullNameAttribute()
     {

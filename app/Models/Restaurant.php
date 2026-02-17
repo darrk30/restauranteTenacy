@@ -156,4 +156,9 @@ class Restaurant extends Model
     {
         return $this->hasMany(Sale::class);
     }
+
+    public function recetas()
+    {
+        return $this->hasMany(Receta::class);
+    }
 }
