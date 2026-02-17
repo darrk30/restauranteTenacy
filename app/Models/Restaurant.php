@@ -62,11 +62,6 @@ class Restaurant extends Model
         return $this->hasMany(Variant::class);
     }
 
-    public function warehouses()
-    {
-        return $this->hasMany(Warehouse::class);
-    }
-
     public function warehouseStocks()
     {
         return $this->hasMany(WarehouseStock::class);

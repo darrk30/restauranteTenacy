@@ -90,12 +90,6 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                         default => 'gray',
                     }),
 
-                Tables\Columns\TextColumn::make('warehouse.name')
-                    ->label('Almacen')
-                    ->placeholder('—')
-                    ->sortable()
-                    ->wrap(),
-
                 Tables\Columns\TextColumn::make('entrada')
                     ->label('Entrada')
                     ->getStateUsing(fn($record) => $record->cantidad > 0 ? $record->cantidad : 0)

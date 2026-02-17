@@ -14,11 +14,6 @@ class WarehouseStock extends Model
         'min_stock',
     ];
 
-    // public function warehouse()
-    // {
-    //     return $this->belongsTo(Warehouse::class);
-    // }
-
     public function variant()
     {
         return $this->belongsTo(Variant::class);

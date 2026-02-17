@@ -21,7 +21,6 @@ use App\Models\CashRegisterMovement;
 use App\Models\Sale;
 use App\Models\SessionCashRegister;
 use App\Models\Table;
-use App\Models\Warehouse;
 use App\Models\WarehouseStock;
 use App\Services\InventoryService;
 use App\Traits\ManjoStockProductos;
@@ -365,9 +364,6 @@ class PagarOrden extends Page implements HasForms, HasActions
                                 'cantidad'   => $cantidadADescontar,
                                 'sale_id'    => $sale->id,
                             ]);
-
-                            // Solo relaciones necesarias para el Trait (Producto, Variante, Unidad)
-                            // YA NO usamos Warehouse
                             $tempDetail->setRelation('product', $productoHijo);
                             $tempDetail->setRelation('variant', $subItem->variant);
                             $tempDetail->setRelation('unit', $productoHijo->unit);

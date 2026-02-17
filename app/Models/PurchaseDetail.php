@@ -18,11 +18,6 @@ class PurchaseDetail extends Model
         'restaurant_id',
     ];
 
-    public function warehouse()
-    {
-        return $this->belongsTo(Warehouse::class);
-    }
-
     public function purchase()
     {
         return $this->belongsTo(Purchase::class);

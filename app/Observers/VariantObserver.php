@@ -3,7 +3,6 @@
 namespace App\Observers;
 
 use App\Models\Variant;
-use App\Models\Warehouse;
 use App\Models\WarehouseStock;
 
 class VariantObserver
