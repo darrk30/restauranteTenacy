@@ -227,53 +227,61 @@ class ProductResource extends Resource
                                             ->inline(true)
                                             ->onIcon('heroicon-m-check')
                                             ->offIcon('heroicon-m-x-mark')
-                                            ->visible(
-                                                fn(Get $get) =>
-                                                $get('type') !== TipoProducto::Insumo->value
-                                            )
-                                            ->hintIcon(
-                                                'heroicon-m-information-circle',
-                                                tooltip: 'Para productos obsequiados al cliente. En el POS podrás marcarlos como cortesía y su precio será S/ 0.'
-                                            ),
+                                            ->visible(fn(Get $get) => $get('type') !== TipoProducto::Insumo->value)
+                                            ->hintIcon('heroicon-m-information-circle', tooltip: 'Para productos obsequiados...'),
 
+                                        // 2. VISIBLE (Sin cambios)
                                         Toggle::make('visible')
                                             ->label('Visible en carta')
                                             ->default(false)
                                             ->inline(true)
                                             ->onIcon('heroicon-m-check')
                                             ->offIcon('heroicon-m-x-mark')
-                                            ->visible(
-                                                fn(Get $get) =>
-                                                $get('type') !== TipoProducto::Insumo->value
-                                            )
+                                            ->visible(fn(Get $get) => $get('type') !== TipoProducto::Insumo->value)
+                                            ->hintIcon('heroicon-m-information-circle', tooltip: 'Habilita que el producto aparezca...'),
+
+                                        // 3. RECETA (Nuevo Toggle - Mutuamente excluyente con Stock)
+                                        Toggle::make('receta')
+                                            ->label('Tiene Receta')
+                                            ->default(false)
+                                            ->live()
+                                            ->afterStateUpdated(function ($state, Set $set) {
+                                                if ($state) {
+                                                    $set('control_stock', false);
+                                                    $set('venta_sin_stock', false);
+                                                }
+                                            })
+                                            ->inline(true)
+                                            ->onIcon('heroicon-m-beaker')
+                                            ->offIcon('heroicon-m-x-mark')
+                                            ->visible(fn(Get $get) => $get('type') !== TipoProducto::Insumo->value)
                                             ->hintIcon(
                                                 'heroicon-m-information-circle',
-                                                tooltip: 'Habilita que el producto aparezca en la carta digital para pedidos.'
+                                                tooltip: 'Para platos preparados. El stock se descuenta de los ingredientes. Desactiva "Control de Stock".'
                                             ),
 
+                                        // 4. CONTROL DE STOCK (Modificado)
                                         Toggle::make('control_stock')
                                             ->label('Control de stock')
                                             ->default(false)
-                                            ->live()
-                                            ->afterStateUpdated(function ($state, callable $set) {
-                                                if (!$state) {
+                                            ->live() // Reactivo
+                                            ->afterStateUpdated(function ($state, Set $set) {
+                                                if ($state) {
+                                                    $set('receta', false);
+                                                } else {
                                                     $set('venta_sin_stock', false);
                                                 }
                                             })
                                             ->inline(true)
                                             ->onIcon('heroicon-m-check')
                                             ->offIcon('heroicon-m-x-mark')
-                                            ->visible(
-                                                fn(callable $get) =>
-                                                !in_array($get('type'), [
-                                                    TipoProducto::Servicio->value,
-                                                ])
-                                            )
+                                            ->visible(fn(Get $get) => !in_array($get('type'), [TipoProducto::Servicio->value]))
                                             ->hintIcon(
                                                 'heroicon-m-information-circle',
-                                                tooltip: 'Controla salidas, ingresos y traslados del producto. Evita ventas sin stock.'
+                                                tooltip: 'Para productos terminados (ej. Gaseosas). Desactiva la opción de "Receta".'
                                             ),
 
+                                        // 5. VENTA SIN STOCK (Sin cambios mayores, solo depende de control_stock)
                                         Toggle::make('venta_sin_stock')
                                             ->label('Venta sin stock')
                                             ->default(false)
@@ -281,22 +289,11 @@ class ProductResource extends Resource
                                             ->onIcon('heroicon-m-check')
                                             ->offIcon('heroicon-m-x-mark')
                                             ->live()
-                                            ->visible(function (callable $get) {
-                                                $controlStock = $get('control_stock');
-                                                $tipo = $get('type');
-                                                if ($tipo === TipoProducto::Insumo->value) {
-                                                    return false;
-                                                }
-                                                if (!$controlStock) {
-                                                    return false;
-                                                }
-                                                return true;
-                                            })
-                                            ->hintAction(
-                                                Action::make('info')
-                                                    ->icon('heroicon-m-information-circle')
-                                                    ->tooltip('Puede venderse el producto aunque no haya stock disponible.')
-                                            ),
+                                            ->visible(fn(Get $get) => $get('control_stock') && $get('type') !== TipoProducto::Insumo->value)
+                                            ->hintIcon('heroicon-m-information-circle', tooltip: 'Puede venderse el producto aunque no haya stock disponible.'),
+
+
+
                                     ]),
                                 ])
                                 ->collapsible(),
@@ -331,15 +328,6 @@ class ProductResource extends Resource
                         TextInput::make('name')
                             ->label('Nombre del atributo')
                             ->required(),
-                        Select::make('tipo')
-                            ->label('Tipo')
-                            ->options([
-                                'color' => 'Color',
-                                'pildoras' => 'Píldoras',
-                                'seleccionar' => 'Seleccionar',
-                                'radio' => 'Radio',
-                            ])
-                            ->required(),
                     ])
                     ->createOptionUsing(fn(array $data) => Attribute::create($data)->id),
                 Select::make('values')
@@ -361,11 +349,6 @@ class ProductResource extends Resource
                             TextInput::make('name')
                                 ->label('Nombre del valor')
                                 ->required(),
-
-                            ColorPicker::make('value')
-                                ->label('Color')
-                                ->visible($attribute?->tipo === 'color')
-                                ->required($attribute?->tipo === 'color'),
                             Hidden::make('attribute_id')->default($attribute?->id),
                         ];
                     })

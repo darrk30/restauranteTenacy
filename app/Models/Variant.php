@@ -20,7 +20,7 @@ class Variant extends Model
         'status',
         'restaurant_id'
     ];
-    
+
     public function product()
     {
         return $this->belongsTo(Product::class);
@@ -41,9 +41,9 @@ class Variant extends Model
         return $this->hasMany(PromotionProduct::class);
     }
 
-    public function stocks()
+    public function stock()
     {
-        return $this->hasMany(WarehouseStock::class);
+        return $this->hasOne(WarehouseStock::class);
     }
 
     public function ajustesitems()
@@ -71,6 +71,10 @@ class Variant extends Model
         return $this->hasMany(SaleDetail::class);
     }
 
+    public function recetas()
+    {
+        return $this->hasMany(Receta::class, 'variant_id');
+    }
 
     public function getFullNameAttribute()
     {

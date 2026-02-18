@@ -4,16 +4,12 @@ namespace Database\Seeders;
 
 use App\Models\Restaurant;
 use App\Models\User;
-use App\Models\Warehouse;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // 🚫 1️⃣ Desactivar temporalmente eventos de Restaurant
-        // Restaurant::unsetEventDispatcher();
-
         // 👤 Crear usuario principal si no existe
         if (User::count() === 0) {
             User::factory()->create([

@@ -11,16 +11,6 @@ trait SyncProductAttributesTrait
     {
         $allValueIds = collect($attributeValues)->pluck('values')->flatten()->unique()->toArray();
         $values = Value::whereIn('id', $allValueIds)->get(['id', 'name', 'value'])->keyBy('id');
-
-        // $syncData = collect($attributeValues)->mapWithKeys(function ($item) use ($values) {
-        //     $selectedValues = collect($item['values'] ?? [])
-        //         ->map(fn($id) => $values->get($id))
-        //         ->filter()
-        //         ->values()
-        //         ->toArray();
-
-        //     return [$item['attribute_id'] => ['values' => json_encode($selectedValues)]];
-        // })->toArray();
         $syncData = collect($attributeValues)->mapWithKeys(function ($item) use ($values) {
 
             $selectedIds = $item['values'] ?? [];

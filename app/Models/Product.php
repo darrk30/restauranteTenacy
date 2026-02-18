@@ -27,6 +27,7 @@ class Product extends Model
         'price',
         'control_stock',
         'venta_sin_stock',
+        'receta',
         'cortesia',
         'visible',
         'order',
@@ -68,9 +69,6 @@ class Product extends Model
             ->using(AttributeProduct::class) // <--- AGREGA ESTA LÍNEA
             ->withPivot('values')
             ->withTimestamps();
-        // return $this->belongsToMany(Attribute::class, 'attribute_product')
-        //     ->withPivot('values')
-        //     ->withTimestamps();
     }
 
     public function promotionproducts()

@@ -68,6 +68,11 @@ class Promotion extends Model
         return $this->hasMany(OrderDetail::class);
     }
 
+    public function saleDetails()
+    {
+        return $this->hasMany(SaleDetail::class);
+    }
+
     // --- LÓGICA DEL NEGOCIO (MÉTODOS NUEVOS) ---
 
     public function isAvailable(): bool

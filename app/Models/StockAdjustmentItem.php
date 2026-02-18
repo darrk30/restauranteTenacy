@@ -11,7 +11,6 @@ class StockAdjustmentItem extends Model
         'stock_adjustment_id',
         'variant_id',
         'product_id',
-        'warehouse_id',
         'unit_id',
         'cantidad',
         'restaurant_id',
@@ -21,11 +20,6 @@ class StockAdjustmentItem extends Model
     public function adjustment()
     {
         return $this->belongsTo(StockAdjustment::class);
-    }
-
-    public function warehouse()
-    {
-        return $this->belongsTo(Warehouse::class);
     }
 
     // Variante del producto

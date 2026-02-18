@@ -11,20 +11,16 @@ class Kardex extends Model
         'product_id',
         'variant_id',
         'restaurant_id',
-        'warehouse_id',
         'tipo_movimiento',
         'comprobante',
         'modelo_texto',
         'modelo_id',
         'modelo_type',
         'cantidad',
+        'costo_unitario',
+        'saldo_valorizado',
         'stock_restante',
     ];
-
-    public function warehouse()
-    {
-        return $this->belongsTo(Warehouse::class);
-    }
 
     // Producto
     public function product()

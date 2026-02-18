@@ -7,22 +7,21 @@ use App\Models\Variant;
 use Filament\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Set;
 use Filament\Tables\Filters\Filter;
+use Filament\Tables\Columns\ColumnGroup;
+use Filament\Tables\Columns\TextColumn;
 
 class KardexPage extends Page implements Tables\Contracts\HasTable
 {
     use Tables\Concerns\InteractsWithTable;
 
-    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document';
-    protected static ?string $navigationLabel = 'Kardex';
+    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-check';
+    protected static ?string $navigationLabel = 'Kardex Valorizado';
     protected static ?string $navigationGroup = 'Inventarios';
-    protected static ?string $title = 'Reporte de Kardex';
+    protected static ?string $title = 'Kardex Valorizado (PPP)';
     protected static string $view = 'filament.kardex.kardex-page';
-
-    public ?int $productId = null;
 
     public function table(Table $table): Table
     {
@@ -30,88 +29,96 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
             ->query(
                 Kardex::query()
                     ->with(['product', 'variant'])
-                    ->when(! $this->areFiltersActive(), fn($q) => $q->whereRaw('0=1'))
-                    ->when(
-                        $this->productId,
-                        fn($q) => $q->where('product_id', $this->productId)
-                    )->orderBy('id', 'desc')
+                    ->when(!$this->areFiltersActive(), fn($q) => $q->whereRaw('1=0'))
+                    ->orderBy('id', 'desc')
             )
             ->columns([
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->label('Fecha')
-                    ->dateTime('d/m/Y H:i:s')
+                    ->dateTime('d/m/Y H:i')
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('comprobante')
-                    ->label('Doc. Asociado')
-                    ->sortable()
-                    ->wrap(),
+                TextColumn::make('comprobante')
+                    ->label('Documento/Motivo')
+                    ->description(fn($record) => $this->getOrigenLabel($record->modelo_type))
+                    ->searchable(),
 
+                // --- GRUPO ENTRADAS ---
+                ColumnGroup::make('ENTRADAS')
+                    ->columns([
+                        TextColumn::make('cant_in')
+                            ->label('Cant.')
+                            ->getStateUsing(fn($record) => $record->cantidad > 0 ? $record->cantidad : 0)
+                            ->formatStateUsing(fn ($state) => $state <= 0 ? '-' : number_format($state, 3))
+                            ->color(fn($state) => $state === '-' ? 'gray' : 'success')
+                            ->alignRight(),
+                            
+                        TextColumn::make('costo_u_in')
+                            ->label('Costo U.')
+                            ->getStateUsing(fn($record) => $record->cantidad > 0 ? $record->costo_unitario : 0)
+                            ->formatStateUsing(fn ($state) => $state <= 0 ? '-' : 'S/ ' . number_format($state, 4))
+                            ->color(fn($state) => $state === '-' ? 'gray' : null)
+                            ->alignRight(),
 
-                Tables\Columns\TextColumn::make('modelo_type')
-                    ->label('Origen')
-                    ->formatStateUsing(function ($state) {
+                        TextColumn::make('total_in')
+                            ->label('Total')
+                            ->getStateUsing(fn($record) => $record->cantidad > 0 ? ($record->cantidad * $record->costo_unitario) : 0)
+                            ->formatStateUsing(fn ($state) => $state <= 0 ? '-' : 'S/ ' . number_format($state, 2))
+                            ->color(fn($state) => $state === '-' ? 'gray' : null)
+                            ->alignRight(),
+                    ]),
 
-                        if (! $state) return '—';
+                // --- GRUPO SALIDAS ---
+                ColumnGroup::make('SALIDAS')
+                    ->columns([
+                        TextColumn::make('cant_out')
+                            ->label('Cant.')
+                            ->getStateUsing(fn($record) => $record->cantidad < 0 ? abs($record->cantidad) : 0)
+                            ->formatStateUsing(fn ($state) => $state <= 0 ? '-' : number_format($state, 3))
+                            ->color(fn($state) => $state === '-' ? 'gray' : 'danger')
+                            ->alignRight(),
 
-                        $type = class_basename($state);
+                        TextColumn::make('costo_u_out')
+                            ->label('Costo U.')
+                            ->getStateUsing(fn($record) => $record->cantidad < 0 ? $record->costo_unitario : 0)
+                            ->formatStateUsing(fn ($state) => $state <= 0 ? '-' : 'S/ ' . number_format($state, 4))
+                            ->color(fn($state) => $state === '-' ? 'gray' : null)
+                            ->alignRight(),
 
-                        // Mapeo bonito en español
-                        return [
-                            'StockAdjustmentItem' => 'Ajuste de stock',
-                            'ProductVariants' => 'Productos',
-                            'PurchaseDetail'      => 'Compra',
-                            'SaleDetail'            => 'Venta',
-                        ][$type] ?? $type;  // fallback por si aparece otro
-                    })
-                    ->badge()
-                    ->color(function ($state) {
+                        TextColumn::make('total_out')
+                            ->label('Total')
+                            ->getStateUsing(fn($record) => $record->cantidad < 0 ? (abs($record->cantidad) * $record->costo_unitario) : 0)
+                            ->formatStateUsing(fn ($state) => $state <= 0 ? '-' : 'S/ ' . number_format($state, 2))
+                            ->color(fn($state) => $state === '-' ? 'gray' : null)
+                            ->alignRight(),
+                    ]),
 
-                        if (! $state) return 'gray';
+                // --- GRUPO SALDOS (EXISTENCIAS) ---
+                ColumnGroup::make('SALDO FINAL (VALORIZADO)')
+                    ->columns([
+                        TextColumn::make('stock_restante')
+                            ->label('Stock')
+                            ->formatStateUsing(fn ($state) => $state == 0 ? '0.000' : number_format($state, 3))
+                            ->weight('bold')
+                            ->alignRight(),
 
-                        return match (class_basename($state)) {
-                            'StockAdjustmentItem' => 'warning',
-                            'PurchaseDetail'      => 'success',
-                            'ProductVariants'      => 'success',
-                            'SaleDetail'            => 'danger',
-                            default               => 'gray',
-                        };
-                    }),
+                        TextColumn::make('costo_promedio')
+                            ->label('Costo Prom.')
+                            ->getStateUsing(function ($record) {
+                                return $record->stock_restante > 0 
+                                    ? ($record->saldo_valorizado / $record->stock_restante) 
+                                    : 0;
+                            })
+                            ->formatStateUsing(fn ($state) => $state <= 0 ? 'S/ 0.0000' : 'S/ ' . number_format($state, 4))
+                            ->color('info')
+                            ->alignRight(),
 
-                Tables\Columns\TextColumn::make('tipo_movimiento')
-                    ->label('Movimiento')
-                    ->badge()
-                    ->color(fn($state) => match ($state) {
-                        'entrada' => 'success',
-                        'Stock Inicial' => 'success',
-                        'salida' => 'danger',
-                        'compra-anulada' => 'danger',
-                        'ajuste-anulado' => 'danger',
-                        default => 'gray',
-                    }),
-
-                Tables\Columns\TextColumn::make('warehouse.name')
-                    ->label('Almacen')
-                    ->placeholder('—')
-                    ->sortable()
-                    ->wrap(),
-
-                Tables\Columns\TextColumn::make('entrada')
-                    ->label('Entrada')
-                    ->getStateUsing(fn($record) => $record->cantidad > 0 ? $record->cantidad : 0)
-                    ->numeric(3)
-                    ->color('success'),
-
-                Tables\Columns\TextColumn::make('salida')
-                    ->label('Salida')
-                    ->getStateUsing(fn($record) => $record->cantidad < 0 ? $record->cantidad : 0)
-                    ->numeric(3)
-                    ->color('danger'),
-
-                Tables\Columns\TextColumn::make('balance')
-                    ->label('Balance')
-                    ->getStateUsing(fn($record) => $record->stock_restante)
-                    ->numeric(3),
+                        TextColumn::make('saldo_valorizado')
+                            ->label('Valor Total')
+                            ->money('PEN')
+                            ->weight('bold')
+                            ->alignRight(),
+                    ]),
             ])
             ->filters([
                 Filter::make('producto_variante')
@@ -121,64 +128,47 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                             ->relationship('product', 'name')
                             ->searchable()
                             ->preload()
-                            ->afterStateUpdated(function ($state, Set $set) {
-                                $set('variant_id', null);
-                            })
-                            ->placeholder('Todos los productos'),
+                            ->reactive()
+                            ->afterStateUpdated(fn(Set $set) => $set('variant_id', null))
+                            ->required(),
 
                         Select::make('variant_id')
-                            ->label('Variante')
+                            ->label('Variante / Almacén')
                             ->options(function (callable $get) {
                                 $productId = $get('product_id');
-                                if (!$productId) {
-                                    return [];
-                                }
+                                if (!$productId) return [];
                                 return Variant::where('product_id', $productId)
-                                    ->where('status', 'activo')
                                     ->get()
                                     ->mapWithKeys(fn($v) => [$v->id => $v->full_name]);
                             })
                             ->searchable()
-                            ->placeholder('Todas las variantes'),
+                            ->required(),
                     ])
                     ->query(function ($query, $data) {
                         return $query
-                            ->when($data['product_id'] ?? null, fn($q) => $q->where('product_id', $data['product_id']))
-                            ->when($data['variant_id'] ?? null, fn($q) => $q->where('variant_id', $data['variant_id']));
+                            ->when($data['product_id'], fn($q) => $q->where('product_id', $data['product_id']))
+                            ->when($data['variant_id'], fn($q) => $q->where('variant_id', $data['variant_id']));
                     }),
-                Filter::make('fecha')
-                    ->form([
-                        DatePicker::make('desde')->label('Desde'),
-                        DatePicker::make('hasta')->label('Hasta'),
-                    ])
-                    ->query(
-                        fn($query, $data) =>
-                        $query
-                            ->when($data['desde'] ?? null, fn($q) => $q->whereDate('created_at', '>=', $data['desde']))
-                            ->when($data['hasta'] ?? null, fn($q) => $q->whereDate('created_at', '<=', $data['hasta']))
-                    ),
             ])
-            ->defaultSort('id', 'desc')
-            ->emptyStateHeading('No hay registros para mostrar')
-            ->emptyStateDescription('Aplica filtros o cambia los parámetros de búsqueda.')
-            ->emptyStateIcon('heroicon-o-clipboard-document')
-            ->actions([])
-            ->bulkActions([]);
+            ->persistFiltersInSession();
+    }
+
+    private function getOrigenLabel(?string $modelType): string
+    {
+        if (!$modelType) return 'Mov. Manual';
+        $type = class_basename($modelType);
+        return [
+            'StockAdjustmentItem' => 'Ajuste de Stock',
+            'PurchaseDetail'      => 'Compra Recibida',
+            'SaleDetail'          => 'Venta Realizada',
+            'Variant'             => 'Stock Inicial',
+        ][$type] ?? $type;
     }
 
     public function areFiltersActive(): bool
     {
-        $filters = $this->tableFilters ?? [];
-
-        foreach ($filters as $state) {
-            if (! empty(array_filter((array) $state))) {
-                return true;
-            }
-        }
-
-        return false;
+        return !empty($this->tableFilters['producto_variante']['product_id']);
     }
-
 
     public function getAppliedFilters(): array
     {

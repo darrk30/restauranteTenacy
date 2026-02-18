@@ -19,6 +19,7 @@ return new class extends Migration
             $table->decimal('costo')->nullable()->default(0);
             $table->string('status')->default('activo');
             $table->boolean('stock_inicial')->default(false);
+            $table->decimal('stock_minimo')->default(0);
             $table->foreignId('product_id')->constrained()->onDelete('cascade');
             $table->foreignId('restaurant_id')->constrained()->onDelete('cascade');
             $table->timestamps();
