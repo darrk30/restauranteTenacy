@@ -328,15 +328,6 @@ class ProductResource extends Resource
                         TextInput::make('name')
                             ->label('Nombre del atributo')
                             ->required(),
-                        Select::make('tipo')
-                            ->label('Tipo')
-                            ->options([
-                                'color' => 'Color',
-                                'pildoras' => 'Píldoras',
-                                'seleccionar' => 'Seleccionar',
-                                'radio' => 'Radio',
-                            ])
-                            ->required(),
                     ])
                     ->createOptionUsing(fn(array $data) => Attribute::create($data)->id),
                 Select::make('values')
@@ -358,11 +349,6 @@ class ProductResource extends Resource
                             TextInput::make('name')
                                 ->label('Nombre del valor')
                                 ->required(),
-
-                            ColorPicker::make('value')
-                                ->label('Color')
-                                ->visible($attribute?->tipo === 'color')
-                                ->required($attribute?->tipo === 'color'),
                             Hidden::make('attribute_id')->default($attribute?->id),
                         ];
                     })

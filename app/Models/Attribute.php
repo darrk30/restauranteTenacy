@@ -9,7 +9,6 @@ class Attribute extends Model
 {
     protected $fillable = [
         'name',
-        'tipo',
         'restaurant_id',
     ];
 
