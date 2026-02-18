@@ -17,6 +17,8 @@ return new class extends Migration
             $table->double('stock_real')->default(0);
             $table->double('stock_reserva')->default(0);
             $table->double('min_stock')->default(0);
+            $table->decimal('costo_promedio', 10, 4)->default(0);
+            $table->decimal('valor_inventario', 10, 4)->default(0);
             $table->foreignId('restaurant_id')->constrained()->onDelete('cascade');
             $table->unique(['variant_id', 'restaurant_id']);
             $table->timestamps();

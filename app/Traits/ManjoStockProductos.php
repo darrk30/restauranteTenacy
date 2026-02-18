@@ -63,11 +63,26 @@ trait ManjoStockProductos
     {
         foreach ($purchase->details as $item) {
             if ($purchase->estado_despacho === 'recibido') {
+
+                // 1. Calcular Costo Unitario Base de la entrada
+                $costoEntradaBase = 0;
+                $unitProduct = $item->product->unit;
+                $unitCompra = $item->unit ?? $unitProduct;
+
+                // Factor (Ej. Caja 12u -> Factor 12)
+                $factor = $this->convertirCantidad($unitCompra, $unitProduct, 1);
+
+                if ($factor > 0) {
+                    // Si la caja cuesta 24, costo unitario base = 2
+                    $costoEntradaBase = $item->costo / $factor;
+                }
+
                 $this->processItem(
                     item: $item,
                     tipo: 'entrada',
                     comprobante: $purchase->serie . '-' . $purchase->numero,
                     movimiento: $movimiento,
+                    costoEntradaUnitario: $costoEntradaBase // Pasamos el costo calculado
                 );
             }
         }
@@ -88,7 +103,7 @@ trait ManjoStockProductos
     /**
      * DIRECTOR: Decide recursivamente cómo procesar el ítem
      */
-    private function processItem($item, string $tipo, ?string $comprobante = null, ?string $movimiento = null): void
+    private function processItem($item, string $tipo, ?string $comprobante = null, ?string $movimiento = null, ?float $costoEntradaUnitario = null): void
     {
         // 1. CASO PROMOCIÓN (Recursivo)
         if ($item->promotion_id && $item->promotion) {
@@ -119,38 +134,32 @@ trait ManjoStockProductos
 
         if (!$product || !$variant) return;
 
-        // 2. CASO PRODUCTO CON RECETA (Ej. Ceviche)
-        // Solo procesamos receta si es SALIDA (Venta/Merma), no en entrada (Compra)
         if ($product->receta && $tipo === 'salida') {
             $this->processRecipeItem($item, $variant, $tipo, $comprobante, $movimiento);
         }
 
-        // 3. CASO PRODUCTO CON CONTROL DE STOCK (Ej. Gaseosa / Insumo Arroz)
         if ($product->control_stock) {
-            $this->processDirectItem($item, $variant, $product, $tipo, $comprobante, $movimiento);
+            $this->processDirectItem($item, $variant, $product, $tipo, $comprobante, $movimiento, $costoEntradaUnitario);
         }
     }
 
     /**
      * Lógica A: Procesa un producto directo (Gaseosa)
      */
-    private function processDirectItem($item, $variant, $product, $tipo, $comprobante, $movimiento): void
+    private function processDirectItem($item, $variant, $product, $tipo, $comprobante, $movimiento, $costoEntradaUnitario): void
     {
-        // 1. Determinar unidades
-        $unitProduct = $product->unit; // Unidad Base (ej. Botella/Kg)
-        $unitSelected = $item->unit ?? $unitProduct; // Unidad Venta (ej. Pack/Gramos)
-
-        // 2. Convertir cantidad total a unidad base
+        $unitProduct = $product->unit;
+        $unitSelected = $item->unit ?? $unitProduct;
         $cantidadFinal = $this->convertirCantidad($unitSelected, $unitProduct, $item->cantidad);
 
-        // 3. Actualizar BD
         $this->updateStockAndKardex(
             variant: $variant,
             cantidadBase: $cantidadFinal,
             tipo: $tipo,
             comprobante: $comprobante,
             movimiento: $movimiento,
-            modelo: $item
+            modelo: $item,
+            costoEntradaUnitario: $costoEntradaUnitario
         );
     }
 
@@ -193,65 +202,87 @@ trait ManjoStockProductos
     }
 
     /**
-     * NÚCLEO COMÚN: Bloqueo, Update Stock y Create Kardex
+     * NÚCLEO CRÍTICO: Actualiza Stock y VARIANTE (Costo)
      */
-    private function updateStockAndKardex(Variant $variant, float $cantidadBase, string $tipo, ?string $comprobante, ?string $movimiento, Model $modelo): void
+    private function updateStockAndKardex(Variant $variant, float $cantidadBase, string $tipo, ?string $comprobante, ?string $movimiento, Model $modelo, ?float $costoEntradaUnitario = null): void
     {
-        // 1. BLOQUEO PESIMISTA
+        // Bloqueo
         $stock = WarehouseStock::where('variant_id', $variant->id)
             ->where('restaurant_id', filament()->getTenant()->id)
             ->lockForUpdate()
             ->first();
 
-        // Crear si no existe
         if (!$stock) {
             $stock = WarehouseStock::create([
-                'variant_id'    => $variant->id,
-                'stock_real'    => 0,
-                'stock_reserva' => 0,
-                'restaurant_id' => filament()->getTenant()->id,
+                'variant_id'       => $variant->id,
+                'stock_real'       => 0,
+                'stock_reserva'    => 0,
+                'costo_promedio'   => 0,
+                'valor_inventario' => 0,
+                'restaurant_id'    => filament()->getTenant()->id,
             ]);
         }
 
-        // 2. ACTUALIZAR STOCK REAL Y RESERVA
+        // --- LÓGICA DE COMPRA (ENTRADA) ---
         if ($tipo === 'entrada') {
-            $stock->increment('stock_real', $cantidadBase);
-            $stock->increment('stock_reserva', $cantidadBase);
+            // 1. Calcular nuevo promedio ponderado
+            $valorTotalActual = $stock->valor_inventario;
+            $valorEntrada = $cantidadBase * ($costoEntradaUnitario ?? 0);
+            $nuevoStockTotal = $stock->stock_real + $cantidadBase;
+
+            $nuevoCostoPromedio = $stock->costo_promedio;
+
+            if ($nuevoStockTotal > 0) {
+                // FÓRMULA PPP
+                $nuevoCostoPromedio = ($valorTotalActual + $valorEntrada) / $nuevoStockTotal;
+            } elseif ($costoEntradaUnitario > 0) {
+                $nuevoCostoPromedio = $costoEntradaUnitario;
+            }
+
+            // 2. Actualizar WarehouseStock
+            $stock->stock_real = $nuevoStockTotal;
+            $stock->stock_reserva += $cantidadBase;
+            $stock->costo_promedio = $nuevoCostoPromedio;
+            $stock->valor_inventario = $nuevoStockTotal * $nuevoCostoPromedio;
+            $stock->save();
+
+            // 3. ACTUALIZAR VARIANTE (Para que la venta lo lea después) 🔥
+            $variant->update(['costo' => $nuevoCostoPromedio]);
         }
 
+        // --- LÓGICA DE VENTA (SALIDA) ---
         if ($tipo === 'salida') {
+            // Solo movemos cantidades, el costo se mantiene
             $allowsNegative = $variant->product->venta_sin_stock ?? false;
-
             $nuevoStock = $allowsNegative
                 ? $stock->stock_real - $cantidadBase
                 : max(0, $stock->stock_real - $cantidadBase);
 
-            $stock->update(['stock_real' => $nuevoStock]);
+            $stock->stock_real = $nuevoStock;
+            $stock->valor_inventario = $nuevoStock * $stock->costo_promedio;
 
-            // Solo actualizar reserva si NO es una venta final
             if ($movimiento !== 'Venta') {
                 $stock->update(['stock_reserva' => $nuevoStock]);
             }
+            $stock->save();
         }
 
-        // 3. REGISTRAR KARDEX
-        // Manejamos el caso de objetos virtuales
-        $modeloType = get_class($modelo);
-        $modeloId   = $modelo->id ?? null; // Puede ser null si es virtual de promoción
-
+        // 4. Registrar Kardex
+        // ... (código de kardex igual al anterior) ...
         $variant->kardexes()->create([
-            'product_id'      => $variant->product_id,
-            'variant_id'      => $variant->id,
-            'restaurant_id'   => filament()->getTenant()->id,
-            'tipo_movimiento' => $movimiento ?? $tipo,
-            'comprobante'     => $comprobante,
-            'cantidad'        => $tipo === 'salida' ? -$cantidadBase : $cantidadBase,
-            'stock_restante'  => $stock->stock_real,
-            'modelo_type'     => $modeloType,
-            'modelo_id'       => $modeloId,
+            'product_id'       => $variant->product_id,
+            'variant_id'       => $variant->id,
+            'restaurant_id'    => filament()->getTenant()->id,
+            'tipo_movimiento'  => $movimiento ?? $tipo,
+            'comprobante'      => $comprobante,
+            'cantidad'         => $tipo === 'salida' ? -$cantidadBase : $cantidadBase,
+            'costo_unitario'   => $stock->costo_promedio, // Guardamos el costo del momento
+            'saldo_valorizado' => $stock->valor_inventario,
+            'stock_restante'   => $stock->stock_real,
+            'modelo_type'      => get_class($modelo),
+            'modelo_id'        => $modelo->id,
         ]);
     }
-
     /**
      * Reverso del ajuste (Anulaciones)
      */

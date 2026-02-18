@@ -17,6 +17,8 @@ class Kardex extends Model
         'modelo_id',
         'modelo_type',
         'cantidad',
+        'costo_unitario',
+        'saldo_valorizado',
         'stock_restante',
     ];
 

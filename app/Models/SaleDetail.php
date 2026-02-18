@@ -15,6 +15,10 @@ class SaleDetail extends Model
         'product_name',
         'cantidad',
         'precio_unitario',
+        'valor_unitario',
+        'costo_unitario',
+        'valor_total',
+        'costo_total',  
         'subtotal',
     ];
 

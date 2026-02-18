@@ -446,7 +446,7 @@ class PagarOrden extends Page implements HasForms, HasActions
 
     public function procesarPagoFinal()
     {
-        // 1. VALIDACIONES PREVIAS (Caja, Montos, etc.)
+        // 1. VALIDACIONES PREVIAS
         $this->calculateTotalServer();
         $totalPagado = collect($this->pagos_agregados)->sum('amount');
         $tenantId = Filament::getTenant()->id;
@@ -505,39 +505,66 @@ class PagarOrden extends Page implements HasForms, HasActions
 
             $detallesParaKardex = collect();
 
-            // 3. PROCESAMIENTO DE ITEMS
+            // 3. PROCESAMIENTO DE ITEMS CON PRECISIÓN 100% (LÓGICA TOP-DOWN)
             foreach ($this->items as $item) {
                 $esPromocion = ($item->item_type === 'Promocion');
 
-                // A. Guardamos el detalle visual (SaleDetail)
-                // Se guarda lo que se vendió: "1 Ceviche" o "1 Gaseosa"
+                // --- LÓGICA DE VENTA ---
+                $cantidad = $item->cantidad;
+                $precioUnitario = (float) $item->price; // Precio final con IGV (ej: 2.00)
+
+                // 1. Subtotal de la línea (Lo que el cliente paga)
+                // Se calcula primero el total para evitar que "baile" el céntimo.
+                $subtotal = round($precioUnitario * $cantidad, 2); // ej: 6.00
+
+                // 2. Valor Total de la línea (Base Imponible para SUNAT)
+                // Obtenemos la base imponible total de la línea y redondeamos a 2 decimales.
+                $valorTotal = round($subtotal / 1.18, 2); // ej: 5.08
+
+                // 3. Valor Unitario Base con 6 decimales
+                // Dividimos la base imponible total entre la cantidad para máxima precisión.
+                $valorUnitario = ($cantidad > 0) ? ($valorTotal / $cantidad) : 0; // ej: 1.693333
+
+                // --- LÓGICA DE COSTOS (PROMEDIO PONDERADO) ---
+                $costoUnitario = 0;
+                if (!$esPromocion && $item->variant) {
+                    $costoUnitario = (float) ($item->variant->costo ?? 0);
+                }
+                $costoTotal = round($costoUnitario * $cantidad, 2);
+
+                // --- GUARDADO EN BASE DE DATOS ---
                 $saleDetail = new \App\Models\SaleDetail([
                     'sale_id'         => $sale->id,
                     'product_id'      => $esPromocion ? null : $item->product_id,
                     'variant_id'      => $esPromocion ? null : $item->variant_id,
                     'promotion_id'    => $esPromocion ? $item->promotion_id : null,
-                    'product_name'    => $item->product_name ?? ($esPromocion ? ($item->promotion->name ?? 'Promoción') : ($item->product->name ?? 'Producto')),
-                    'cantidad'        => $item->cantidad,
-                    'precio_unitario' => $item->price,
-                    'subtotal'        => $item->subTotal,
+                    'product_name'    => $item->product_name ?? 'Producto',
+                    'cantidad'        => $cantidad,
+
+                    // FINANZAS DE VENTA
+                    'precio_unitario' => $precioUnitario, // 2.000000
+                    'valor_unitario'  => $valorUnitario,  // 1.693333 (Base Imponible Unit)
+                    'subtotal'        => $subtotal,       // 6.00 (Total con IGV)
+                    'valor_total'     => $valorTotal,     // 5.08 (Base Imponible Total)
+
+                    // FINANZAS DE COSTO
+                    'costo_unitario'  => $costoUnitario,
+                    'costo_total'     => $costoTotal,
                 ]);
 
-                // Guardamos inmediatamente para tener ID y relaciones listas para el Kardex
                 $saleDetail->save();
 
-                // Cargamos relaciones para que el Trait no tenga que consultar de nuevo
+                // D. Relaciones para el Kardex
                 if (!$esPromocion) {
                     $saleDetail->load(['product', 'variant', 'product.unit']);
                 } else {
                     $saleDetail->load(['promotion.promotionproducts.product', 'promotion.promotionproducts.variant']);
                 }
 
-                // B. Lo agregamos a la colección para procesar STOCK
-                // Pasamos el objeto COMPLETO. El Trait decidirá si descuenta directo o busca receta.
                 $detallesParaKardex->push($saleDetail);
             }
 
-            // 4. MOVIMIENTO DE STOCK (KARDEX) - LLAMADA AL TRAIT INTELIGENTE
+            // 4. MOVIMIENTO DE STOCK (Kardex)
             if ($detallesParaKardex->isNotEmpty()) {
                 $this->applyVentaMasiva(
                     $detallesParaKardex,

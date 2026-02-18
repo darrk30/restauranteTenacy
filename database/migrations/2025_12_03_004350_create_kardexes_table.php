@@ -21,17 +21,19 @@ return new class extends Migration
             // Tipo de movimiento (compra, ajuste, venta, etc)
             $table->string('tipo_movimiento');
             $table->string('comprobante');
-
-            // Relación polimórfica (purchase, adjustment, sale)
-            $table->nullableMorphs('modelo'); // modelo_id + modelo_type
-
-
+            
             // Cantidad movida
             $table->decimal('cantidad', 12, 3);
 
+            // Costo unitario y saldo valorizado después del movimiento
+            $table->decimal('costo_unitario', 10, 4)->default(0);
+            $table->decimal('saldo_valorizado', 15, 4)->default(0);
+            
             // Stock restante después del movimiento
             $table->decimal('stock_restante', 12, 3)->nullable();
-
+            
+            // Relación polimórfica (purchase, adjustment, sale)
+            $table->nullableMorphs('modelo'); // modelo_id + modelo_type
             $table->timestamps();
         });
     }

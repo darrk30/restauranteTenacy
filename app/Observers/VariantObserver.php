@@ -21,6 +21,8 @@ class VariantObserver
                 'stock_real'    => 0,
                 'stock_reserva' => 0,
                 'min_stock'     => 0,
+                'costo_promedio'=> 0,
+                'valor_inventario'=> 0,
                 'restaurant_id' => $variant->restaurant_id,
             ]);
         }

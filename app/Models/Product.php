@@ -69,9 +69,6 @@ class Product extends Model
             ->using(AttributeProduct::class) // <--- AGREGA ESTA LÍNEA
             ->withPivot('values')
             ->withTimestamps();
-        // return $this->belongsToMany(Attribute::class, 'attribute_product')
-        //     ->withPivot('values')
-        //     ->withTimestamps();
     }
 
     public function promotionproducts()

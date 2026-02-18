@@ -502,8 +502,8 @@ class OrdenMesa extends Page implements HasActions
             $varianteUnica = $producto->variants->first();
             if ($varianteUnica) {
                 $this->variantSeleccionadaId = $varianteUnica->id;
-                $this->stockActualVariante = $varianteUnica->stock->sum('stock_real');
-                $this->stockReservaVariante = $varianteUnica->stock->sum('stock_reserva');
+                $this->stockActualVariante = $varianteUnica->stock?->stock_real ?? 0;
+                $this->stockReservaVariante = $varianteUnica->stock?->stock_reserva ?? 0;
             }
         } else {
             foreach ($producto->attributes as $attr) {

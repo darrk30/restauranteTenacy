@@ -254,39 +254,52 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                             ]),
                     ])
                     ->action(function (array $data, $record): void {
+                        // 1. Extraer el costo que viene del formulario
+                        $costoIngresado = (float) ($data['costo'] ?? 0);
+
+                        // 2. Lógica de Stock Inicial (Solo si no se ha ingresado antes)
                         if (isset($data['stock_inicial']) && !$record->stock_inicial) {
                             $cantidad = (float) $data['stock_inicial'];
-                            if ($cantidad > 0) {
-                                $stock = WarehouseStock::firstOrCreate(
-                                    ['variant_id' => $record->id],
-                                    [
-                                        'stock_real' => 0,
-                                        'stock_reserva' => 0,
-                                        'min_stock' => 0,
-                                        'restaurant_id' => filament()->getTenant()->id,
-                                    ]
-                                );
-                                $stock->increment('stock_real', $cantidad);
-                                $stock->increment('stock_reserva', $cantidad);
 
+                            if ($cantidad > 0) {
+                                // Buscamos o creamos el registro de stock
+                                $stock = WarehouseStock::firstOrNew(
+                                    ['variant_id' => $record->id],
+                                    ['restaurant_id' => filament()->getTenant()->id]
+                                );
+
+                                // Al ser Stock Inicial, el costo promedio es simplemente el costo ingresado
+                                $stock->stock_real = $cantidad;
+                                $stock->stock_reserva = $cantidad;
+                                $stock->costo_promedio = $costoIngresado;
+                                $stock->valor_inventario = $cantidad * $costoIngresado; // Cantidad * Costo
+                                $stock->save();
+
+                                // Registrar en Kardex con valores financieros
                                 $record->kardexes()->create([
                                     'product_id'      => $record->product_id,
                                     'variant_id'      => $record->id,
                                     'restaurant_id'   => filament()->getTenant()->id,
                                     'tipo_movimiento' => 'Stock Inicial',
+                                    'comprobante'     => 'STOCK-INICIAL',
                                     'cantidad'        => $cantidad,
+                                    'costo_unitario'  => $costoIngresado,
+                                    'saldo_valorizado' => $stock->valor_inventario,
                                     'stock_restante'  => $stock->stock_real,
                                     'modelo_type'     => get_class($record),
                                     'modelo_id'       => $record->id,
-                                    'comprobante'     => 'STOCK-INICIAL',
                                 ]);
+
                                 $record->stock_inicial = true;
                             }
                             unset($data['stock_inicial']);
                         }
+
+                        // 3. Actualizar los datos de la Variante (incluyendo el campo costo)
                         $record->update($data);
-                        Notification::make()->title('Variante actualizada')->success()->send();
-                    }),
+
+                        Notification::make()->title('Variante actualizada con éxito')->success()->send();
+                    })
             ])
             ->paginated(false);
     }

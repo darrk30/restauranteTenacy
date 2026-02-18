@@ -11,6 +11,8 @@ class WarehouseStock extends Model
         'variant_id',
         'stock_real',
         'stock_reserva',
+        'costo_promedio',
+        'valor_inventario',
         'min_stock',
     ];
 
