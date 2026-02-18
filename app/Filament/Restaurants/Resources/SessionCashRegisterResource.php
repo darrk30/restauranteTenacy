@@ -35,229 +35,162 @@ class SessionCashRegisterResource extends Resource
     {
         return $form
             ->schema([
-
                 // ==========================================
-                //  ESCENARIO 1: APERTURA (Solo en Create)
+                // ESCENARIO 1: APERTURA (Solo en Create)
                 // ==========================================
-                Grid::make(3)
+                Grid::make(['default' => 1, 'lg' => 3])
                     ->visible(fn(string $operation) => $operation === 'create')
                     ->schema([
                         Section::make('DETALLE DE APERTURA')
-                            ->columnSpan(2)
+                            ->columnSpan(['lg' => 2])
                             ->schema([
                                 Select::make('cash_register_id')
                                     ->label('CAJA')
                                     ->relationship(
                                         name: 'cashRegister',
                                         titleAttribute: 'name',
-                                        modifyQueryUsing: function ($query) {
-                                            // CORRECCIÓN AQUÍ: Usamos 'users.id' en lugar de solo 'id'
-                                            $query->whereHas('users', function ($q) {
-                                                $q->where('users.id', Auth::id());
-                                            });
-
-                                            // Evitar mostrar cajas que ya están abiertas
-                                            $query->whereDoesntHave('sesionCashRegisters', function ($q) {
-                                                $q->where('status', 'open');
-                                            });
-
-                                            return $query;
-                                        }
+                                        modifyQueryUsing: fn($query) => $query
+                                            ->whereHas('users', fn($q) => $q->where('users.id', Auth::id()))
+                                            ->whereDoesntHave('sesionCashRegisters', fn($q) => $q->where('status', 'open'))
                                     )
                                     ->required()
-                                    ->preload()
-                                    // CORRECCIÓN AQUÍ TAMBIÉN: 'users.id'
-                                    ->disabled(fn() => \App\Models\CashRegister::whereHas('users', fn($q) => $q->where('users.id', Auth::id()))->count() === 0),
-
-                                TextInput::make('turno_ficticio')
-                                    ->label('TURNO')
-                                    ->default('Mañana')
-                                    ->disabled()
-                                    ->dehydrated(false),
-
-                                TextInput::make('opening_amount')
-                                    ->label('MONTO APERTURA')
-                                    ->prefix('S/')
-                                    ->numeric()
-                                    ->default(0)
-                                    ->required(),
+                                    ->preload(),
+                                TextInput::make('turno_ficticio')->label('TURNO')->default('Mañana')->disabled()->dehydrated(false),
+                                TextInput::make('opening_amount')->label('MONTO APERTURA')->prefix('S/')->numeric()->default(0)->required(),
                             ]),
-
                         Section::make('INFO DE LA SESIÓN')
-                            ->columnSpan(1)
+                            ->columnSpan(['lg' => 1])
                             ->schema([
-                                TextInput::make('cajero_name')
-                                    ->label('CAJERO')
-                                    ->default(fn() => Auth::user()->name)
-                                    ->disabled()
-                                    ->dehydrated(false),
-
-                                TextInput::make('status_display')
-                                    ->label('ESTADO')
-                                    ->default('POR APERTURAR')
-                                    ->extraInputAttributes(['style' => 'color: green; font-weight: bold;'])
-                                    ->disabled()
-                                    ->dehydrated(false),
-
-                                DateTimePicker::make('opened_at')
-                                    ->label('FECHA DE APERTURA')
-                                    ->default(now())
-                                    ->disabled()
-                                    ->dehydrated(),
+                                TextInput::make('cajero_name')->label('CAJERO')->default(fn() => Auth::user()->name)->disabled()->dehydrated(false),
+                                TextInput::make('status_display')->label('ESTADO')->default('POR APERTURAR')->extraInputAttributes(['style' => 'color: green; font-weight: bold;'])->disabled()->dehydrated(false),
+                                DateTimePicker::make('opened_at')->label('FECHA DE APERTURA')->default(now())->disabled()->dehydrated(),
                             ]),
                     ]),
 
                 // ==========================================
-                //  ESCENARIO 2: CIERRE DETALLADO (Solo en Edit)
+                // ESCENARIO 2: CIERRE DETALLADO (Edit / View)
                 // ==========================================
                 Grid::make(1)
                     ->visible(fn(string $operation) => in_array($operation, ['edit', 'view']))
                     ->schema([
-
-                        // 🟥 SECCIÓN SUPERIOR: DETALLE POR MÉTODO DE PAGO
                         Section::make('ARQUEO POR MÉTODO DE PAGO')
+                            ->description('Detalle de ingresos registrados vs. conteo físico')
                             ->schema([
-
-                                // 1. MENSAJE: Si no hay detalles generados
                                 Placeholder::make('no_details')
                                     ->label('')
-                                    ->content('⚠️ No se han generado detalles de cierre. Verifique que se hayan registrado movimientos.')
+                                    ->content('⚠️ No hay movimientos registrados para esta sesión.')
                                     ->visible(fn($record) => !$record || $record->cierreCajaDetalles()->doesntExist()),
 
-                                // 2. TABLA: Repeater vinculado a la relación 'cierreCajaDetalles'
                                 Repeater::make('cierreCajaDetalles')
                                     ->label('')
-                                    ->relationship('cierreCajaDetalles') // 🔥 Vinculación directa a la BD
-                                    ->addable(false)
-                                    ->deletable(false)
-                                    ->reorderable(false)
-                                    ->columns(4)
-                                    ->visible(fn($record) => $record && $record->cierreCajaDetalles()->exists())
+                                    ->relationship('cierreCajaDetalles')
+                                    ->loadStateFromRelationshipsUsing(function ($component, $record, string $operation) {
+                                        if (!$record) return;
+                                        $query = $record->cierreCajaDetalles()->with('paymentMethod');
+                                        if ($operation === 'view') $query->where('monto_sistema', '!=', 0);
+                                        $items = $query->get();
+
+                                        if ($items->isEmpty() && $operation !== 'view') {
+                                            $datosGenerados = \App\Models\PaymentMethod::where('status', true)->get()->map(function ($metodo) use ($record) {
+                                                $total = $record->cashRegisterMovements()->where('payment_method_id', $metodo->id)->where('tipo', 'Ingreso')->where('status', 'aprobado')->sum('monto') -
+                                                    $record->cashRegisterMovements()->where('payment_method_id', $metodo->id)->where('tipo', 'Salida')->where('status', 'aprobado')->sum('monto');
+                                                return [
+                                                    'metodo_pago_id' => $metodo->id,
+                                                    'nombre_metodo_visual' => $metodo->name,
+                                                    'monto_sistema' => $total,
+                                                    'monto_cajero' => 0,
+                                                    'diferencia' => -$total,
+                                                ];
+                                            })->toArray();
+                                            $component->state($datosGenerados);
+                                            return;
+                                        }
+                                        $component->state($items->map(function ($item) {
+                                            $fila = $item->toArray();
+                                            $fila['nombre_metodo_visual'] = $item->paymentMethod->name ?? 'Desconocido';
+                                            return $fila;
+                                        })->toArray());
+                                    })
+                                    ->addable(false)->deletable(false)->reorderable(false)
+                                    ->columns(['default' => 2, 'sm' => 2, 'lg' => 4])
                                     ->schema([
-
                                         Hidden::make('metodo_pago_id'),
-                                        // A. Método de Pago (Select deshabilitado para mostrar nombre)
-                                        TextInput::make('nombre_metodo_visual')
-                                            ->label('MÉTODO')
-                                            ->disabled()
-                                            ->dehydrated(false) // No intentamos guardar esto en la BD
-                                            // 🔥 TRUCO: Obtenemos el nombre a través de la relación
-                                            ->formatStateUsing(function ($record) {
-                                                // $record es la fila de 'cierre_caja_detalles'
-                                                return $record->paymentMethod->name ?? 'Sin Nombre';
-                                            }), // Enviamos el ID al guardar
-
-                                        // B. Monto Sistema (Calculado por el Observer previamente)
-                                        TextInput::make('monto_sistema')
-                                            ->label('SISTEMA')
-                                            ->prefix('S/')
-                                            ->numeric()
-                                            ->disabled()
-                                            ->dehydrated(), // Se guarda lo que diga el sistema
-
-                                        // C. Monto Cajero (Editable)
-                                        TextInput::make('monto_cajero')
-                                            ->label('CAJERO (REAL)')
-                                            ->prefix('S/')
-                                            ->numeric()
-                                            ->default(0)
-                                            ->required()
-                                            ->live(onBlur: true)
-                                            // 🔥 LÓGICA DE CÁLCULO EN TIEMPO REAL
+                                        TextInput::make('nombre_metodo_visual')->label('MÉTODO')->disabled()->dehydrated(false),
+                                        TextInput::make('monto_sistema')->label('SISTEMA')->prefix('S/')->numeric()->disabled()->dehydrated(),
+                                        TextInput::make('monto_cajero')->label('CAJERO (REAL)')->prefix('S/')->numeric()->default(0)->required()
+                                            ->live(onBlur: true)->disabled(fn(string $operation) => $operation === 'view')
                                             ->afterStateUpdated(function (Get $get, Set $set, $state) {
-                                                // 1. Calcular diferencia de la fila actual
                                                 $sistema = (float) $get('monto_sistema');
                                                 $cajero = (float) $state;
                                                 $set('diferencia', $cajero - $sistema);
-
-                                                // 2. Calcular Totales Globales (Salimos del repeater con ../../)
                                                 $items = $get('../../cierreCajaDetalles');
-
-                                                // Usamos collect para sumar fácil
-                                                $totalCajero = collect($items)->sum('monto_cajero');
-                                                $totalSistema = collect($items)->sum('monto_sistema');
-
-                                                $set('../../cajero_closing_amount', $totalCajero);
-                                                $set('../../system_closing_amount', $totalSistema);
-                                                $set('../../difference', $totalCajero - $totalSistema);
+                                                $set('../../cajero_closing_amount', collect($items)->sum(fn($i) => (float)($i['monto_cajero'] ?? 0)));
+                                                $set('../../system_closing_amount', collect($items)->sum(fn($i) => (float)($i['monto_sistema'] ?? 0)));
+                                                $set('../../difference', (float)$get('../../cajero_closing_amount') - (float)$get('../../system_closing_amount'));
                                             }),
-
-                                        // D. Diferencia (Visual)
-                                        TextInput::make('diferencia')
-                                            ->label('DIFERENCIA')
-                                            ->prefix('S/')
-                                            ->disabled()
-                                            ->dehydrated() // Guardamos la diferencia
-                                            ->extraInputAttributes(fn($state) => [
-                                                'style' => 'font-weight: bold; color: ' . ($state < 0 ? 'red' : 'green')
-                                            ]),
+                                        TextInput::make('diferencia')->label('DIFERENCIA')->prefix('S/')->disabled()->dehydrated()
+                                            ->extraInputAttributes(fn($state) => ['style' => 'font-weight: bold; color: ' . ($state < 0 ? 'red' : 'green')]),
                                     ]),
                             ]),
 
-                        // 🟧 SECCIÓN INFERIOR: TOTALES Y SIDEBAR
-                        Grid::make(3)
+                        // 🟩 DISEÑO MEJORADO: Totales en 1 fila (PC) y 2 (Móvil)
+                        Section::make('TOTALES GENERALES')
                             ->schema([
-                                // COLUMNA IZQUIERDA (2/3): TOTALES
-                                Section::make('TOTALES GENERALES')
-                                    ->columnSpan(2)
+                                Grid::make(['default' => 2, 'sm' => 2, 'lg' => 3])
                                     ->schema([
-                                        TextInput::make('cajero_closing_amount')
-                                            ->label('TOTAL CIERRE CAJERO')
-                                            ->prefix('S/')
-                                            ->readOnly()
-                                            ->extraInputAttributes(['style' => 'font-weight: bold; font-size: 1.1em; color: #d97706;']),
-
                                         TextInput::make('system_closing_amount')
                                             ->label('TOTAL SISTEMA')
                                             ->prefix('S/')
                                             ->readOnly()
-                                            // Cargar valor inicial al abrir la página
-                                            ->afterStateHydrated(function (TextInput $component, $record) {
-                                                if ($record) {
-                                                    // Sumamos directamente de la tabla detalles_cierre
-                                                    $total = $record->cierreCajaDetalles()->sum('monto_sistema');
-                                                    $component->state($total);
-                                                }
-                                            }),
+                                            ->afterStateHydrated(fn(TextInput $component, $record) => $record ? $component->state($record->cierreCajaDetalles()->sum('monto_sistema')) : null),
+
+                                        TextInput::make('cajero_closing_amount')
+                                            ->label('TOTAL CAJERO')
+                                            ->prefix('S/')
+                                            ->readOnly()
+                                            ->extraInputAttributes(['class' => 'font-bold text-amber-600']),
 
                                         TextInput::make('difference')
-                                            ->label('DIFERENCIA')
+                                            ->label('DIFERENCIA TOTAL')
                                             ->prefix('S/')
                                             ->readOnly()
                                             ->extraInputAttributes(fn($state) => [
-                                                'style' => 'font-weight: bold; color: ' . ($state < 0 ? 'red' : 'green')
+                                                'class' => 'font-bold ' . ($state < 0 ? 'text-danger-600' : 'text-success-600')
+                                            ]),
+                                    ]),
+                            ]),
+
+                        Grid::make(['default' => 1, 'sm' => 2, 'lg' => 3])
+                            ->schema([
+                                Section::make('INFO Y NOTAS')
+                                    ->schema([
+                                        // En PC (lg) divide en 3 columnas, en móvil (default) se apilan en 1
+                                        Grid::make(['default' => 2, 'lg' => 3])
+                                            ->schema([
+                                                TextInput::make('cajero_name_display')
+                                                    ->label('CAJERO')
+                                                    ->disabled()
+                                                    ->dehydrated(false)
+                                                    ->formatStateUsing(fn($record) => $record?->user?->name ?? Auth::user()->name),
+
+                                                Select::make('status')
+                                                    ->label('ESTADO')
+                                                    ->options(['open' => 'Abierta', 'closed' => 'Cerrada'])
+                                                    ->disabled()
+                                                    ->dehydrated(false),
+
+                                                DateTimePicker::make('closed_at')
+                                                    ->label('FECHA CIERRE')
+                                                    ->required()
+                                                    ->default(now()),
                                             ]),
 
+                                        // Las notas quedan debajo ocupando todo el ancho de la sección
                                         Textarea::make('notes')
-                                            ->label('NOTAS')
-                                            ->rows(2)
+                                            ->label('NOTAS DE CIERRE')
+                                            ->placeholder('Observaciones adicionales sobre el arqueo...')
+                                            ->rows(3)
                                             ->columnSpanFull(),
-                                    ]),
-
-                                // 🟦 COLUMNA DERECHA (1/3): INFO SIDEBAR
-                                Section::make('INFO')
-                                    ->columnSpan(1)
-                                    ->schema([
-                                        TextInput::make('cajero_name_display')
-                                            ->label('CAJERO')
-                                            ->disabled()
-                                            ->dehydrated(false)
-                                            ->formatStateUsing(fn($record) => $record?->user?->name ?? Auth::user()->name),
-
-                                        Select::make('status')
-                                            ->label('ESTADO')
-                                            ->options([
-                                                'open' => 'Abierta',
-                                                'closed' => 'Cerrada',
-                                            ])
-                                            ->disabled()
-                                            ->dehydrated(false)
-                                            ->formatStateUsing(fn() => 'closed'),
-
-                                        DateTimePicker::make('closed_at')
-                                            ->label('FECHA CIERRE')
-                                            ->required()
-                                            ->formatStateUsing(fn($state) => $state ?? now()),
                                     ]),
                             ]),
                     ]),
@@ -275,17 +208,70 @@ class SessionCashRegisterResource extends Resource
                     ->weight('bold')
                     ->copyable(),
 
-                Tables\Columns\TextColumn::make('user.name')
-                    ->label('Cajero')
-                    ->searchable()
-                    ->sortable()
-                    ->icon('heroicon-o-user'),
-
                 Tables\Columns\TextColumn::make('cashRegister.name')
                     ->label('Caja')
-                    ->sortable()
                     ->badge()
                     ->color('gray'),
+
+                Tables\Columns\TextColumn::make('opened_at')
+                    ->label('Apertura')
+                    ->dateTime('d/m h:i A')
+                    ->sortable(),
+
+                // 1. Total Sistema
+                Tables\Columns\TextColumn::make('system_closing_amount')
+                    ->label('Sistema')
+                    ->money('PEN')
+                    // 🔥 LÓGICA PRINCIPAL:
+                    ->state(function ($record) {
+                        // Validación de seguridad por si el record llega nulo
+                        if (!$record) return 0;
+
+                        // CASO 1: CAJA ABIERTA -> Calculamos en vivo
+                        if ($record->status === 'open') {
+                            // Sumar Ingresos (Ventas, etc.)
+                            $ingresos = $record->cashRegisterMovements()
+                                ->where('tipo', 'Ingreso')
+                                ->where('status', '!=', 'anulado') // Ignorar anulados
+                                ->sum('monto');
+
+                            // Sumar Egresos (Gastos, Retiros)
+                            $egresos = $record->cashRegisterMovements()
+                                ->where('tipo', 'Salida')
+                                ->where('status', '!=', 'anulado')
+                                ->sum('monto');
+
+                            // Fórmula: Apertura + Ingresos - Egresos
+                            return ($record->opening_amount ?? 0) + $ingresos - $egresos;
+                        }
+
+                        // CASO 2: CAJA CERRADA -> Usamos el valor guardado en BD
+                        return $record->system_closing_amount;
+                    })
+                    // Detalles visuales adicionales
+                    ->description(fn($record) => $record?->status === 'open' ? 'En vivo' : null)
+                    ->weight(fn($record) => $record?->status === 'open' ? 'bold' : 'normal')
+                    ->color(fn($record) => $record?->status === 'open' ? 'primary' : 'gray'),
+
+                // 2. Total Cajero
+                Tables\Columns\TextColumn::make('cajero_closing_amount')
+                    ->label('Cajero')
+                    ->money('PEN')
+                    ->placeholder('---')
+                    ->color('warning')
+                    ->weight('bold')
+                    // ✅ CORRECCIÓN 3: Verificar que $record exista y no esté 'open'
+                    ->visible(fn($record) => $record && $record->status !== 'open'),
+
+                // 3. Diferencia
+                Tables\Columns\TextColumn::make('difference')
+                    ->label('Diferencia')
+                    ->money('PEN')
+                    ->placeholder('---')
+                    // ✅ CORRECCIÓN 4: Verificar que $record exista
+                    ->visible(fn($record) => $record && $record->status !== 'open')
+                    ->color(fn(string $state) => $state < 0 ? 'danger' : ($state > 0 ? 'success' : 'gray'))
+                    ->weight('bold'),
 
                 Tables\Columns\TextColumn::make('status')
                     ->label('Estado')
@@ -301,35 +287,6 @@ class SessionCashRegisterResource extends Resource
                         'audit' => 'EN ARQUEO',
                         default => $state,
                     }),
-
-                // 1. FECHA DE APERTURA (Dos líneas)
-                Tables\Columns\TextColumn::make('opened_at')
-                    ->label('F. Apertura')
-                    ->dateTime('d/m/Y') // Arriba: Solo la fecha
-                    ->description(fn($record) => $record->opened_at?->format('h:i A')) // Abajo: La hora (ej: 10:30 AM)
-                    ->sortable()
-                    ->icon('heroicon-m-calendar')
-                    ->iconColor('primary'),
-
-                // 2. FECHA DE CIERRE (Dos líneas)
-                Tables\Columns\TextColumn::make('closed_at')
-                    ->label('F. Cierre')
-                    ->dateTime('d/m/Y') // Arriba: Solo la fecha
-                    ->description(
-                        fn($record) => $record->closed_at
-                            ? $record->closed_at->format('h:i A') // Si cerró: Muestra la hora
-                            : 'En curso...' // Si no: Muestra texto
-                    )
-                    ->sortable()
-                    ->placeholder('En curso...') // Texto para la línea de arriba si es null
-                    ->icon(fn($state) => $state ? 'heroicon-m-lock-closed' : 'heroicon-m-clock')
-                    ->color(fn($state) => $state ? 'gray' : 'warning'),
-
-                Tables\Columns\TextColumn::make('difference')
-                    ->label('Cuadre')
-                    ->money('PEN')
-                    ->placeholder('-')
-                    ->color(fn($state) => $state < 0 ? 'danger' : ($state > 0 ? 'success' : 'gray')),
             ])
             ->defaultSort('opened_at', 'desc')
             ->filters([
@@ -340,24 +297,18 @@ class SessionCashRegisterResource extends Resource
                     ]),
             ])
             ->actions([
-                // BOTÓN 1: CERRAR CAJA (Solo visible si está ABIERTA)
+                // En acciones también es buena práctica proteger el acceso, aunque suele fallar menos aquí
                 Tables\Actions\EditAction::make()
                     ->label('Cerrar Caja')
                     ->icon('heroicon-m-lock-closed')
                     ->color('warning')
-                    ->visible(fn($record) => $record->status === 'open'),
+                    ->visible(fn($record) => $record?->status === 'open'),
 
-                // BOTÓN 2: VER DETALLES (Solo visible si está CERRADA)
-                Tables\Actions\ViewAction::make() // 🔥 Usamos ViewAction
+                Tables\Actions\ViewAction::make()
                     ->label('Ver Detalles')
                     ->icon('heroicon-m-eye')
                     ->color('gray')
-                    ->visible(fn($record) => $record->status === 'closed'),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    // Tables\Actions\DeleteBulkAction::make(),
-                ]),
+                    ->visible(fn($record) => $record?->status === 'closed'),
             ]);
     }
 

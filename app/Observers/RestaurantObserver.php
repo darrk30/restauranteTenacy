@@ -20,7 +20,6 @@ class RestaurantObserver
     {
         app()->instance('bypass_tenant_scope', true);
         (new UnitSeeder())->runForRestaurant($restaurant);
-        (new WarehouseSeeder())->runForRestaurant($restaurant);
         (new FloorSeeder())->runForRestaurant($restaurant);
         (new TypeDocumentSeeder())->runForRestaurant($restaurant);
         (new ConfiguracionInicial())->runForRestaurant($restaurant);

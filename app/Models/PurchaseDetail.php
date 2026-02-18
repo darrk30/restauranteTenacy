@@ -11,18 +11,12 @@ class PurchaseDetail extends Model
         'purchase_id',
         'product_id',
         'variant_id',
-        'warehouse_id',
         'subtotal',
         'unit_id',
         'cantidad',
         'costo',
         'restaurant_id',
     ];
-
-    public function warehouse()
-    {
-        return $this->belongsTo(Warehouse::class);
-    }
 
     public function purchase()
     {

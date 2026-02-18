@@ -2,42 +2,40 @@
 
 namespace App\Filament\Restaurants\Widgets;
 
+use App\Models\CashRegisterMovement;
 use App\Models\Sale;
-use Filament\Facades\Filament; // Importante para el Tenant
-use Filament\Widgets\Concerns\InteractsWithPageFilters; // 👈 NECESARIO PARA EL DASHBOARD
+use Filament\Facades\Filament;
+use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
-use Illuminate\Support\Carbon;
 use Livewire\Attributes\On;
+use Illuminate\Support\Carbon; // Importante para las fechas
 
 class VentasCanalStats extends BaseWidget
 {
-    use InteractsWithPageFilters; // 👈 Esto permite leer los filtros del Dashboard
+    use InteractsWithPageFilters;
 
-    // 👇 Mantenemos esto para que el Reporte pueda "inyectar" sus filtros
     #[On('update-stats')]
     public function updateStats(array $filters): void
     {
-        // Sobrescribimos los filtros con lo que manda el reporte
         $this->filters = $filters;
     }
 
     protected function getStats(): array
     {
-        // 1. DEFINIR RANGO DE FECHAS (Lógica Híbrida)
+        $filtros = $this->filters ?? [];
+        $tenantId = Filament::getTenant()->id;
+
+        $query = Sale::query()->where('restaurant_id', $tenantId);
+
+        // 1. LÓGICA DE FECHAS (Dashboard vs Reporte) -------------------------
+        
         $inicio = null;
         $fin = null;
-        $filtros = $this->filters; // Copia local para facilitar lectura
 
-        // CASO A: Viene del REPORTE (Tiene fechas exactas)
-        if (!empty($filtros['fecha_desde']) || !empty($filtros['fecha_hasta'])) {
-            $inicio = !empty($filtros['fecha_desde']) ? $filtros['fecha_desde'] : null;
-            $fin = !empty($filtros['fecha_hasta']) ? $filtros['fecha_hasta'] : null;
-        } 
-        // CASO B: Viene del DASHBOARD (Tiene rangos: hoy, semana, mes)
-        elseif (!empty($filtros['rango'])) {
-            $rango = $filtros['rango'];
-            switch ($rango) {
+        // A. Si viene del DASHBOARD (Usa 'rango')
+        if (!empty($filtros['rango'])) {
+            switch ($filtros['rango']) {
                 case 'hoy':
                     $inicio = now()->startOfDay();
                     $fin = now()->endOfDay();
@@ -50,64 +48,111 @@ class VentasCanalStats extends BaseWidget
                     $inicio = now()->startOfMonth();
                     $fin = now()->endOfMonth();
                     break;
-                case 'year':
-                    $inicio = now()->startOfYear();
-                    $fin = now()->endOfYear();
-                    break;
                 case 'custom':
-                    $inicio = !empty($filtros['fecha_inicio']) ? Carbon::parse($filtros['fecha_inicio']) : null;
-                    $fin = !empty($filtros['fecha_fin']) ? Carbon::parse($filtros['fecha_fin']) : null;
+                    $inicio = !empty($filtros['fecha_inicio']) ? Carbon::parse($filtros['fecha_inicio'])->startOfDay() : null;
+                    $fin = !empty($filtros['fecha_fin']) ? Carbon::parse($filtros['fecha_fin'])->endOfDay() : null;
                     break;
             }
         } 
-        // CASO C: Por defecto (Si entra directo al Dashboard sin filtrar)
+        // B. Si viene del REPORTE (Usa 'fecha_desde')
+        elseif (!empty($filtros['fecha_desde'])) {
+            $inicio = Carbon::parse($filtros['fecha_desde'])->startOfDay();
+            if (!empty($filtros['fecha_hasta'])) {
+                $fin = Carbon::parse($filtros['fecha_hasta'])->endOfDay();
+            }
+        }
+        // C. Fallback (Si no hay filtros, por defecto HOY o TODO)
         else {
-            $inicio = now()->startOfDay();
-            $fin = now()->endOfDay();
+             // Opcional: Si quieres que por defecto en Dashboard muestre HOY si no se ha filtrado nada
+             // $inicio = now()->startOfDay();
+             // $fin = now()->endOfDay();
         }
 
-        // 2. CONSTRUIR CONSULTA
-        $query = Sale::query()
-            ->where('restaurant_id', Filament::getTenant()->id); // Filtro de seguridad Tenant
-
-        // Aplicar fechas calculadas arriba
+        // Aplicar fechas a la query
         if ($inicio) $query->whereDate('fecha_emision', '>=', $inicio);
         if ($fin) $query->whereDate('fecha_emision', '<=', $fin);
 
-        // Aplicar filtros extra específicos del Reporte (si existen)
-        if (!empty($filtros['canal'])) $query->where('canal', $filtros['canal']);
+        // ---------------------------------------------------------------------
+
+        // 2. LÓGICA DE ESTADO (CORRECCIÓN AQUÍ) -------------------------------
+        
+        // Si hay un status seleccionado (Reporte), lo usamos.
+        // Si NO hay status (Dashboard), forzamos 'completado' para ignorar anulados.
+        $statusFilter = $filtros['status'] ?? 'completado'; 
+        $query->where('status', $statusFilter);
+
+        // ---------------------------------------------------------------------
+
+        // Filtros específicos adicionales
         if (!empty($filtros['serie'])) $query->where('serie', $filtros['serie']);
         if (!empty($filtros['numero'])) $query->where('correlativo', 'like', "%{$filtros['numero']}%");
 
-        // 3. CALCULAR DATOS
-        $totalGeneral = (clone $query)->sum('total');
+        // 3. DATOS GENERALES
+        $totalGeneralQuery = clone $query;
+        if (!empty($filtros['canal'])) {
+            $totalGeneralQuery->where('canal', $filtros['canal']);
+        }
 
-        $porCanal = (clone $query)
+        $totalVentas = $totalGeneralQuery->sum('total');
+        $cantidadVentas = $totalGeneralQuery->count();
+
+        // 4. DATOS POR CANAL 
+        $porCanalQuery = clone $query;
+        if (!empty($filtros['canal'])) {
+            $porCanalQuery->where('canal', $filtros['canal']);
+        }
+
+        $porCanal = $porCanalQuery
             ->selectRaw('canal, sum(total) as total')
             ->groupBy('canal')
             ->pluck('total', 'canal');
 
-        // 4. RETORNAR TARJETAS
-        return [
-            Stat::make('Total Ventas', 'S/ ' . number_format($totalGeneral, 2))
-                ->description('En el periodo seleccionado')
-                ->chart([7, 3, 10, 5, 15, 8, 20])
+        // 5. DATOS POR MÉTODO DE PAGO
+        $statMetodoPago = null;
+        if (!empty($filtros['payment_method_id'])) {
+            $metodoId = $filtros['payment_method_id'];
+            $nombreMetodo = \App\Models\PaymentMethod::find($metodoId)?->name;
+
+            $saleIds = $totalGeneralQuery->pluck('id');
+
+            $totalMetodo = CashRegisterMovement::query()
+                ->whereIn('referencia_id', $saleIds)
+                ->where('referencia_type', Sale::class)
+                ->where('status', 'aprobado')
+                ->where('payment_method_id', $metodoId)
+                ->sum('monto');
+
+            $statMetodoPago = Stat::make("Recaudado ({$nombreMetodo})", 'S/ ' . number_format($totalMetodo, 2))
+                ->icon('heroicon-m-credit-card')
+                ->description('Monto específico por método')
+                ->color('success');
+        }
+
+        // 6. RETORNAR STATS
+        $stats = [
+            Stat::make('Venta Total', 'S/ ' . number_format($totalVentas, 2))
+                ->description($cantidadVentas . ' transacciones')
+                ->icon('heroicon-m-banknotes')
                 ->color('gray'),
-
-            Stat::make('Salón', 'S/ ' . number_format($porCanal['salon'] ?? 0, 2))
-                ->description('Consumo en mesa')
-                ->color('warning')
-                ->icon('heroicon-m-building-storefront'),
-
-            Stat::make('Para Llevar', 'S/ ' . number_format($porCanal['llevar'] ?? 0, 2))
-                ->description('Recojo en local')
-                ->color('success')
-                ->icon('heroicon-m-shopping-bag'),
-
-            Stat::make('Delivery', 'S/ ' . number_format($porCanal['delivery'] ?? 0, 2))
-                ->description('Envíos a domicilio')
-                ->color('info')
-                ->icon('heroicon-m-truck'),
         ];
+
+        if ($statMetodoPago) {
+            $stats[] = $statMetodoPago;
+        }
+
+        if (empty($filtros['canal']) || $filtros['canal'] === 'salon') {
+            $stats[] = Stat::make('Salón', 'S/ ' . number_format($porCanal['salon'] ?? 0, 2))
+                ->color('warning')->icon('heroicon-m-building-storefront');
+        }
+        if (empty($filtros['canal']) || $filtros['canal'] === 'llevar') {
+            $stats[] = Stat::make('Para Llevar', 'S/ ' . number_format($porCanal['llevar'] ?? 0, 2))
+                ->color('success')->icon('heroicon-m-shopping-bag');
+        }
+        if (empty($filtros['canal']) || $filtros['canal'] === 'delivery') {
+            $stats[] = Stat::make('Delivery', 'S/ ' . number_format($porCanal['delivery'] ?? 0, 2))
+                ->color('info')->icon('heroicon-m-truck');
+        }
+
+        return $stats;
     }
 }

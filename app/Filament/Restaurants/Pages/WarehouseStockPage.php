@@ -3,91 +3,130 @@
 namespace App\Filament\Restaurants\Pages;
 
 use App\Models\Variant;
-use App\Models\WarehouseStock;
+use App\Enums\TipoProducto;
 use Filament\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Tables\Actions\Action;
+use Filament\Actions\Action;
+use Filament\Tables\Filters\SelectFilter;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Database\Eloquent\Builder;
 
 class WarehouseStockPage extends Page implements Tables\Contracts\HasTable
 {
     use Tables\Concerns\InteractsWithTable;
 
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
-
     protected static ?string $navigationLabel = 'Existencias';
-
     protected static ?string $navigationGroup = 'Inventarios';
-
     protected static ?string $title = 'Existencias de Almacén';
-
     protected static string $view = 'filament.warehouse.pages.existencias';
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('descargarPdf')
+                ->label('Descargar PDF')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('danger')
+                ->action(fn() => $this->exportarPdf()),
+        ];
+    }
+
+    public function exportarPdf()
+    {
+        $columnasVisibles = collect($this->getTable()->getColumns())
+            ->filter(fn($column) => ! $column->isToggledHidden())
+            ->map(fn($column) => [
+                'label' => $column->getLabel(),
+                'name'  => $column->getName(),
+            ]);
+
+        $data = $this->getFilteredTableQuery()->get();
+
+        $pdf = Pdf::loadView('filament.reports.inventario.existencias-pdf', [
+            'data'     => $data,
+            'columns'  => $columnasVisibles,
+            'tenant'   => filament()->getTenant()->name,
+            'prodType' => $this->tableFilters['type']['value'] ?? null,
+        ])->setPaper('a4', $columnasVisibles->count() > 5 ? 'landscape' : 'portrait');
+
+        return response()->streamDownload(function () use ($pdf) {
+            echo $pdf->stream();
+        }, 'Reporte_Inventario_' . now()->format('d-m-Y') . '.pdf');
+    }
 
     public function table(Table $table): Table
     {
         return $table
             ->query(
                 Variant::query()
-                    ->with([
-                        'product',
-                        'values.attribute',
-                        'stocks.warehouse',
-                    ])
+                    ->with(['product.unit', 'stock'])
                     ->where('status', 'activo')
-                    ->whereHas('product', function ($q) {
-                        $q->where('status', 'activo')->where('control_stock', true);
-                    })
-                    ->whereHas('stocks')
+                    ->whereHas('product', fn($q) => $q->where('status', 'activo')->where('control_stock', true))
+                    ->whereHas('stock')
             )
+            ->columnToggleFormColumns(2)
             ->columns([
                 Tables\Columns\TextColumn::make('product.name')
                     ->label('Producto')
-                    ->searchable(),
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
 
                 Tables\Columns\TextColumn::make('full_name')
                     ->label('Variante')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
 
-                Tables\Columns\TextColumn::make('min_stock_promedio')
-                    ->label('Stock Min. Promedio')
-                    ->getStateUsing(
-                        fn($record) =>
-                        $record->stocks->avg('min_stock') ? number_format($record->stocks->avg('min_stock'), 2) : 0
-                    )
-                    ->badge()
-                    ->color('warning'),
+                // --- NUEVA COLUMNA: TIPO ---
+                Tables\Columns\TextColumn::make('product.type')
+                    ->label('Tipo')
+                    ->badge() // Usa el método getColor() del Enum automáticamente
+                    ->icon(fn($state) => $state->getIcon()) // Usa el método getIcon() del Enum
+                    ->sortable()
+                    ->toggleable(),
 
+                Tables\Columns\TextColumn::make('stock.min_stock')
+                    ->label('S. Mínimo')
+                    ->numeric(decimalPlaces: 3)
+                    ->alignRight()
+                    ->toggleable(),
 
-                Tables\Columns\TextColumn::make('stock_total')
-                    ->label('Stock Total')
-                    ->getStateUsing(
-                        fn($record) =>
-                        $record->stocks->sum(fn($s) => $s->stock_real ?? $s->stock ?? 0)
-                    )
-                    ->icon('heroicon-o-eye') // icono bonito opcional
-                    ->color('primary')
-                    ->action(
-                        Action::make('ver_stock')
-                            ->label('Detalles')
-                            ->modalHeading(fn($record) => "STOCK POR ALMACEN")
-                            ->modalSubmitAction(false)
-                            ->modalCancelActionLabel('Cerrar')
-                            ->modalContent(function ($record) {
-                                $stocks = $record->stocks;
-                                return view('filament.warehouse.pages.stock-modal', [
-                                    'variant' => $record,
-                                    'stocks' => $stocks,
-                                ]);
-                            })
-                    ),
+                Tables\Columns\TextColumn::make('stock.stock_real')
+                    ->label('S. Actual')
+                    ->numeric(decimalPlaces: 3)
+                    ->alignRight()
+                    ->weight('bold')
+                    ->color(fn($record) => ($record->stock?->stock_real <= $record->stock?->min_stock) ? 'danger' : 'primary')
+                    ->toggleable(),
+
                 Tables\Columns\TextColumn::make('product.unit.name')
                     ->label('Unidad')
-                    ->sortable()
-                    ->toggleable()
                     ->badge()
-                    ->color('info'),
+                    ->color('info')
+                    ->toggleable(),
+
+                Tables\Columns\TextColumn::make('stock.valor_inventario')
+                    ->label('Valor Almacén')
+                    ->money('PEN')
+                    ->alignRight()
+                    ->sortable()
+                    ->toggleable(),
             ])
-            ->actions([])
-            ->bulkActions([]);
+            ->filters([
+                SelectFilter::make('type')
+                    ->label('Filtrar por Tipo')
+                    ->options([
+                        TipoProducto::Producto->value => TipoProducto::Producto->getLabel(),
+                        TipoProducto::Insumo->value   => TipoProducto::Insumo->getLabel(),
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        return $query->when($data['value'], function ($q, $value) {
+                            $q->whereHas('product', fn($p) => $p->where('type', $value));
+                        });
+                    })
+            ])
+            ->defaultSort('product.name');
     }
 }

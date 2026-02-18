@@ -45,10 +45,9 @@ class EditPurchase extends EditRecord
 
         foreach ($orig->details as $item) {
             $this->itemsOriginales[$item->id] = [
-                'cantidad'     => $item->cantidad,
-                'warehouse_id' => $item->warehouse_id,
-                'variant_id'   => $item->variant_id,
-                'unit_id'      => $item->unit_id,
+                'cantidad'   => $item->cantidad,
+                'variant_id' => $item->variant_id,
+                'unit_id'    => $item->unit_id,
             ];
         }
     }
@@ -78,10 +77,9 @@ class EditPurchase extends EditRecord
             }
 
             $newMap[$key] = [
-                'cantidad'     => $d['cantidad'] ?? 0,
-                'warehouse_id' => $d['warehouse_id'] ?? null,
-                'variant_id'   => $d['variant_id'] ?? null,
-                'unit_id'      => $d['unit_id'] ?? null,
+                'cantidad'   => $d['cantidad'] ?? 0,
+                'variant_id' => $d['variant_id'] ?? null,
+                'unit_id'    => $d['unit_id'] ?? null,
             ];
         }
 
@@ -92,6 +90,7 @@ class EditPurchase extends EditRecord
 
         $changed = false;
 
+        // Comparar datos para ver si algo cambió
         foreach ($newMap as $key => $vals) {
             if (!is_int($key)) continue;
 
@@ -102,9 +101,9 @@ class EditPurchase extends EditRecord
 
             $orig = $this->itemsOriginales[$key];
 
+            // Comparación simplificada (Sin almacén)
             if (
                 floatval($orig['cantidad']) !== floatval($vals['cantidad']) ||
-                $orig['warehouse_id'] !== $vals['warehouse_id'] ||
                 $orig['variant_id']   !== $vals['variant_id'] ||
                 $orig['unit_id']      !== $vals['unit_id']
             ) {
@@ -117,66 +116,62 @@ class EditPurchase extends EditRecord
             $changed = true;
         }
 
-        /** Reglas */
+        /** Reglas de Negocio (Iguales, pero usan el Trait actualizado) */
         $old = $this->estadoOriginal;
         $new = $nuevoEstado;
 
-        /** Tipo de movimiento */
         $this->movimiento = $this->buildMovimientoLabel($changed, $old, $new);
 
         // 1) pendiente → pendiente
         if ($old === 'pendiente' && $new === 'pendiente') {
-            return; // nada
+            return;
         }
 
-        // 2) pendiente → recibido (solo aplicar)
+        // 2) pendiente → recibido (Aplicar Entrada)
         if ($old === 'pendiente' && $new === 'recibido') {
             $this->shouldApplyStock = true;
             return;
         }
 
-        // 3) recibido → pendiente (solo revertir)
+        // 3) recibido → pendiente (Revertir Entrada -> Restar)
         if ($old === 'recibido' && $new === 'pendiente') {
             if (!$this->alreadyReversed) {
+                // El Trait ya sabe que reversePurchase es 'entrada' y debe restar
                 $this->reversePurchase($this->record, $this->movimiento);
                 $this->alreadyReversed = true;
             }
             return;
         }
 
-        // 4) recibido → recibido
+        // 4) recibido → recibido (Si hubo cambios en items)
         if ($old === 'recibido' && $new === 'recibido') {
             if ($changed) {
                 if (!$this->alreadyReversed) {
+                    // Revertimos lo viejo (restar lo que había antes)
                     $this->reversePurchase($this->record, $this->movimiento);
                     $this->alreadyReversed = true;
                 }
-
+                // Marcamos para aplicar lo nuevo después de guardar (sumar lo nuevo)
                 $this->shouldApplyStock = true;
             }
             return;
         }
     }
 
-    /**
-     * Construir etiqueta tipo de movimiento
-     */
     private function buildMovimientoLabel(bool $changed, string $old, string $new): string
     {
         if ($old !== $new) {
             return "despacho: $old → $new";
         }
         if ($changed) {
-            return "ajuste en item";
+            return "ajuste en item (edición)";
         }
         return "sin cambios";
     }
 
-    /**
-     * After Save: aplicar si corresponde
-     */
     protected function afterSave(): void
     {
+        // Si se marcó para aplicar, se ejecuta ahora con los datos ya guardados en BD
         if ($this->shouldApplyStock) {
             $this->applyPurchase($this->record, $this->movimiento);
         }

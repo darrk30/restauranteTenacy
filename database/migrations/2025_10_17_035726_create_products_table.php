@@ -29,6 +29,7 @@ return new class extends Migration
             $table->boolean('visible')->default(true);  // Visibilidad en el frontend
             $table->integer('order')->nullable();          // Orden de aparición
             $table->boolean('venta_sin_stock')->default(false);  // Permitir pedidos sin stock
+            $table->boolean('receta')->default(false);  // Producto con receta
             $table->foreignId('restaurant_id')->constrained('restaurants')->onDelete('cascade'); // Restaurante
             $table->unique(['restaurant_id', 'code']);
             $table->timestamps();

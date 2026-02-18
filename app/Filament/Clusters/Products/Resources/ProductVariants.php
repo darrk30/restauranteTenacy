@@ -2,17 +2,25 @@
 
 namespace App\Filament\Clusters\Products\Resources;
 
+use App\Enums\StatusProducto;
+use App\Enums\TipoProducto;
 use App\Filament\Clusters\Products\Resources\ProductResource;
 use App\Models\Product;
-use App\Services\BarcodeLookupService;
+use App\Models\Unit;
+use App\Models\Variant;
+use App\Models\WarehouseStock;
 use Filament\Resources\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Notifications\Notification;
-use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Toggle;
+use Icetalker\FilamentTableRepeater\Forms\Components\TableRepeater;
 
 class ProductVariants extends Page implements Tables\Contracts\HasTable
 {
@@ -34,28 +42,13 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
         return "Variantes de {$this->record->name}";
     }
 
-    protected function getListeners(): array
-    {
-        return [
-            'barcode-scanned' => 'setBarcode',
-        ];
-    }
-
-    public function setBarcode($data)
-    {
-        $this->form->fill([
-            'barcode' => $data['code'],
-        ]);
-    }
-
-
     public function table(Table $table): Table
     {
         return $table
             ->query(
                 fn() => $this->record
                     ->variants()
-                    ->with('product')
+                    ->with('product', 'stock')
                     ->whereIn('status', ['activo', 'inactivo'])
             )
             ->columns([
@@ -68,24 +61,31 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
 
                 Tables\Columns\TextColumn::make('product.name')
                     ->label('Producto'),
-                    
-                    Tables\Columns\TextColumn::make('values')
-                    ->label('Variante de producto')
+
+                Tables\Columns\TextColumn::make('values')
+                    ->label('Variante')
                     ->getStateUsing(
                         fn($record) =>
                         $record->values && $record->values->isNotEmpty()
-                        ? $record->values
-                        ->map(fn($value) => "{$value->attribute->name}: {$value->name}")
-                        ->toArray()
-                        : ['Sin variantes']
-                        )
-                        ->badge()
-                        ->colors(['primary']),
-                        
-                    Tables\Columns\TextColumn::make('costo')
-                        ->formatStateUsing(fn($state) => 'S/ ' . number_format($state, 2))
-                        ->label('Costo'),
-                    Tables\Columns\TextColumn::make('status')
+                            ? $record->values->map(fn($value) => "{$value->attribute->name}: {$value->name}")->toArray()
+                            : ['Sin variantes']
+                    )
+                    ->badge()
+                    ->colors(['primary']),
+
+                // 🟢 STOCK ACTUALIZADO (Visible solo si el producto controla stock)
+                Tables\Columns\TextColumn::make('stock.stock_real')
+                    ->label('Stock Actual')
+                    ->numeric()
+                    ->alignCenter()
+                    ->placeholder('0')
+                    ->visible(fn() => $this->record->control_stock),
+
+                Tables\Columns\TextColumn::make('costo')
+                    ->formatStateUsing(fn($state) => 'S/ ' . number_format($state, 2))
+                    ->label('Costo'),
+
+                Tables\Columns\TextColumn::make('status')
                     ->label('Estado')
                     ->badge()
                     ->colors([
@@ -94,6 +94,108 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                     ]),
             ])
             ->actions([
+                // --- BOTÓN RECETA (NUEVO) ---
+                Tables\Actions\Action::make('receta')
+                    ->label('Receta')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->color('info')
+                    ->button()
+                    ->visible(fn() => $this->record->receta)
+                    ->modalHeading(fn($record) => "Receta: " . $this->record->name . ($record->values->isNotEmpty() ? ' - ' . $record->full_name : ''))
+                    ->fillForm(fn($record) => [
+                        'recetas' => $record->recetas->map(function ($receta) {
+                            return [
+                                'insumo_id' => $receta->insumo_id,
+                                'unit_id'   => $receta->unit_id,
+                                'cantidad'  => $receta->cantidad,
+                            ];
+                        })->toArray()
+                    ])
+                    ->form([
+                        TableRepeater::make('recetas')
+                            ->label('Ingredientes')
+                            ->addActionLabel('Agregar ingrediente')
+                            ->defaultItems(0)
+                            ->schema([
+
+                                // COLUMNA 1: INSUMO
+                                Select::make('insumo_id')
+                                    ->label('Insumo') // Se mantiene el label para la vista móvil
+                                    ->placeholder('Seleccionar insumo...')
+                                    ->options(function () {
+                                        return \App\Models\Variant::query()
+                                            ->whereHas('product', function ($query) {
+                                                $query->where('type', \App\Enums\TipoProducto::Insumo)
+                                                    ->where('status', \App\Enums\StatusProducto::Activo);
+                                            })
+                                            ->where('status', 'activo')
+                                            ->get()
+                                            ->mapWithKeys(function ($variant) {
+                                                return [$variant->id => $variant->product->name];
+                                            });
+                                    })
+                                    // ESTO ES CLAVE: Permite ver el nombre guardado en lugar del ID "2"
+                                    ->getOptionLabelUsing(function ($value) {
+                                        $variant = \App\Models\Variant::with('product')->find($value);
+                                        return $variant ? $variant->product->name : null;
+                                    })
+                                    ->searchable()
+                                    ->preload()
+                                    ->required()
+                                    ->reactive()
+                                    ->afterStateUpdated(fn(Set $set) => $set('unit_id', null))
+                                    ->native(false), // false = Diseño bonito de Filament
+
+                                // COLUMNA 2: UNIDAD
+                                Select::make('unit_id')
+                                    ->label('Unidad')
+                                    ->placeholder('Selec.')
+                                    ->options(function (Get $get) {
+                                        $insumoId = $get('insumo_id');
+                                        if (!$insumoId) return [];
+
+                                        $insumo = \App\Models\Variant::with('product.unit')->find($insumoId);
+                                        $unidadBase = $insumo?->product?->unit;
+
+                                        if (!$unidadBase) return [];
+
+                                        // Lógica para traer unidades de la misma categoría o conversiones
+                                        if ($unidadBase->unit_category_id) {
+                                            return \App\Models\Unit::where('unit_category_id', $unidadBase->unit_category_id)
+                                                ->pluck('name', 'id');
+                                        }
+
+                                        return \App\Models\Unit::where('id', $unidadBase->id)
+                                            ->orWhere('reference_unit_id', $unidadBase->id)
+                                            ->orWhere('id', $unidadBase->reference_unit_id)
+                                            ->pluck('name', 'id');
+                                    })
+                                    // ESTO ES CLAVE: Permite ver el nombre de la unidad guardada
+                                    ->getOptionLabelUsing(fn($value) => \App\Models\Unit::find($value)?->name)
+                                    ->searchable()
+                                    ->required()
+                                    ->native(false),
+
+                                // COLUMNA 3: CANTIDAD
+                                TextInput::make('cantidad')
+                                    ->label('Cantidad')
+                                    ->placeholder('0.00')
+                                    ->numeric()
+                                    ->required(),
+                            ])
+                    ])
+                    ->action(function (Variant $record, array $data) {
+                        // $record aquí es la Variante de la fila (el plato)
+                        $record->recetas()->delete();
+
+                        if (!empty($data['recetas'])) {
+                            $record->recetas()->createMany($data['recetas']);
+                        }
+
+                        Notification::make()->title('Receta actualizada correctamente')->success()->send();
+                    }),
+
+                // --- BOTÓN EDITAR EXISTENTE ---
                 Tables\Actions\Action::make('edit')
                     ->label('Editar')
                     ->icon('heroicon-o-pencil-square')
@@ -101,13 +203,11 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                     ->color('primary')
                     ->modalHeading('Editar Variante')
                     ->fillForm(fn($record) => [
-                        'image' => $record->image,
+                        'image_path' => $record->image_path,
                         'codigo_barras' => $record->codigo_barras,
                         'internal_code' => $record->internal_code,
-                        'extra_price' => $record->extra_price,
-                        'sale_without_stock' => $record->sale_without_stock,
+                        'costo' => $record->costo,
                         'status' => $record->status,
-                        'unit' => $record->unit,
                     ])
                     ->form([
                         Forms\Components\FileUpload::make('image_path')
@@ -117,114 +217,89 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                             ->directory('products/variants')
                             ->disk('public')
                             ->preserveFilenames()
-                            ->previewable(true)
-                            ->columnSpanFull(), // Para que ocupe todo el ancho arriba
+                            ->columnSpanFull(),
 
-                        // --- FILA 1: Códigos (2 Columnas) ---
                         Forms\Components\Grid::make(2)
                             ->schema([
                                 Forms\Components\TextInput::make('codigo_barras')
-                                    ->label('Código de barras')
-                                    ->maxLength(100),
-
+                                    ->label('Código de barras')->maxLength(100),
                                 Forms\Components\TextInput::make('internal_code')
-                                    ->label('Código interno')
-                                    ->maxLength(100),
+                                    ->label('Código interno')->maxLength(100),
                             ]),
 
-                        // --- FILA 2: Stock, Costo y Estado (3 Columnas) ---
                         Forms\Components\Grid::make(3)
                             ->schema([
-                                // 1. Stock Inicial (Tu lógica original intacta)
                                 Forms\Components\TextInput::make('stock_inicial')
                                     ->label(fn($record) => $record?->product?->unit?->name ? "Stock inicial ({$record->product->unit->name})" : "Stock inicial")
                                     ->default(0)
-                                    ->visible(function ($record) {
-                                        if (!$record?->product?->control_stock) return false;
-                                        if ($record?->product?->unit?->code === 'ZZ') return false;
-                                        if ($record->stock_inicial != false) return false;
-                                        return true;
-                                    })
+                                    ->visible(fn($record) => $record->product->control_stock && !$record->stock_inicial)
                                     ->numeric()
                                     ->step(fn($record) => $record?->product?->unit?->code === 'NIU' ? 1 : 'any')
                                     ->rules(fn($record) => $record?->product?->unit?->code === 'NIU' ? ['required', 'integer', 'min:0'] : ['required', 'numeric', 'min:0'])
                                     ->helperText("Solo se ingresa una vez."),
 
-                                // 2. Costo (Agregado según tu petición)
                                 Forms\Components\TextInput::make('costo')
                                     ->label('Costo')
                                     ->numeric()
-                                    ->prefix('S/.') // Opcional: símbolo de moneda
+                                    ->prefix('S/.')
                                     ->default(0),
 
-                                // 3. Estado (Switch)
                                 Toggle::make('status')
                                     ->label('Estado')
                                     ->onColor('success')
                                     ->offColor('danger')
-                                    ->inline(false) // Pone la etiqueta ARRIBA del switch, alineándolo visualmente con los inputs de texto
-                                    // 1. Al LEER: Convertimos 'activo' a true, cualquier otra cosa a false
+                                    ->inline(false)
                                     ->formatStateUsing(fn($state) => $state === 'activo')
-                                    // 2. Al GUARDAR: Si es true guardamos 'activo', si es false guardamos 'inactivo'
                                     ->dehydrateStateUsing(fn($state) => $state ? 'activo' : 'inactivo'),
                             ]),
                     ])
-                    ->fillForm(fn($record) => $record->toArray())
                     ->action(function (array $data, $record): void {
+                        // 1. Extraer el costo que viene del formulario
+                        $costoIngresado = (float) ($data['costo'] ?? 0);
 
-                        // Guardar stock inicial solo si viene en el formulario
-                        if (isset($data['stock_inicial']) && $record->stock_inicial_asignado == false) {
-
-                            $cantidad = (int) $data['stock_inicial'];
+                        // 2. Lógica de Stock Inicial (Solo si no se ha ingresado antes)
+                        if (isset($data['stock_inicial']) && !$record->stock_inicial) {
+                            $cantidad = (float) $data['stock_inicial'];
 
                             if ($cantidad > 0) {
-                                $warehouse = \App\Models\Warehouse::where('restaurant_id', filament()->getTenant()->id)
-                                    ->orderBy('order')
-                                    ->first();
+                                // Buscamos o creamos el registro de stock
+                                $stock = WarehouseStock::firstOrNew(
+                                    ['variant_id' => $record->id],
+                                    ['restaurant_id' => filament()->getTenant()->id]
+                                );
 
-                                if ($warehouse) {
-                                    $stock = \App\Models\WarehouseStock::firstOrCreate(
-                                        [
-                                            'warehouse_id' => $warehouse->id,
-                                            'variant_id' => $record->id,
-                                        ],
-                                        [
-                                            'stock_real' => 0,
-                                            'stock_reserva' => 0,
-                                            'min_stock' => 0,
-                                            'restaurant_id' => filament()->getTenant()->id,
-                                        ]
-                                    );
-                                    $stock->update([
-                                        'stock_real' => $stock->stock_real + $cantidad,
-                                        'stock_reserva' => $stock->stock_real + $cantidad
-                                    ]);
+                                // Al ser Stock Inicial, el costo promedio es simplemente el costo ingresado
+                                $stock->stock_real = $cantidad;
+                                $stock->stock_reserva = $cantidad;
+                                $stock->costo_promedio = $costoIngresado;
+                                $stock->valor_inventario = $cantidad * $costoIngresado; // Cantidad * Costo
+                                $stock->save();
 
-                                    $record->kardexes()->create([
-                                        'product_id'      => $record->product_id,
-                                        'variant_id'      => $record->id,
-                                        'restaurant_id'   => filament()->getTenant()->id,
-                                        'tipo_movimiento' => 'Stock Inicial',
-                                        'cantidad'        => $cantidad,
-                                        'stock_restante'  => $stock->stock_real,
-                                        'modelo_type'     => ProductVariants::class,
-                                        'modelo_id'       => $record->id,
-                                        'comprobante'     => 'STOCK-INICIAL',
-                                    ]);
-                                }
-                                $record->update(['stock_inicial' => true,]);
+                                // Registrar en Kardex con valores financieros
+                                $record->kardexes()->create([
+                                    'product_id'      => $record->product_id,
+                                    'variant_id'      => $record->id,
+                                    'restaurant_id'   => filament()->getTenant()->id,
+                                    'tipo_movimiento' => 'Stock Inicial',
+                                    'comprobante'     => 'STOCK-INICIAL',
+                                    'cantidad'        => $cantidad,
+                                    'costo_unitario'  => $costoIngresado,
+                                    'saldo_valorizado' => $stock->valor_inventario,
+                                    'stock_restante'  => $stock->stock_real,
+                                    'modelo_type'     => get_class($record),
+                                    'modelo_id'       => $record->id,
+                                ]);
+
+                                $record->stock_inicial = true;
                             }
-
-                            // No permitir guardar este dato nuevamente
                             unset($data['stock_inicial']);
                         }
+
+                        // 3. Actualizar los datos de la Variante (incluyendo el campo costo)
                         $record->update($data);
 
-                        Notification::make()
-                            ->title('Variante actualizada correctamente')
-                            ->success()
-                            ->send();
-                    }),
+                        Notification::make()->title('Variante actualizada con éxito')->success()->send();
+                    })
             ])
             ->paginated(false);
     }

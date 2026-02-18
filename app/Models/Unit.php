@@ -30,6 +30,11 @@ class Unit extends Model
         return $this->belongsTo(Restaurant::class);
     }
 
+    public function recetas()
+    {
+        return $this->hasMany(Receta::class);
+    }
+
     /**
      * 🔗 Relación: unidad base o de referencia sobre la cual se define esta unidad.
      * Ejemplo: si esta unidad es “Kilogramo”, su unidad base es “Gramo”.
