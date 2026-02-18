@@ -173,7 +173,7 @@ class Promotion extends Model
             // --- CORRECCIÓN AQUÍ ---
             if ($detalle->variant_id && $detalle->variant) {
                 // Usamos 'stock_reserva' igual que en tu OrdenMesa
-                $stockItem = $detalle->variant->stocks->sum('stock_reserva');
+                $stockItem = $detalle->variant->stock->sum('stock_reserva');
             } elseif ($producto) {
                 // Si el producto simple tuviera stock directo
                 $stockItem = $producto->stock ?? 0;
