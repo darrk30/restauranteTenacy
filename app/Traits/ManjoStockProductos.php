@@ -187,7 +187,6 @@ trait ManjoStockProductos
 
                 // C. Convertir (Ej. 400 Gramos -> 0.4 Kilos)
                 $cantidadBase = $this->convertirCantidad($unidadReceta, $unidadBaseInsumo, $cantidadTotalReceta);
-
                 // D. Actualizar BD del INSUMO
                 $this->updateStockAndKardex(
                     variant: $insumoVariant, // ¡OJO! Afectamos al Insumo
@@ -254,9 +253,7 @@ trait ManjoStockProductos
         if ($tipo === 'salida') {
             // Solo movemos cantidades, el costo se mantiene
             $allowsNegative = $variant->product->venta_sin_stock ?? false;
-            $nuevoStock = $allowsNegative
-                ? $stock->stock_real - $cantidadBase
-                : max(0, $stock->stock_real - $cantidadBase);
+            $nuevoStock = $allowsNegative ? $stock->stock_real - $cantidadBase : $stock->stock_real - $cantidadBase;
 
             $stock->stock_real = $nuevoStock;
             $stock->valor_inventario = $nuevoStock * $stock->costo_promedio;

@@ -117,10 +117,9 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                             ->addActionLabel('Agregar ingrediente')
                             ->defaultItems(0)
                             ->schema([
-
                                 // COLUMNA 1: INSUMO
                                 Select::make('insumo_id')
-                                    ->label('Insumo') // Se mantiene el label para la vista móvil
+                                    ->label('Insumo')
                                     ->placeholder('Seleccionar insumo...')
                                     ->options(function () {
                                         return \App\Models\Variant::query()
@@ -131,24 +130,20 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                                             ->where('status', 'activo')
                                             ->get()
                                             ->mapWithKeys(function ($variant) {
-                                                return [$variant->id => $variant->product->name];
+                                                // Mostramos Nombre + Unidad Base para guiar al usuario
+                                                return [$variant->id => "{$variant->product->name} ({$variant->product->unit->name}) - S/ {$variant->costo}"];
                                             });
-                                    })
-                                    // ESTO ES CLAVE: Permite ver el nombre guardado en lugar del ID "2"
-                                    ->getOptionLabelUsing(function ($value) {
-                                        $variant = \App\Models\Variant::with('product')->find($value);
-                                        return $variant ? $variant->product->name : null;
                                     })
                                     ->searchable()
                                     ->preload()
                                     ->required()
                                     ->reactive()
                                     ->afterStateUpdated(fn(Set $set) => $set('unit_id', null))
-                                    ->native(false), // false = Diseño bonito de Filament
+                                    ->native(false),
 
-                                // COLUMNA 2: UNIDAD
+                                // COLUMNA 2: UNIDAD (Filtrada por categoría)
                                 Select::make('unit_id')
-                                    ->label('Unidad')
+                                    ->label('Unidad Receta')
                                     ->placeholder('Selec.')
                                     ->options(function (Get $get) {
                                         $insumoId = $get('insumo_id');
@@ -159,20 +154,14 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
 
                                         if (!$unidadBase) return [];
 
-                                        // Lógica para traer unidades de la misma categoría o conversiones
+                                        // Traer todas las unidades de la misma categoría (Masa con Masa, Volumen con Volumen)
                                         if ($unidadBase->unit_category_id) {
                                             return \App\Models\Unit::where('unit_category_id', $unidadBase->unit_category_id)
                                                 ->pluck('name', 'id');
                                         }
 
-                                        return \App\Models\Unit::where('id', $unidadBase->id)
-                                            ->orWhere('reference_unit_id', $unidadBase->id)
-                                            ->orWhere('id', $unidadBase->reference_unit_id)
-                                            ->pluck('name', 'id');
+                                        return [$unidadBase->id => $unidadBase->name];
                                     })
-                                    // ESTO ES CLAVE: Permite ver el nombre de la unidad guardada
-                                    ->getOptionLabelUsing(fn($value) => \App\Models\Unit::find($value)?->name)
-                                    ->searchable()
                                     ->required()
                                     ->native(false),
 
@@ -185,14 +174,59 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                             ])
                     ])
                     ->action(function (Variant $record, array $data) {
-                        // $record aquí es la Variante de la fila (el plato)
+                        // 1. Borrar receta anterior
                         $record->recetas()->delete();
 
-                        if (!empty($data['recetas'])) {
-                            $record->recetas()->createMany($data['recetas']);
+                        if (empty($data['recetas'])) {
+                            // Si borró todo, el costo del plato vuelve a ser manual o 0 (opcional)
+                            // $record->update(['costo' => 0]); 
+                            Notification::make()->title('Receta eliminada')->success()->send();
+                            return;
                         }
 
-                        Notification::make()->title('Receta actualizada correctamente')->success()->send();
+                        // 2. Guardar nueva receta
+                        $record->recetas()->createMany($data['recetas']);
+
+                        // 🟢 3. CÁLCULO DE COSTO AUTOMÁTICO
+                        $nuevoCostoPlato = 0;
+
+                        foreach ($data['recetas'] as $item) {
+                            $insumo = \App\Models\Variant::with('product.unit')->find($item['insumo_id']);
+                            $unidadReceta = \App\Models\Unit::find($item['unit_id']);
+                            $cantidadReceta = (float) $item['cantidad'];
+
+                            if ($insumo && $unidadReceta && $insumo->product->unit) {
+                                $unidadStock = $insumo->product->unit;
+                                $costoInsumo = (float) $insumo->costo; // Ej: 10.00 (el Kg)
+
+                                // Factores de conversión respecto a la unidad base (ej: Gramo = 1)
+                                // Si Unidad Stock es KG, factor_stock = 1000
+                                // Si Unidad Receta es Gramo, factor_receta = 1
+                                $factorStock = (float) ($unidadStock->quantity ?? 1);
+                                $factorReceta = (float) ($unidadReceta->quantity ?? 1);
+
+                                // Evitar división por cero
+                                if ($factorStock > 0) {
+                                    // Costo por unidad base (ej: costo por 1 gramo)
+                                    $costoPorUnidadBase = $costoInsumo / $factorStock;
+
+                                    // Cantidad en unidades base (ej: 200 gramos * 1 = 200)
+                                    $cantidadTotalBase = $cantidadReceta * $factorReceta;
+
+                                    // Sumar al costo total del plato
+                                    $nuevoCostoPlato += ($costoPorUnidadBase * $cantidadTotalBase);
+                                }
+                            }
+                        }
+
+                        // 4. Actualizar el costo de la Variante (Plato)
+                        $record->update(['costo' => round($nuevoCostoPlato, 2)]); // Redondeo a 2 decimales
+
+                        Notification::make()
+                            ->title('Receta actualizada')
+                            ->body("El costo del plato se actualizó a: S/ " . number_format($nuevoCostoPlato, 2))
+                            ->success()
+                            ->send();
                     }),
 
                 // --- BOTÓN EDITAR EXISTENTE ---
