@@ -5,6 +5,7 @@ namespace App\Filament\Restaurants\Pages;
 use App\Models\Client;
 use App\Models\Floor;
 use App\Models\Order;
+use App\Models\Table;
 use App\Models\TypeDocument;
 use App\Models\User;
 use App\Services\DocumentoService;
@@ -69,6 +70,17 @@ class PointOfSale extends Page
                 Notification::make()->title('Delivery finalizado con éxito')->success()->send();
             }
         }
+    }
+
+    public function getTableStats(): array
+    {
+        $tables = Table::where('restaurant_id', Filament::getTenant()->id)->get();
+
+        return [
+            'libres'   => $tables->where('estado_mesa', 'libre')->count(), // Ajusta el string según tu BD
+            'ocupadas' => $tables->where('estado_mesa', 'ocupada')->count(),
+            'pagando'  => $tables->where('estado_mesa', 'pagando')->count(),
+        ];
     }
 
     // 2. MÉTODO PARA VER DETALLES (Ojo)

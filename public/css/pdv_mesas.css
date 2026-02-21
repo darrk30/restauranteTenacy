@@ -994,3 +994,24 @@ select.modal-custom-input {
     margin-top: 2px;
     font-style: italic;
 }
+
+.summary-row { display: flex; gap: 10px; margin-bottom: 15px; }
+.summary-badge { 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+    padding: 5px 12px; 
+    border-radius: 9999px; 
+    font-size: 0.875rem; 
+    font-weight: 600; 
+    color: white; 
+}
+.count-pill {
+    background: rgba(255, 255, 255, 0.3);
+    padding: 0px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+}
+.free-bg { background-color: #22c55e; } /* Verde */
+.occ-bg { background-color: #ef4444; }  /* Rojo */
+.pay-bg { background-color: #eab308; }  /* Amarillo */

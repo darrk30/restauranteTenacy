@@ -207,6 +207,11 @@ class SupplierResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\Action::make('compras')
+                    ->label('Compras')
+                    ->icon('heroicon-o-shopping-bag')
+                    ->color('warning')
+                    ->url(fn($record) => static::getUrl('compras', ['record' => $record])),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -228,6 +233,8 @@ class SupplierResource extends Resource
             'index' => Pages\ListSuppliers::route('/'),
             'create' => Pages\CreateSupplier::route('/create'),
             'edit' => Pages\EditSupplier::route('/{record}/edit'),
+            'compras' => Pages\ViewProviderPurchases::route('/{record}/compras'),
+            'compra-detalle' => Pages\ViewPurchaseDetail::route('/{record}/compras/detalle'),
         ];
     }
 }

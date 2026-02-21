@@ -9,6 +9,7 @@
         "php": "^8.2",
         "aymanalhattami/filament-slim-scrollbar": "^2.1",
         "barryvdh/laravel-dompdf": "^3.1",
+        "danihidayatx/image-optimizer": "^2.1",
         "filament/filament": "3.3",
         "flowframe/laravel-trend": "^0.4.0",
         "icetalker/filament-table-repeater": "^1.4",

@@ -31,10 +31,25 @@
         {{-- 2. SECCIÓN SALÓN --}}
         <div x-show="canalActivo === 'salon'" x-transition:enter.duration.200ms>
             <div x-data="{ tab: 1 }" style="width:100%;">
+                @php
+                    $stats = $this->getTableStats();
+                @endphp
+
                 <div class="summary-row">
-                    <div class="summary-badge free-bg">Libres</div>
-                    <div class="summary-badge occ-bg">Ocupadas</div>
-                    <div class="summary-badge pay-bg">Pagando</div>
+                    <div class="summary-badge free-bg">
+                        <span>Libres</span>
+                        <span class="count-pill">{{ $stats['libres'] }}</span>
+                    </div>
+
+                    <div class="summary-badge occ-bg">
+                        <span>Ocupadas</span>
+                        <span class="count-pill">{{ $stats['ocupadas'] }}</span>
+                    </div>
+
+                    <div class="summary-badge pay-bg">
+                        <span>Pagando</span>
+                        <span class="count-pill">{{ $stats['pagando'] }}</span>
+                    </div>
                 </div>
                 <div class="pdv-tabs">
                     @foreach ($floors as $i => $floor)
@@ -406,9 +421,9 @@
         <x-modal-ticket :orderId="$ordenGenerada->id" :jobId="$jobId" :areas="$areasUnicas" />
     @endif
 
-        <script>
-            window.APP_TENANT = @js($tenant->slug ?? 'default');
-        </script>
+    <script>
+        window.APP_TENANT = @js($tenant->slug ?? 'default');
+    </script>
     {{-- @push('scripts')
         <script src="{{ asset('js/mesas.js') }}" defer></script>
     @endpush --}}

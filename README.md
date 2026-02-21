@@ -1,61 +1,69 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 🚀 Tukipu Cloud - SaaS Multitenant para Restaurantes
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+![Laravel](https://img.shields.io/badge/Laravel-11-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)
+![Filament](https://img.shields.io/badge/Filament_PHP-v3-EBB308?style=for-the-badge&logo=laravel&logoColor=white)
+![PHP](https://img.shields.io/badge/PHP-8.2-777BB4?style=for-the-badge&logo=php&logoColor=white)
 
-## About Laravel
+Tukipu es una plataforma **SaaS (Software as a Service)** de alto rendimiento para la gestión operativa de restaurantes. Utiliza una arquitectura de **Multitenancy por Subdominios**, permitiendo un aislamiento total de datos entre establecimientos.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+# 📊 Módulos Estratégicos del Sistema
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### 🏢 Arquitectura Multitenancy
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- **Aislamiento Total:** Cada restaurante posee sus propios usuarios, productos, ventas y configuraciones de forma independiente, garantizando que la data de un comercio nunca se mezcle con otro.
+- **Subdominios Dinámicos:** Implementación de acceso personalizado vía `{slug}.tukipu.cloud`, configurado dinámicamente en el `PanelProvider` de Filament.
+- **Tenant Separation:** Filtrado automático de datos a nivel de base de datos a través de la columna `tenant_id` para asegurar la privacidad y seguridad entre comercios.
 
-## Learning Laravel
+### 💰 Análisis de Rentabilidad (Reporte de Ganancias)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- **Cálculo de Utilidad:** Deducción automática del `costo_total` de insumos sobre el ingreso bruto de la venta para obtener la **Ganancia Neta** real.
+- **Filtros de Precisión:** Motor de búsqueda avanzado por rango de fechas e intervalos de tiempo exactos, con soporte nativo para formato de 12 horas (AM/PM).
+- **Indicadores Visuales:** Sistema de Badges dinámicos que resaltan márgenes de utilidad mayores al 30% en color verde para una rápida toma de decisiones.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+### 📦 Gestión de Inventario (Kardex)
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- **Control de Stock en Tiempo Real:** Actualización automática y precisa de existencias al completar ventas, procesar facturas de compra o realizar anulaciones de pedidos.
+- **Historial de Movimientos:** Registro pormenorizado (Kardex) de entradas, salidas, mermas y transferencias para auditorías detalladas de almacén.
 
-## Laravel Sponsors
+### 📑 Comprobantes y Facturación
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+- **Enums Centralizados:** Uso de clases PHP nativas (Enums) para estandarizar los tipos de documentos: **Factura, Boleta, Ticket y Nota de Venta**.
+- **Validación de Correlativos:** Lógica de negocio integrada que asegura que cada establecimiento mantenga su propia numeración y series de forma única y consecutiva.
 
-### Premium Partners
+### 🍱 Gestión de Comandas y Salones
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+- **Monitorización de Mesas:** Interfaz gráfica interactiva para visualizar el estado de las mesas en tiempo real (libres, ocupadas, con cuenta impresa o por pagar).
+- **Dashboard Estadístico:** Widgets con información crítica en tiempo real: platos más vendidos, ingresos del turno actual y monitoreo de pedidos pendientes en cocina.
 
-## Contributing
+---
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## 🛠️ Stack Tecnológico
 
-## Code of Conduct
+- **Backend:** Laravel 11 / PHP 8.2+
+- **Panel Administrativo:** Filament PHP v3
+- **Base de Datos:** MySQL / MariaDB
+- **Frontend:** Livewire, Alpine.js & Tailwind CSS
+- **Servidor:** VPS con Nginx y PHP-FPM
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+---
 
-## Security Vulnerabilities
+## 📋 Requisitos del Servidor (VPS)
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- **PHP 8.2+** con extensiones: `bcmath`, `ctype`, `fileinfo`, `openssl`, `pdo_mysql`, `tokenizer`, `xml`.
+- **Composer 2.x**.
+- **Nginx** configurado para **Wildcard Subdomains** (`*.tukipu.cloud`).
 
-## License
+---
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## ⚙️ Proceso de Despliegue (Actualización en VPS)
+
+Para garantizar un entorno de producción estable y libre de errores de permisos, se debe seguir este flujo estrictamente:
+
+### 1. Sincronización de Código
+
+```bash
+# Entrar al directorio y limpiar cambios locales accidentales
+cd /home/tukipu/htdocs/tukipu.cloud
+git checkout -- .
+git pull origin master
+```

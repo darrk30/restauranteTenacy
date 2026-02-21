@@ -28,7 +28,7 @@ class ClientResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-users';
     protected static ?string $navigationLabel = 'Clientes';
     protected static ?string $modelLabel = 'Cliente';
-        protected static ?string $navigationGroup = 'Caja';
+    protected static ?string $navigationGroup = 'Caja';
 
     protected static ?int $navigationSort = 10;
 
@@ -288,8 +288,25 @@ class ClientResource extends Resource
                     ->hidden(fn(Client $record) => $record->numero === '99999999'),
 
                 Tables\Actions\DeleteAction::make()
-                    // Ocultar si es el cliente genérico
-                    ->hidden(fn(Client $record) => $record->numero === '99999999'),
+                    ->hidden(fn(Client $record) => $record->numero === '99999999')
+                    ->before(function (Tables\Actions\DeleteAction $action, Client $record) {
+                        // Verificar si tiene ventas asociadas
+                        if ($record->sales()->exists()) {
+                            Notification::make()
+                                ->title('Cliente con ventas asociadas')
+                                ->body('No se puede eliminar físicamente.')
+                                ->warning()
+                                ->send();
+
+                            // 3. CANCELAR la eliminación física
+                            $action->halt();
+                        }
+                    }),
+                Tables\Actions\Action::make('facturas')
+                    ->label('Facturas')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->color('success')
+                    ->url(fn(Client $record): string => static::getUrl('facturas', ['record' => $record])),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -314,6 +331,8 @@ class ClientResource extends Resource
             'index' => Pages\ListClients::route('/'),
             'create' => Pages\CreateClient::route('/create'),
             'edit' => Pages\EditClient::route('/{record}/edit'),
+            'facturas' => Pages\ViewClientSales::route('/{record}/facturas'),
+            'factura-detalle' => Pages\ViewSaleDetail::route('/{record}/facturas/detalle'),
         ];
     }
 }

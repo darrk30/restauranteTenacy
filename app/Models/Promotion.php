@@ -4,10 +4,13 @@ namespace App\Models;
 
 use App\Enums\PromotionRuleType;
 use App\Enums\TipoProducto;
+use App\Observers\PromotionObserver;
 use App\Traits\ActualizarFile;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 
+#[ObservedBy([PromotionObserver::class])]
 class Promotion extends Model
 {
     use ActualizarFile;

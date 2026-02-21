@@ -4,13 +4,15 @@ namespace App\Models;
 
 use App\Enums\StatusProducto;
 use App\Enums\TipoProducto;
+use App\Observers\ProductObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
  * @property \Illuminate\Database\Eloquent\Collection $attributes
  */
-
+#[ObservedBy([ProductObserver::class])]
 class Product extends Model
 {
     protected $fillable = [
