@@ -2,6 +2,7 @@
 
 namespace App\Filament\Restaurants\Resources;
 
+use App\Enums\Comprobantes;
 use App\Enums\StatusProducto;
 use App\Enums\TipoProducto;
 use App\Filament\Clusters\Products\Resources\ProductResource;
@@ -54,13 +55,9 @@ class PurchaseResource extends Resource
                     ->schema([
                         Select::make('tipo_documento')
                             ->label('Tipo de comprobante')
-                            ->options([
-                                'FACTURA' => 'Factura',
-                                'BOLETA'  => 'Boleta',
-                                'TICKET'  => 'Ticket',
-                                'OTRO'    => 'Otro',
-                            ])
-                            ->required(),
+                            ->options(Comprobantes::class)
+                            ->required()
+                            ->native(false),
 
                         TextInput::make('serie')
                             ->label('Serie')
@@ -80,6 +77,7 @@ class PurchaseResource extends Resource
                             ->searchable()
                             ->preload()
                             ->required()
+                            ->native(false)
                             ->columnSpanFull(),
 
                         Textarea::make('observaciones')
@@ -101,6 +99,7 @@ class PurchaseResource extends Resource
                                 'pendiente' => 'Pendiente',
                                 'recibido' => 'Recibido',
                             ])
+                            ->native(false)
                             ->default('recibido')
                             ->required(),
 
@@ -110,6 +109,7 @@ class PurchaseResource extends Resource
                                 'pendiente' => 'Pendiente',
                                 'pagado' => 'Pagado',
                             ])
+                            ->native(false)
                             ->default('pendiente')
                             ->required(),
                     ])->columns(['default' => 1, 'md' => 3, 'xl' => 3,]),

@@ -11,6 +11,7 @@ use App\Models\Sale;
 use Filament\Actions\Action;
 use Filament\Forms\Components\CheckboxList; // Para el exportar
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
@@ -159,17 +160,21 @@ class ReporteVentasPorCanal extends Page implements HasForms, HasTable
                                 'xl' => 4, // Aumentamos columnas para que quepa todo
                             ])
                             ->schema([
-                                DatePicker::make('fecha_desde')
+                                DateTimePicker::make('fecha_desde')
                                     ->label('Desde')
                                     ->native(false)
-                                    ->displayFormat('d/m/Y H:i')
+                                    ->displayFormat('d/m/Y H:i A')
+                                    ->format('Y-m-d H:i')
+                                    ->seconds(false)
                                     ->default(now()->startOfMonth())
                                     ->live(),
 
-                                DatePicker::make('fecha_hasta')
+                                DateTimePicker::make('fecha_hasta')
                                     ->label('Hasta')
                                     ->native(false)
-                                    ->displayFormat('d/m/Y H:i')
+                                    ->displayFormat('d/m/Y H:i A')
+                                    ->format('Y-m-d H:i')
+                                    ->seconds(false)
                                     ->default(now()->endOfMonth())
                                     ->live(),
 
@@ -180,6 +185,7 @@ class ReporteVentasPorCanal extends Page implements HasForms, HasTable
                                         'delivery' => 'Delivery',
                                         'llevar' => 'Para Llevar',
                                     ])
+                                    ->native(false)
                                     ->placeholder('Todos los canales')
                                     ->live(),
 
@@ -189,6 +195,7 @@ class ReporteVentasPorCanal extends Page implements HasForms, HasTable
                                     ->options(PaymentMethod::pluck('name', 'id'))
                                     ->searchable()
                                     ->placeholder('Todos los métodos')
+                                    ->native(false)
                                     ->live(),
 
                                 Select::make('serie')
@@ -209,6 +216,7 @@ class ReporteVentasPorCanal extends Page implements HasForms, HasTable
                                         'completado' => 'Completado',
                                         'anulado' => 'Anulado'
                                     ])
+                                    ->native(false)
                                     ->default('completado')
                                     ->live(),
                             ]),
@@ -228,8 +236,8 @@ class ReporteVentasPorCanal extends Page implements HasForms, HasTable
 
                 // APLICACIÓN DE FILTROS DEL FORMULARIO SUPERIOR
                 if ($data = $this->data) {
-                    if (!empty($data['fecha_desde'])) $query->whereDate('fecha_emision', '>=', $data['fecha_desde']);
-                    if (!empty($data['fecha_hasta'])) $query->whereDate('fecha_emision', '<=', $data['fecha_hasta']);
+                    if (!empty($data['fecha_desde'])) $query->where('fecha_emision', '>=', $data['fecha_desde']);
+                    if (!empty($data['fecha_hasta'])) $query->where('fecha_emision', '<=', $data['fecha_hasta']);   
                     if (!empty($data['canal'])) $query->where('canal', $data['canal']);
                     if (!empty($data['serie'])) $query->where('serie', $data['serie']);
                     if (!empty($data['numero'])) $query->where('correlativo', 'like', "%{$data['numero']}%");

@@ -106,8 +106,23 @@ class ConceptoCajasResource extends Resource
             ->filters([
                 Tables\Filters\Filter::make('created_at')
                     ->form([
-                        DatetimePicker::make('fecha_desde')->label('Desde')->hourMode(12)->displayFormat('d/m/y h:i A')->seconds(false)->default($sesionAbierta ? $sesionAbierta->opened_at : now()->startOfDay()),
-                        DatetimePicker::make('fecha_hasta')->label('Hasta')->hourMode(12)->displayFormat('d/m/y h:i A')->seconds(false)->default(now()),
+                        DateTimePicker::make('fecha_desde')
+                        ->label('Desde')
+                        ->native(false)
+                        ->displayFormat('d/m/Y h:i A')
+                        ->format('Y-m-d H:i:s')
+                        ->seconds(false)
+                        ->default($sesionAbierta ? $sesionAbierta->opened_at : now()->startOfDay())
+                        ->live(),
+
+                    DateTimePicker::make('fecha_hasta')
+                        ->label('Hasta')
+                        ->native(false)
+                        ->displayFormat('d/m/Y h:i A')
+                        ->format('Y-m-d H:i:s')
+                        ->seconds(false)
+                        ->default(now())
+                        ->live(),
                     ])
                     ->query(function (Builder $query, array $data): Builder {
                         return $query
