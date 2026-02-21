@@ -23,6 +23,7 @@ return new class extends Migration
 
             //Mozo
             $table->foreignId('user_id')->constrained(); // Quién realizó la venta
+            $table->foreignId('user_actualiza_id')->nullable()->constrained('users')->nullOnDelete();
 
             //Delivery
             $table->foreignId('delivery_id')->nullable()->constrained('users'); // Delivery
@@ -42,6 +43,7 @@ return new class extends Migration
             $table->decimal('monto_igv', 12, 2);     // 18%
             $table->decimal('total', 12, 2);
             $table->string('cantida_items')->nullable();
+            $table->decimal('costo_total', 12, 2);
 
             // Estado
             $table->string('status')->default('conpletado');

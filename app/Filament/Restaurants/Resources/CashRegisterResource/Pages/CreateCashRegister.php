@@ -10,4 +10,5 @@ use Illuminate\Support\Facades\Auth;
 class CreateCashRegister extends CreateRecord
 {
     protected static string $resource = CashRegisterResource::class;
+    protected static ?string $title = 'Nueva Caja Registradora';
 }

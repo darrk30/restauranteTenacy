@@ -157,16 +157,7 @@
     </style>
 
     <div class="custom-filter-card">
-        <form wire:submit.prevent="aplicarFiltros" class="filters-row">
-            <div class="form-container">
-                {{ $this->form }}
-            </div>
-            <div class="btn-container">
-                <x-filament::button type="submit" size="md" class="w-full md:w-auto">
-                    Filtrar Resultados
-                </x-filament::button>
-            </div>
-        </form>
+        {{ $this->form }}
     </div>
 
     @forelse ($this->getRankings() as $ranking)
@@ -198,16 +189,23 @@
                             <tr>
                                 <td style="font-weight: bold; color: var(--text-muted);">{{ $index + 1 }}</td>
                                 <td style="text-align: left;">
-                                    <div style="font-weight: 600; line-height: 1.2;">{{ $item->product_name }}</div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        @if ($item->promotion_id)
+                                            {{-- Badge de Promoción --}}
+                                            <span
+                                                style="background-color: #fef2f2; color: #dc2626; font-size: 10px; padding: 2px 6px; border-radius: 4px; border: 1px solid #fee2e2; font-weight: bold; text-transform: uppercase;">
+                                                Promo
+                                            </span>
+                                        @endif
+                                        <div style="font-weight: 600; line-height: 1.2;">{{ $item->product_name }}</div>
+                                    </div>
 
                                     @if ($item->variant_id)
                                         <div
-                                            style="font-size: 0.75rem; color: #6b7280; margin-top: 2px; font-weight: 500;">
+                                            style="font-size: 0.75rem; color: #6b7280; margin-top: 2px; font-weight: 500; margin-left: {{ $item->promotion_id ? '50px' : '0' }};">
                                             @php
-                                                // Intentamos obtener la variante. Si ya usaste eager loading es instantáneo.
                                                 $variant = \App\Models\Variant::find($item->variant_id);
                                             @endphp
-
                                             <span class="text-primary-600 dark:text-primary-400">
                                                 {{ $variant ? $variant->fullName : 'Variante #' . $item->variant_id }}
                                             </span>

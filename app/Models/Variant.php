@@ -16,6 +16,8 @@ class Variant extends Model
         'internal_code',
         'stock_inicial',
         'costo',
+        'rendimiento',
+        'lote',
         'product_id',
         'status',
         'restaurant_id'

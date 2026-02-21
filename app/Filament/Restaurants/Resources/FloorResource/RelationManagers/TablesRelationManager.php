@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 class TablesRelationManager extends RelationManager
 {
     protected static string $relationship = 'Tables';
+    protected static ?string $title = 'Mesas';
 
     public function form(Form $form): Form
     {
@@ -45,10 +46,16 @@ class TablesRelationManager extends RelationManager
                 //
             ])
             ->headerActions([
-                Tables\Actions\CreateAction::make(),
+                Tables\Actions\CreateAction::make()->label('Nueva')
+                    ->icon('heroicon-o-plus')
+                    ->color('primary')
+                    ->modalHeading('Nueva Mesa') 
+                ->modalSubmitActionLabel('Crear Mesa'),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                Tables\Actions\EditAction::make()
+                    ->modalHeading('Editar Mesa')
+                    ->modalSubmitActionLabel('Actualizar Mesa'),
                 Tables\Actions\DeleteAction::make(),
             ])
             ->bulkActions([

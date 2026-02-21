@@ -18,7 +18,9 @@ return new class extends Migration
             $table->string('internal_code')->nullable();
             $table->decimal('costo')->nullable()->default(0);
             $table->string('status')->default('activo');
+            $table->decimal('rendimiento')->nullable()->default(0);
             $table->boolean('stock_inicial')->default(false);
+            $table->boolean('lote')->default(false);
             $table->decimal('stock_minimo')->default(0);
             $table->foreignId('product_id')->constrained()->onDelete('cascade');
             $table->foreignId('restaurant_id')->constrained()->onDelete('cascade');

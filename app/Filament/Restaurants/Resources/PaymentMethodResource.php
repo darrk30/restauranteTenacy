@@ -4,6 +4,7 @@ namespace App\Filament\Restaurants\Resources;
 
 use App\Filament\Restaurants\Resources\PaymentMethodResource\Pages;
 use App\Models\PaymentMethod;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -24,7 +25,9 @@ class PaymentMethodResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-credit-card';
     protected static ?string $navigationLabel = 'Métodos de Pago';
+    protected static ?string $pluralModelLabel = 'Métodos de Pago';
     protected static ?string $navigationGroup = 'Configuración';
+    protected static ?int $navigationSort = 100;
 
     public static function form(Form $form): Form
     {
@@ -60,14 +63,14 @@ class PaymentMethodResource extends Resource
                             ])
                             ->default('activo')
                             ->required(),
-                        // Imagen arriba ocupando todo el ancho
                         FileUpload::make('image_path')
                             ->label('Imagen')
                             ->image()
-                            ->directory('metodos_pago')
                             ->disk('public')
+                            ->directory('tenants/' . Filament::getTenant()->slug . '/metodos_pago')
+                            ->visibility('public')
                             ->preserveFilenames()
-                            ->previewable(true),
+                            ->columnSpanFull(),
 
                     ])
                     ->columns(2),
@@ -82,7 +85,7 @@ class PaymentMethodResource extends Resource
                 ImageColumn::make('image_path')
                     ->label('Logo')
                     ->circular(),
-                    
+
                 TextColumn::make('name')
                     ->label('Nombre')
                     ->searchable()

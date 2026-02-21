@@ -9,15 +9,16 @@ use Filament\Actions;
 class ViewSale extends ViewRecord
 {
     protected static string $resource = SaleResource::class;
+    protected static ?string $title = 'Detalle de Venta';
 
     protected function getHeaderActions(): array
     {
         return [
-            // Podemos agregar un botón de imprimir aquí en el futuro
             Actions\Action::make('print')
-                ->label('Reimprimir')
+                ->label('Reimprimir Ticket')
                 ->icon('heroicon-o-printer')
-                ->action(fn() => $this->halt()),
+                ->color('info')
+                ->url(fn($record) => route('sale.ticket.print', $record), shouldOpenInNewTab: true),
         ];
     }
 }

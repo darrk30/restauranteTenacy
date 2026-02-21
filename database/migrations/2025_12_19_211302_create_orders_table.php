@@ -27,6 +27,7 @@ return new class extends Migration
             $table->timestamp('fecha_pedido')->useCurrent();
             $table->foreignId('table_id')->nullable()->constrained('tables')->nullOnDelete();
             $table->foreignId('user_id')->constrained()->restrictOnDelete();
+            $table->foreignId('user_actualiza_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
             $table->unique(['restaurant_id', 'code']);
             $table->timestamps();

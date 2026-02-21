@@ -9,10 +9,12 @@ use App\Models\Product;
 use App\Models\Unit;
 use App\Models\Variant;
 use App\Models\WarehouseStock;
+use Filament\Facades\Filament;
 use Filament\Resources\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Repeater;
@@ -103,7 +105,10 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                     ->visible(fn() => $this->record->receta)
                     ->modalHeading(fn($record) => "Receta: " . $this->record->name . ($record->values->isNotEmpty() ? ' - ' . $record->full_name : ''))
                     ->fillForm(fn($record) => [
-                        'recetas' => $record->recetas->map(function ($receta) {
+                        // 🟢 Cargamos los nuevos campos
+                        'lote'        => $record->lote ?? false,
+                        'rendimiento' => $record->rendimiento ?? 1,
+                        'recetas'     => $record->recetas->map(function ($receta) {
                             return [
                                 'insumo_id' => $receta->insumo_id,
                                 'unit_id'   => $receta->unit_id,
@@ -112,6 +117,26 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                         })->toArray()
                     ])
                     ->form([
+                        // 🟢 NUEVOS CONTROLES PARA LOTE / RENDIMIENTO
+                        Forms\Components\Grid::make(2)->schema([
+                            Toggle::make('lote')
+                                ->label('¿Es receta por lote/olla?')
+                                ->helperText('Actívalo si vas a ingresar los ingredientes de una olla completa.')
+                                ->reactive() // Hace que el formulario reaccione al clic
+                                ->onColor('success')
+                                ->offColor('gray'),
+
+                            TextInput::make('rendimiento')
+                                ->label('¿Para cuántos platos rinde?')
+                                ->numeric()
+                                ->default(1)
+                                ->minValue(0.01)
+                                ->helperText('Ej: Si la olla rinde 10 platos, ingresa 10.')
+                                // Solo es visible y obligatorio si "lote" está activado
+                                ->visible(fn(Get $get) => $get('lote') === true)
+                                ->required(fn(Get $get) => $get('lote') === true),
+                        ])->columnSpanFull(),
+
                         TableRepeater::make('recetas')
                             ->label('Ingredientes')
                             ->addActionLabel('Agregar ingrediente')
@@ -130,7 +155,6 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                                             ->where('status', 'activo')
                                             ->get()
                                             ->mapWithKeys(function ($variant) {
-                                                // Mostramos Nombre + Unidad Base para guiar al usuario
                                                 return [$variant->id => "{$variant->product->name} ({$variant->product->unit->name}) - S/ {$variant->costo}"];
                                             });
                                     })
@@ -154,7 +178,6 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
 
                                         if (!$unidadBase) return [];
 
-                                        // Traer todas las unidades de la misma categoría (Masa con Masa, Volumen con Volumen)
                                         if ($unidadBase->unit_category_id) {
                                             return \App\Models\Unit::where('unit_category_id', $unidadBase->unit_category_id)
                                                 ->pluck('name', 'id');
@@ -174,21 +197,34 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                             ])
                     ])
                     ->action(function (Variant $record, array $data) {
-                        // 1. Borrar receta anterior
+                        // 1. Configurar Lote y Rendimiento
+                        $isLote = $data['lote'] ?? false;
+                        $rendimiento = (float) ($data['rendimiento'] ?? 1);
+
+                        // Protección: Si no es lote, el rendimiento se fuerza a 1
+                        if (!$isLote || $rendimiento <= 0) {
+                            $rendimiento = 1;
+                        }
+
+                        // Actualizar la Variante con estos nuevos datos
+                        $record->update([
+                            'lote' => $isLote,
+                            'rendimiento' => $rendimiento
+                        ]);
+
+                        // 2. Borrar receta anterior
                         $record->recetas()->delete();
 
                         if (empty($data['recetas'])) {
-                            // Si borró todo, el costo del plato vuelve a ser manual o 0 (opcional)
-                            // $record->update(['costo' => 0]); 
                             Notification::make()->title('Receta eliminada')->success()->send();
                             return;
                         }
 
-                        // 2. Guardar nueva receta
+                        // 3. Guardar nueva receta
                         $record->recetas()->createMany($data['recetas']);
 
-                        // 🟢 3. CÁLCULO DE COSTO AUTOMÁTICO
-                        $nuevoCostoPlato = 0;
+                        // 🟢 4. CÁLCULO DE COSTO MATEMÁTICO
+                        $costoTotalReceta = 0; // Costo de todo lo que ingresó el usuario
 
                         foreach ($data['recetas'] as $item) {
                             $insumo = \App\Models\Variant::with('product.unit')->find($item['insumo_id']);
@@ -197,34 +233,33 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
 
                             if ($insumo && $unidadReceta && $insumo->product->unit) {
                                 $unidadStock = $insumo->product->unit;
-                                $costoInsumo = (float) $insumo->costo; // Ej: 10.00 (el Kg)
+                                $costoInsumo = (float) $insumo->costo;
 
-                                // Factores de conversión respecto a la unidad base (ej: Gramo = 1)
-                                // Si Unidad Stock es KG, factor_stock = 1000
-                                // Si Unidad Receta es Gramo, factor_receta = 1
                                 $factorStock = (float) ($unidadStock->quantity ?? 1);
                                 $factorReceta = (float) ($unidadReceta->quantity ?? 1);
 
-                                // Evitar división por cero
                                 if ($factorStock > 0) {
-                                    // Costo por unidad base (ej: costo por 1 gramo)
                                     $costoPorUnidadBase = $costoInsumo / $factorStock;
-
-                                    // Cantidad en unidades base (ej: 200 gramos * 1 = 200)
                                     $cantidadTotalBase = $cantidadReceta * $factorReceta;
-
-                                    // Sumar al costo total del plato
-                                    $nuevoCostoPlato += ($costoPorUnidadBase * $cantidadTotalBase);
+                                    $costoTotalReceta += ($costoPorUnidadBase * $cantidadTotalBase);
                                 }
                             }
                         }
 
-                        // 4. Actualizar el costo de la Variante (Plato)
-                        $record->update(['costo' => round($nuevoCostoPlato, 2)]); // Redondeo a 2 decimales
+                        // 🟢 5. APLICAR LÓGICA DE LOTE
+                        // Si es lote, el costo del plato es Costo Total / Rendimiento. Si no, es el Costo Total.
+                        $nuevoCostoPlato = $isLote ? ($costoTotalReceta / $rendimiento) : $costoTotalReceta;
+
+                        // Actualizar el costo de la Variante
+                        $record->update(['costo' => round($nuevoCostoPlato, 2)]);
 
                         Notification::make()
-                            ->title('Receta actualizada')
-                            ->body("El costo del plato se actualizó a: S/ " . number_format($nuevoCostoPlato, 2))
+                            ->title('Receta y Costo actualizados')
+                            ->body(
+                                $isLote
+                                    ? "Costo total olla: S/ " . number_format($costoTotalReceta, 2) . "\nRinde: {$rendimiento} platos.\nCosto Unitario: S/ " . number_format($nuevoCostoPlato, 2)
+                                    : "Costo del plato actualizado a: S/ " . number_format($nuevoCostoPlato, 2)
+                            )
                             ->success()
                             ->send();
                     }),
@@ -244,15 +279,14 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                         'status' => $record->status,
                     ])
                     ->form([
-                        Forms\Components\FileUpload::make('image_path')
-                            ->label('Imagen')
+                        FileUpload::make('image_path')
+                            ->label('Imagen de la presentación')
                             ->image()
-                            ->imageEditor()
-                            ->directory('products/variants')
                             ->disk('public')
+                            ->directory('tenants/' . Filament::getTenant()->slug . '/products/variants')
+                            ->visibility('public')
                             ->preserveFilenames()
                             ->columnSpanFull(),
-
                         Forms\Components\Grid::make(2)
                             ->schema([
                                 Forms\Components\TextInput::make('codigo_barras')

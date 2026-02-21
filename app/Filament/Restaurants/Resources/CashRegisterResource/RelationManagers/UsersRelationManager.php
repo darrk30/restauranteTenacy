@@ -11,12 +11,14 @@ use Filament\Tables\Table;
 class UsersRelationManager extends RelationManager
 {
     protected static string $relationship = 'users';
+    protected static ?string $title = 'Usuarios asignados';
 
     public function form(Form $form): Form
     {
         return $form
             ->schema([
                 Forms\Components\TextInput::make('name')
+                    ->label('Nombre')
                     ->required()
                     ->maxLength(255),
             ]);

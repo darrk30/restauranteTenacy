@@ -5,6 +5,8 @@ namespace App\Filament\Restaurants\Resources;
 use App\Enums\DocumentSeriesType; // Importamos tu Enum
 use App\Filament\Restaurants\Resources\DocumentSerieResource\Pages;
 use App\Models\DocumentSerie;
+use App\Models\Sale;
+use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -14,8 +16,10 @@ use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
+use Illuminate\Validation\Rules\Unique;
 
 class DocumentSerieResource extends Resource
 {
@@ -25,6 +29,7 @@ class DocumentSerieResource extends Resource
     protected static ?string $navigationLabel = 'Series de Documentos';
     protected static ?string $modelLabel = 'Serie';
     protected static ?string $navigationGroup = 'Configuración';
+    protected static ?int $navigationSort = 115;
 
     public static function form(Form $form): Form
     {
@@ -44,7 +49,18 @@ class DocumentSerieResource extends Resource
                             ->placeholder('Ej: F001, B001')
                             ->required()
                             ->maxLength(4)
-                            ->extraInputAttributes(['style' => 'text-transform: uppercase']),
+                            ->extraInputAttributes(['style' => 'text-transform: uppercase'])
+                            ->unique(
+                                table: 'document_series',
+                                column: 'serie',
+                                ignorable: fn($record) => $record,
+                                modifyRuleUsing: function (Unique $rule) {
+                                    return $rule->where('restaurant_id', Filament::getTenant()->id);
+                                }
+                            )
+                            ->validationMessages([
+                                'unique' => 'Esta serie ya ha sido registrada para este restaurante.',
+                            ]),
 
                         TextInput::make('current_number')
                             ->label('Correlativo Actual')
@@ -101,8 +117,51 @@ class DocumentSerieResource extends Resource
                     ->options(DocumentSeriesType::class), // 🔥 Filtro automático con Enum
             ])
             ->actions([
-                // Tables\Actions\EditAction::make(),
-                // Tables\Actions\DeleteAction::make(),
+                Tables\Actions\DeleteAction::make()
+                    ->before(function (Tables\Actions\DeleteAction $action, DocumentSerie $record) {
+                        // 🟢 Validamos si existen ventas con esta serie para este restaurante
+                        $tieneVentas = Sale::where('serie', $record->serie)
+                            ->where('restaurant_id', Filament::getTenant()->id)
+                            ->exists();
+
+                        if ($tieneVentas) {
+                            // Notificación de advertencia personalizada
+                            Notification::make()
+                                ->warning()
+                                ->title('Acción no permitida')
+                                ->body("La serie **{$record->serie}** tiene ventas asociadas y no puede eliminarse.")
+                                ->persistent()
+                                ->actions([
+                                    // 🟢 Botón de desactivar dentro de la notificación
+                                    \Filament\Notifications\Actions\Action::make('desactivar')
+                                        ->label('Desactivar Serie')
+                                        ->color('warning')
+                                        ->button()
+                                        ->close()
+                                        ->action(function () use ($record) {
+                                            $record->update(['is_active' => false]);
+
+                                            Notification::make()
+                                                ->success()
+                                                ->title('Serie desactivada')
+                                                ->send();
+                                        }),
+                                ])
+                                ->send();
+
+                            // 🛑 Detiene la ejecución del borrado
+                            $action->cancel();
+                        }
+                    }),
+
+                // Opcional: Agregar una acción de desactivar directa en la fila
+                Tables\Actions\Action::make('desactivar_fila')
+                    ->label('Desactivar')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('warning')
+                    ->hidden(fn(DocumentSerie $record) => !$record->is_active)
+                    ->requiresConfirmation()
+                    ->action(fn(DocumentSerie $record) => $record->update(['is_active' => false])),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -115,8 +174,8 @@ class DocumentSerieResource extends Resource
     {
         return [
             'index' => Pages\ListDocumentSeries::route('/'),
-            'create' => Pages\CreateDocumentSerie::route('/create'),
-            'edit' => Pages\EditDocumentSerie::route('/{record}/edit'),
+            // 'create' => Pages\CreateDocumentSerie::route('/create'),
+            // 'edit' => Pages\EditDocumentSerie::route('/{record}/edit'),
         ];
     }
 }

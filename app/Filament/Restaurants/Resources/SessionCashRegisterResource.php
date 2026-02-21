@@ -27,9 +27,10 @@ class SessionCashRegisterResource extends Resource
     protected static ?string $model = SessionCashRegister::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-currency-dollar';
-
+    protected static ?string $navigationGroup = 'Caja';
     protected static ?string $navigationLabel = 'Apertura y Cierre';
     protected static ?string $pluralModelLabel = 'Apertura y Cierre';
+    protected static ?int $navigationSort = 2;
 
     public static function form(Form $form): Form
     {
@@ -94,8 +95,9 @@ class SessionCashRegisterResource extends Resource
                                             $datosGenerados = \App\Models\PaymentMethod::where('status', true)->get()->map(function ($metodo) use ($record) {
                                                 $total = $record->cashRegisterMovements()->where('payment_method_id', $metodo->id)->where('tipo', 'Ingreso')->where('status', 'aprobado')->sum('monto') -
                                                     $record->cashRegisterMovements()->where('payment_method_id', $metodo->id)->where('tipo', 'Salida')->where('status', 'aprobado')->sum('monto');
+
                                                 return [
-                                                    'metodo_pago_id' => $metodo->id,
+                                                    'payment_method_id' => $metodo->id, // ✅ Nombre correcto según tu BD
                                                     'nombre_metodo_visual' => $metodo->name,
                                                     'monto_sistema' => $total,
                                                     'monto_cajero' => 0,
@@ -114,7 +116,7 @@ class SessionCashRegisterResource extends Resource
                                     ->addable(false)->deletable(false)->reorderable(false)
                                     ->columns(['default' => 2, 'sm' => 2, 'lg' => 4])
                                     ->schema([
-                                        Hidden::make('metodo_pago_id'),
+                                        Hidden::make('payment_method_id'),
                                         TextInput::make('nombre_metodo_visual')->label('MÉTODO')->disabled()->dehydrated(false),
                                         TextInput::make('monto_sistema')->label('SISTEMA')->prefix('S/')->numeric()->disabled()->dehydrated(),
                                         TextInput::make('monto_cajero')->label('CAJERO (REAL)')->prefix('S/')->numeric()->default(0)->required()

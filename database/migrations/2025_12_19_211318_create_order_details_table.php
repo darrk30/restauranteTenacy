@@ -27,6 +27,8 @@ return new class extends Migration
             $table->timestamp('fecha_envio_cocina')->nullable();
             $table->timestamp('fecha_listo')->nullable();
             $table->foreignId('order_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained()->restrictOnDelete();
+            $table->foreignId('user_actualiza_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
             $table->timestamps();
         });

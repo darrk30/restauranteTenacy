@@ -7,78 +7,98 @@
         $fechaHasta = $filters['fecha']['hasta'] ?? null;
     @endphp
 
-    <div style="font-family: sans-serif; color: #374151;">
+    <div style="font-family: 'Inter', system-ui, sans-serif; color: #1f2937;">
         @if ($prodId)
-            {{-- Contenedor Principal de Filtros --}}
-            <div style="background-color: white; border: 1px solid #e5e7eb; border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                
-                {{-- Título --}}
-                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem; border-bottom: 1px solid #f3f4f6; padding-bottom: 0.75rem;">
-                    <div style="color: #0284c7;">
-                        <x-heroicon-o-funnel style="width: 1.5rem; height: 1.5rem;" />
+            {{-- Contenedor Principal --}}
+            <div
+                style="background: #ffffff; border: 1px solid #f3f4f6; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+
+                {{-- Encabezado Sutil --}}
+                <div
+                    style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid #f9fafb; padding-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="background: #e0f2fe; padding: 6px; border-radius: 8px;">
+                            <x-heroicon-o-funnel style="width: 18px; height: 18px; color: #0284c7;" />
+                        </div>
+                        <h3
+                            style="font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.025em; color: #6b7280; margin: 0;">
+                            Resumen de Filtros</h3>
                     </div>
-                    <h3 style="font-size: 1.125rem; font-weight: 700; margin: 0; color: #111827;">Filtros Activos del Kardex</h3>
+                    <span
+                        style="font-size: 11px; background: #f3f4f6; color: #6b7280; padding: 4px 10px; border-radius: 20px; font-weight: 500;">Kardex
+                        Activo</span>
                 </div>
 
-                {{-- Grid de Filtros (Simulado con Flexbox) --}}
-                <div style="display: flex; flex-wrap: wrap; gap: 1.5rem;">
-                    
-                    {{-- Bloque Producto --}}
-                    <div style="min-width: 200px; flex: 1;">
-                        <p style="font-size: 0.75rem; text-transform: uppercase; color: #6b7280; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Producto Seleccionado</p>
-                        <div style="display: flex; align-items: center; gap: 0.5rem; background-color: #f0f9ff; border: 1px solid #e0f2fe; padding: 0.5rem 0.75rem; border-radius: 0.5rem;">
-                            <x-heroicon-s-cube style="width: 1rem; height: 1rem; color: #0284c7;" />
-                            <span style="font-size: 0.875rem; font-weight: 600; color: #0369a1;">
-                                {{ \App\Models\Product::find($prodId)?->name }}
+                {{-- Grid de Datos --}}
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+
+                    {{-- Producto --}}
+                    <div style="padding: 12px; border-radius: 10px; background: #fcfcfc; border: 1px solid #f3f4f6;">
+                        <span
+                            style="display: block; font-size: 11px; color: #9ca3af; font-weight: 600; margin-bottom: 6px;">PRODUCTO</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <x-heroicon-s-cube style="width: 16px; height: 16px; color: #0284c7;" />
+                            <span style="font-size: 14px; font-weight: 600; color: #111827;">
+                                {{ \App\Models\Product::find($prodId)?->name ?? 'No encontrado' }}
                             </span>
                         </div>
                     </div>
 
-                    {{-- Bloque Variante --}}
-                    @if($varId)
-                    <div style="min-width: 200px; flex: 1;">
-                        <p style="font-size: 0.75rem; text-transform: uppercase; color: #6b7280; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Variante / Almacén</p>
-                        <div style="display: flex; align-items: center; gap: 0.5rem; background-color: #fffbeb; border: 1px solid #fef3c7; padding: 0.5rem 0.75rem; border-radius: 0.5rem;">
-                            <x-heroicon-s-tag style="width: 1rem; height: 1rem; color: #d97706;" />
-                            <span style="font-size: 0.875rem; font-weight: 600; color: #92400e;">
-                                {{ \App\Models\Variant::find($varId)?->full_name }}
-                            </span>
+                    {{-- Variante --}}
+                    @if ($varId)
+                        <div
+                            style="padding: 12px; border-radius: 10px; background: #fcfcfc; border: 1px solid #f3f4f6;">
+                            <span
+                                style="display: block; font-size: 11px; color: #9ca3af; font-weight: 600; margin-bottom: 6px;">VARIANTE
+                                / ALMACÉN</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <x-heroicon-s-tag style="width: 16px; height: 16px; color: #d97706;" />
+                                <span style="font-size: 14px; font-weight: 600; color: #111827;">
+                                    {{ \App\Models\Variant::find($varId)?->full_name ?? 'Estándar' }}
+                                </span>
+                            </div>
                         </div>
-                    </div>
                     @endif
 
-                    {{-- Bloque Periodo --}}
-                    @if($fechaDesde)
-                    <div style="min-width: 200px; flex: 1;">
-                        <p style="font-size: 0.75rem; text-transform: uppercase; color: #6b7280; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Periodo de Consulta</p>
-                        <div style="display: flex; align-items: center; gap: 0.5rem; background-color: #f9fafb; border: 1px solid #f3f4f6; padding: 0.5rem 0.75rem; border-radius: 0.5rem;">
-                            <x-heroicon-o-calendar style="width: 1rem; height: 1rem; color: #4b5563;" />
-                            <span style="font-size: 0.875rem; font-weight: 600;">
-                                {{ $fechaDesde }} 
-                                <span style="color: #9ca3af; margin: 0 0.25rem;">→</span> 
-                                {{ $fechaHasta ?? 'Hoy' }}
+                    {{-- Fecha --}}
+                    <div style="padding: 12px; border-radius: 10px; background: #fcfcfc; border: 1px solid #f3f4f6;">
+                        <span
+                            style="display: block; font-size: 11px; color: #9ca3af; font-weight: 600; margin-bottom: 6px;">RANGO
+                            DE FECHAS</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <x-heroicon-o-calendar style="width: 16px; height: 16px; color: #4b5563;" />
+                            <span style="font-size: 13px; font-weight: 500; color: #111827;">
+                                @if ($fechaDesde)
+                                    {{ \Carbon\Carbon::parse($fechaDesde)->format('d/m/Y') }}
+                                    <span style="color: #d1d5db; margin: 0 4px;">—</span>
+                                    {{ $fechaHasta ? \Carbon\Carbon::parse($fechaHasta)->format('d/m/Y') : 'Hoy' }}
+                                @else
+                                    Todo el historial
+                                @endif
                             </span>
                         </div>
                     </div>
-                    @endif
 
                 </div>
             </div>
         @else
-            {{-- Estado Vacío (Dashed Box) --}}
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem; border: 2px dashed #d1d5db; border-radius: 1rem; background-color: #f9fafb; text-align: center; margin-bottom: 1.5rem;">
-                <div style="color: #9ca3af; margin-bottom: 1rem;">
-                    <x-heroicon-o-magnifying-glass-circle style="width: 4rem; height: 4rem;" />
+            {{-- Estado Vacío Elegante --}}
+            <div
+                style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; border: 1px dashed #e5e7eb; border-radius: 16px; background-color: #fafafa; text-align: center; margin-bottom: 24px;">
+                <div
+                    style="background: white; padding: 16px; border-radius: 50%; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); margin-bottom: 20px;">
+                    <x-heroicon-o-magnifying-glass style="width: 32px; height: 32px; color: #9ca3af;" />
                 </div>
-                <h3 style="font-size: 1.25rem; font-weight: 700; color: #4b5563; margin-bottom: 0.5rem;">Consulta de Kardex Valorizado</h3>
-                <p style="color: #6b7280; max-width: 320px; font-size: 0.875rem; line-height: 1.25rem; margin: 0;">
-                    Por favor, utiliza el botón de <b>filtros</b> arriba a la derecha para seleccionar un producto y visualizar sus movimientos de stock.
+                <h3 style="font-size: 16px; font-weight: 600; color: #374151; margin: 0 0 8px 0;">Esperando selección de
+                    producto</h3>
+                <p style="color: #9ca3af; max-width: 280px; font-size: 13px; line-height: 1.5; margin: 0;">
+                    Usa los <b>filtros de la tabla</b> para buscar el producto que deseas analizar.
                 </p>
             </div>
         @endif
 
-        {{-- Tabla de Filament (Esta se renderiza con los estilos propios de Filament) --}}
-        <div class="filament-main-table">
+        {{-- Tabla --}}
+        <div style="margin-top: 10px;">
             {{ $this->table }}
         </div>
     </div>
