@@ -1015,3 +1015,54 @@ select.modal-custom-input {
 .free-bg { background-color: #22c55e; } /* Verde */
 .occ-bg { background-color: #ef4444; }  /* Rojo */
 .pay-bg { background-color: #eab308; }  /* Amarillo */
+
+/* Aseguramos que el botón permita elementos posicionados fuera de su centro */
+.channel-btn {
+    position: relative;
+    overflow: visible; /* Importante para que el badge no se corte */
+    padding: 10px 20px;
+    cursor: pointer;
+    /* ... tus otros estilos de botón ... */
+}
+
+/* Estilo base del Badge */
+.badge-count {
+    position: absolute;
+    top: -8px;          /* Lo sube un poco sobre el borde superior */
+    right: -8px;        /* Lo saca un poco hacia la derecha */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;        /* Tamaño fijo circular */
+    height: 22px;
+    border-radius: 50%; /* Hace que sea un círculo */
+    font-size: 11px;
+    font-weight: bold;
+    color: white;
+    border: 2px solid #fff; /* Un borde blanco para que resalte del botón */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    z-index: 10;
+}
+
+/* Colores personalizados por canal */
+.badge-salon {
+    background-color: #2563eb; /* Azul */
+}
+
+.badge-llevar {
+    background-color: #f59e0b; /* Ámbar/Naranja */
+}
+
+.badge-delivery {
+    background-color: #dc2626; /* Rojo */
+}
+
+/* Animación opcional cuando cambia el número */
+.badge-count {
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popIn {
+    0% { transform: scale(0); }
+    100% { transform: scale(1); }
+}

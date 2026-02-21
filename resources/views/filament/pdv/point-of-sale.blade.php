@@ -19,13 +19,33 @@
     }" class="w-full h-full" @scroll.window="menuOpen = false">
 
         {{-- 1. BOTONES DE CANALES --}}
+        @php
+            $counts = $this->getChannelCounts();
+        @endphp
+
         <div class="main-channels">
-            <button @click="canalActivo = 'salon'" :class="canalActivo === 'salon' ? 'active' : ''"
-                class="channel-btn">🏢 SALÓN</button>
+            <button @click="canalActivo = 'salon'" :class="canalActivo === 'salon' ? 'active' : ''" class="channel-btn">
+                🏢 SALÓN
+                @if ($counts['salon'] > 0)
+                    <span class="badge-count badge-salon">{{ $counts['salon'] }}</span>
+                @endif
+            </button>
+
             <button @click="canalActivo = 'llevar'" :class="canalActivo === 'llevar' ? 'active' : ''"
-                class="channel-btn">🛍️ LLEVAR</button>
+                class="channel-btn">
+                🛍️ LLEVAR
+                @if ($counts['llevar'] > 0)
+                    <span class="badge-count badge-llevar">{{ $counts['llevar'] }}</span>
+                @endif
+            </button>
+
             <button @click="canalActivo = 'delivery'" :class="canalActivo === 'delivery' ? 'active' : ''"
-                class="channel-btn">🛵 DELIVERY</button>
+                class="channel-btn">
+                🛵 DELIVERY
+                @if ($counts['delivery'] > 0)
+                    <span class="badge-count badge-delivery">{{ $counts['delivery'] }}</span>
+                @endif
+            </button>
         </div>
 
         {{-- 2. SECCIÓN SALÓN --}}
