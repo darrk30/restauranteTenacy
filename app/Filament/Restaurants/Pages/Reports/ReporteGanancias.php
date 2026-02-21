@@ -11,6 +11,7 @@ use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Tables\Table;
@@ -63,8 +64,23 @@ class ReporteGanancias extends Page implements HasForms, HasTable
                 Section::make('Filtros de Búsqueda')
                     ->schema([
                         Grid::make(4)->schema([
-                            DatePicker::make('fecha_desde')->label('Desde')->live(),
-                            DatePicker::make('fecha_hasta')->label('Hasta')->live(),
+                            DateTimePicker::make('fecha_desde')
+                                ->label('Desde')
+                                ->native(false)
+                                ->displayFormat('d/m/Y h:i A') // 🟢 'h' minúscula para 12h y 'A' para AM/PM
+                                ->format('Y-m-d H:i:s')        // 🟢 Mantenemos 'H' (24h) para que la base de datos no se confunda
+                                ->seconds(false)
+                                ->default(now()->startOfMonth())
+                                ->live(),
+
+                            DateTimePicker::make('fecha_hasta')
+                                ->label('Hasta')
+                                ->native(false)
+                                ->displayFormat('d/m/Y h:i A') // 🟢 El usuario verá: 21/02/2026 11:30 AM
+                                ->format('Y-m-d H:i:s')
+                                ->seconds(false)
+                                ->default(now()->endOfMonth())
+                                ->live(),
                             Select::make('tipo_comprobante')
                                 ->label('Comprobante')
                                 // 🟢 Filtramos el Enum para mostrar solo lo que quieres
@@ -94,14 +110,16 @@ class ReporteGanancias extends Page implements HasForms, HasTable
                     ->selectRaw('(total - costo_total) as ganancia_neta');
 
                 // 2. 🟢 APLICAMOS LOS FILTROS MANUALMENTE 🟢
-                $filtros = $this->data; // Obtenemos el array de filtros del formulario de la página
+                $filtros = $this->data;
 
                 if (!empty($filtros['fecha_desde'])) {
-                    $query->whereDate('fecha_emision', '>=', $filtros['fecha_desde']);
+                    // 🟢 Usamos where en lugar de whereDate para incluir la hora
+                    $query->where('fecha_emision', '>=', $filtros['fecha_desde']);
                 }
 
                 if (!empty($filtros['fecha_hasta'])) {
-                    $query->whereDate('fecha_emision', '<=', $filtros['fecha_hasta']);
+                    // 🟢 Usamos where en lugar de whereDate para incluir la hora
+                    $query->where('fecha_emision', '<=', $filtros['fecha_hasta']);
                 }
 
                 if (!empty($filtros['tipo_comprobante'])) {

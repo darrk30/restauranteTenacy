@@ -40,8 +40,8 @@ class ReporteIngresosEgresos extends Page implements HasForms, HasTable
     public function mount(): void
     {
         $this->form->fill([
-            'fecha_desde' => now()->startOfDay()->toDateTimeString(),
-            'fecha_hasta' => now()->endOfDay()->toDateTimeString(),
+            'fecha_desde' => now()->startOfMonth()->format('Y-m-d H:i:s'),
+            'fecha_hasta' => now()->endOfDay()->format('Y-m-d H:i:s'),
         ]);
     }
 
@@ -133,8 +133,23 @@ class ReporteIngresosEgresos extends Page implements HasForms, HasTable
         return $form->schema([
             Section::make('Filtros de Búsqueda')->schema([
                 Grid::make(5)->schema([ // Aumentado a 5 para que quepa el nuevo filtro
-                    DateTimePicker::make('fecha_desde')->label('Desde')->live(),
-                    DateTimePicker::make('fecha_hasta')->label('Hasta')->live(),
+                    DateTimePicker::make('fecha_desde')
+                        ->label('Desde')
+                        ->native(false)
+                        ->displayFormat('d/m/Y h:i A')
+                        ->format('Y-m-d H:i:s')
+                        ->seconds(false)
+                        ->default(now()->startOfMonth())
+                        ->live(),
+
+                    DateTimePicker::make('fecha_hasta')
+                        ->label('Hasta')
+                        ->native(false)
+                        ->displayFormat('d/m/Y h:i A')
+                        ->format('Y-m-d H:i:s')
+                        ->seconds(false)
+                        ->default(now()->endOfDay())
+                        ->live(),
                     Select::make('cash_register_id') // 🟢 Nuevo Filtro de Caja
                         ->label('Caja')
                         ->options(CashRegister::pluck('name', 'id'))
