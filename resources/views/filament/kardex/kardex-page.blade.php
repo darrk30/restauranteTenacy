@@ -84,15 +84,20 @@
         @else
             {{-- Estado Vacío Elegante --}}
             <div
-                style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; border: 1px dashed #e5e7eb; border-radius: 16px; background-color: #fafafa; text-align: center; margin-bottom: 24px;">
-                <div
-                    style="background: white; padding: 16px; border-radius: 50%; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); margin-bottom: 20px;">
-                    <x-heroicon-o-magnifying-glass style="width: 32px; height: 32px; color: #9ca3af;" />
+                style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; border: 1px solid #f3f4f6; border-radius: 20px; background-color: #ffffff; text-align: center; margin-bottom: 24px;">
+
+                {{-- Icono más minimalista --}}
+                <div style="margin-bottom: 16px; opacity: 0.4;">
+                    <x-heroicon-o-magnifying-glass style="width: 28px; height: 28px; color: #6b7280;" />
                 </div>
-                <h3 style="font-size: 16px; font-weight: 600; color: #374151; margin: 0 0 8px 0;">Esperando selección de
-                    producto</h3>
-                <p style="color: #9ca3af; max-width: 280px; font-size: 13px; line-height: 1.5; margin: 0;">
-                    Usa los <b>filtros de la tabla</b> para buscar el producto que deseas analizar.
+
+                {{-- Texto con tipografía más ligera --}}
+                <h3 style="font-size: 15px; font-weight: 500; color: #4b5563; margin: 0 0 6px 0;">
+                    Selecciona un producto
+                </h3>
+
+                <p style="color: #9ca3af; max-width: 240px; font-size: 12px; line-height: 1.4; margin: 0;">
+                    Usa los filtros de búsqueda para visualizar el historial del Kardex.
                 </p>
             </div>
         @endif

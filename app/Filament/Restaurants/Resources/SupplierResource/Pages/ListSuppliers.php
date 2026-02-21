@@ -92,7 +92,7 @@ class ListSuppliers extends ListRecords
                 ->icon('heroicon-m-chevron-down')
                 ->iconPosition('after')
                 ->button()
-                ->color('gray'),
+                ->color('info'),
 
             Actions\CreateAction::make()->label('Nuevo')
                 ->icon('heroicon-o-plus')

@@ -12,6 +12,7 @@ use Filament\Forms\Set;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Columns\ColumnGroup;
 use Filament\Tables\Columns\TextColumn;
+use Illuminate\Database\Eloquent\Builder;
 
 class KardexPage extends Page implements Tables\Contracts\HasTable
 {
@@ -57,7 +58,7 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                         TextColumn::make('costo_u_in')
                             ->label('Costo U.')
                             ->getStateUsing(fn($record) => $record->cantidad > 0 ? $record->costo_unitario : 0)
-                            ->formatStateUsing(fn($state) => $state <= 0 ? '-' : 'S/ ' . number_format($state, 4))
+                            ->formatStateUsing(fn($state) => $state <= 0 ? '-' : 'S/ ' . number_format($state, 2))
                             ->color(fn($state) => $state === '-' ? 'gray' : null)
                             ->alignRight(),
 
@@ -82,7 +83,7 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                         TextColumn::make('costo_u_out')
                             ->label('Costo U.')
                             ->getStateUsing(fn($record) => $record->cantidad < 0 ? $record->costo_unitario : 0)
-                            ->formatStateUsing(fn($state) => $state <= 0 ? '-' : 'S/ ' . number_format($state, 4))
+                            ->formatStateUsing(fn($state) => $state <= 0 ? '-' : 'S/ ' . number_format($state, 2))
                             ->color(fn($state) => $state === '-' ? 'gray' : null)
                             ->alignRight(),
 
@@ -110,7 +111,7 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                                     ? ($record->saldo_valorizado / $record->stock_restante)
                                     : 0;
                             })
-                            ->formatStateUsing(fn($state) => $state <= 0 ? 'S/ 0.0000' : 'S/ ' . number_format($state, 4))
+                            ->formatStateUsing(fn($state) => $state <= 0 ? 'S/ 0.00' : 'S/ ' . number_format($state, 2))
                             ->color('info')
                             ->alignRight(),
 
@@ -126,7 +127,12 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                     ->form([
                         Select::make('product_id')
                             ->label('Producto')
-                            ->relationship('product', 'name')
+                            ->relationship(
+                                'product',
+                                'name',
+                                // 🟢 Filtramos la consulta para que solo traiga productos con control_stock = 1
+                                fn(Builder $query) => $query->where('control_stock', true)
+                            )
                             ->searchable()
                             ->preload()
                             ->reactive()
@@ -150,8 +156,7 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                             ->when($data['product_id'], fn($q) => $q->where('product_id', $data['product_id']))
                             ->when($data['variant_id'], fn($q) => $q->where('variant_id', $data['variant_id']));
                     }),
-            ])
-            ->persistFiltersInSession();
+            ]);
     }
 
     private function getOrigenLabel(?string $modelType): string

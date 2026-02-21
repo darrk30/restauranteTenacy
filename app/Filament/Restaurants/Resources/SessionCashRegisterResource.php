@@ -5,6 +5,7 @@ namespace App\Filament\Restaurants\Resources;
 use App\Filament\Restaurants\Resources\SessionCashRegisterResource\Pages;
 use App\Models\SessionCashRegister;
 use App\Models\PaymentMethod;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -183,8 +184,13 @@ class SessionCashRegisterResource extends Resource
 
                                                 DateTimePicker::make('closed_at')
                                                     ->label('FECHA CIERRE')
+                                                    ->native(false)
+                                                    ->default(now())
+                                                    ->displayFormat('d/m/Y H:i')
+                                                    ->format('Y-m-d H:i:s') // 🟢 Asegura el formato que entiende la base de datos
+                                                    ->seconds(false)        // 🟢 Limpia la interfaz para que coincida con tu d/m/Y H:i
                                                     ->required()
-                                                    ->default(now()),
+
                                             ]),
 
                                         // Las notas quedan debajo ocupando todo el ancho de la sección

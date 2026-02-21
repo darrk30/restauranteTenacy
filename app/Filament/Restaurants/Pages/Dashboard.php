@@ -52,12 +52,18 @@ class Dashboard extends BaseDashboard
                                 'custom' => 'Personalizado',
                             ])
                             ->default('hoy')
-                            ->live(), // 👈 Actualiza en vivo
+                            ->live(),
 
                         DatePicker::make('fecha_inicio')
+                            ->label('Fecha de Inicio')
+                            ->native(false)
+                            ->displayFormat('d/m/Y H:i')
                             ->visible(fn($get) => $get('rango') === 'custom'),
 
                         DatePicker::make('fecha_fin')
+                            ->label('Fecha de Fin')
+                            ->native(false)
+                            ->displayFormat('d/m/Y H:i')
                             ->visible(fn($get) => $get('rango') === 'custom'),
                     ])
                     ->columns(3),
