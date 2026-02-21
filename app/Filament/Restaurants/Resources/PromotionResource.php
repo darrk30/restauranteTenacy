@@ -110,13 +110,12 @@ class PromotionResource extends Resource
                                                 ->inline(false)
                                                 ->default(true),
                                         ]),
-
-                                    DatePicker::make('date_start')
+                                    DateTimePicker::make('date_start')
                                         ->label('Fecha de Inicio')
                                         ->native(false)
                                         ->displayFormat('d/m/Y H:i'),
 
-                                    DatePicker::make('date_end')
+                                    DateTimePicker::make('date_end')
                                         ->label('Fecha de Fin')
                                         ->native(false)
                                         ->displayFormat('d/m/Y H:i'),

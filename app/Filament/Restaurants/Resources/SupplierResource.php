@@ -48,6 +48,7 @@ class SupplierResource extends Resource
                                 'RUC' => 'RUC',
                                 'DNI' => 'DNI',
                             ])
+                            ->native(false)
                             ->label('Tipo de documento')
                             ->reactive(),
 
@@ -151,6 +152,7 @@ class SupplierResource extends Resource
                                 'inactivo' => 'Inactivo',
                                 'archivado' => 'Archivado',
                             ])
+                            ->native(false)
                             ->default('activo')
                             ->required(),
                     ])

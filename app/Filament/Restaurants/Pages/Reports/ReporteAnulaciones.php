@@ -97,11 +97,25 @@ class ReporteAnulaciones extends Page implements HasForms, HasTable
                 Section::make('Filtros de Búsqueda')
                     ->schema([
                         Grid::make(4)->schema([
-                            DateTimePicker::make('fecha_desde')->label('Desde')->native(false)->displayFormat('d/m/Y H:i')->live()
-                                ->afterStateUpdated(fn() => $this->updatedData()),
-                            DateTimePicker::make('fecha_hasta')->label('Hasta')->native(false)->displayFormat('d/m/Y H:i')->live()
-                                ->afterStateUpdated(fn() => $this->updatedData()),
-                            Select::make('canal')->label('Canal')->placeholder('Todos')->live()
+                            
+                            DateTimePicker::make('fecha_desde')
+                                    ->label('Desde')
+                                    ->native(false)
+                                    ->displayFormat('d/m/Y h:i A')
+                                    ->format('Y-m-d H:i:s')
+                                    ->seconds(false)
+                                    ->default(now()->startOfMonth())
+                                    ->live(),
+
+                                DateTimePicker::make('fecha_hasta')
+                                    ->label('Hasta')
+                                    ->native(false)
+                                    ->displayFormat('d/m/Y h:i A')
+                                    ->format('Y-m-d H:i:s')
+                                    ->seconds(false)
+                                    ->default(now()->endOfMonth())
+                                    ->live(),
+                            Select::make('canal')->label('Canal')->native(false)->placeholder('Todos')->live()
                                 ->options(['salon' => 'Salón', 'delivery' => 'Delivery', 'llevar' => 'Para Llevar'])
                                 ->afterStateUpdated(fn() => $this->updatedData()),
                             Select::make('user_id')->label('Responsable')->placeholder('Todos')->searchable()->live()

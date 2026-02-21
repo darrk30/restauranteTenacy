@@ -83,14 +83,20 @@ class ReporteCajas extends Page implements HasForms, HasTable
                                 DateTimePicker::make('fecha_desde')
                                     ->label('Desde')
                                     ->native(false)
-                                    ->displayFormat('d/m/Y H:i')
+                                    ->displayFormat('d/m/Y h:i A')
+                                    ->format('Y-m-d H:i:s')
+                                    ->seconds(false)
+                                    ->default(now()->startOfMonth())
                                     ->hidden(fn(Get $get) => $get('filter_type') !== 'personalizado')
                                     ->live(),
 
                                 DateTimePicker::make('fecha_hasta')
                                     ->label('Hasta')
                                     ->native(false)
-                                    ->displayFormat('d/m/Y H:i')
+                                    ->displayFormat('d/m/Y h:i A')
+                                    ->format('Y-m-d H:i:s')
+                                    ->seconds(false)
+                                    ->default(now()->endOfMonth())
                                     ->hidden(fn(Get $get) => $get('filter_type') !== 'personalizado')
                                     ->live(),
 
@@ -131,8 +137,8 @@ class ReporteCajas extends Page implements HasForms, HasTable
                     ->with(['user', 'cashRegister']);
 
                 if ($data = $this->data) {
-                    if (!empty($data['fecha_desde'])) $query->whereDate('opened_at', '>=', $data['fecha_desde']);
-                    if (!empty($data['fecha_hasta'])) $query->whereDate('opened_at', '<=', $data['fecha_hasta']);
+                    if (!empty($data['fecha_desde'])) $query->where('opened_at', '>=', $data['fecha_desde']);
+                    if (!empty($data['fecha_hasta'])) $query->where('opened_at', '<=', $data['fecha_hasta']);
                     if (!empty($data['user_id'])) $query->where('user_id', $data['user_id']);
                     if (!empty($data['status'])) $query->where('status', $data['status']);
                 }
