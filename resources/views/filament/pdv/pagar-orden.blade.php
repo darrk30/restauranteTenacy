@@ -292,7 +292,8 @@
 
                     <div class="modal-exito-body">
                         <div class="ticket-wrapper">
-                            <iframe src="{{ route('sales.print.ticket', ['sale' => $ventaExitosaId]) }}"
+                            <iframe
+                                src="{{ route('sales.print.ticket', ['sale' => $ventaExitosaId]) }}?hide_actions=1"
                                 class="ticket-iframe"></iframe>
                         </div>
 

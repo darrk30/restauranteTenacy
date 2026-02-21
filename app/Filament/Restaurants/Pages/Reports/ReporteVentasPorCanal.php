@@ -3,6 +3,7 @@
 namespace App\Filament\Restaurants\Pages\Reports;
 
 use App\Exports\VentasExport; // Usaremos la lógica de exportación dinámica del reporte 1
+use App\Filament\Restaurants\Resources\SaleResource;
 use App\Filament\Restaurants\Widgets\VentasCanalStats;
 use App\Models\DocumentSerie;
 use App\Models\PaymentMethod;
@@ -33,9 +34,10 @@ class ReporteVentasPorCanal extends Page implements HasForms, HasTable
     use InteractsWithTable;
 
     protected static ?string $navigationIcon = 'heroicon-o-presentation-chart-line';
-    protected static ?string $navigationLabel = 'Reporte Detallado Ventas';
+    protected static ?string $navigationLabel = 'Reporte Ventas';
     protected static ?string $title = 'Reporte de Ventas Unificado';
     protected static ?string $navigationGroup = 'Reportes';
+    protected static ?int $navigationSort = 50;
     protected static string $view = 'filament.reports.ventas.reporte-ventas-por-canal';
 
     public ?array $data = [];
@@ -93,7 +95,7 @@ class ReporteVentasPorCanal extends Page implements HasForms, HasTable
                     // 1. Reconstruimos la query basada en el formulario ($this->data)
                     // NO usamos $livewire->getFilteredTableQuery() porque aquí el filtro es manual
                     $query = Sale::query()->latest('fecha_emision');
-                    
+
                     // Aplicamos los mismos filtros que en la tabla
                     $filtrosForm = $this->data;
                     if (!empty($filtrosForm['fecha_desde'])) $query->whereDate('fecha_emision', '>=', $filtrosForm['fecha_desde']);
@@ -117,10 +119,21 @@ class ReporteVentasPorCanal extends Page implements HasForms, HasTable
 
                     // 3. Orden de columnas
                     $ordenMaestro = [
-                        'fecha_emision', 'tipo_comprobante', 'comprobante', 'orden_codigo',
-                        'nombre_cliente', 'documento_identidad', 'canal', 'mozo',
-                        'monto_especifico_filtro', 'op_gravada', 'monto_igv',
-                        'monto_descuento', 'total', 'status', 'notas'
+                        'fecha_emision',
+                        'tipo_comprobante',
+                        'comprobante',
+                        'orden_codigo',
+                        'nombre_cliente',
+                        'documento_identidad',
+                        'canal',
+                        'mozo',
+                        'monto_especifico_filtro',
+                        'op_gravada',
+                        'monto_igv',
+                        'monto_descuento',
+                        'total',
+                        'status',
+                        'notas'
                     ];
                     $columnasOrdenadas = array_values(array_intersect($ordenMaestro, $data['columnas_reporte']));
 
@@ -148,11 +161,15 @@ class ReporteVentasPorCanal extends Page implements HasForms, HasTable
                             ->schema([
                                 DatePicker::make('fecha_desde')
                                     ->label('Desde')
+                                    ->native(false)
+                                    ->displayFormat('d/m/Y H:i')
                                     ->default(now()->startOfMonth())
                                     ->live(),
 
                                 DatePicker::make('fecha_hasta')
                                     ->label('Hasta')
+                                    ->native(false)
+                                    ->displayFormat('d/m/Y H:i')
                                     ->default(now()->endOfMonth())
                                     ->live(),
 
@@ -216,7 +233,7 @@ class ReporteVentasPorCanal extends Page implements HasForms, HasTable
                     if (!empty($data['canal'])) $query->where('canal', $data['canal']);
                     if (!empty($data['serie'])) $query->where('serie', $data['serie']);
                     if (!empty($data['numero'])) $query->where('correlativo', 'like', "%{$data['numero']}%");
-                    
+
                     // Nuevos filtros
                     if (!empty($data['status'])) $query->where('status', $data['status']);
                     if (!empty($data['payment_method_id'])) {
@@ -230,14 +247,22 @@ class ReporteVentasPorCanal extends Page implements HasForms, HasTable
                 TextColumn::make('fecha_emision')
                     ->label('Fecha/Hora')
                     ->dateTime('d/m/Y')
-                    ->description(fn ($record) => '🕒 ' . $record->fecha_emision->format('H:i A'))
+                    ->description(fn($record) => '🕒 ' . $record->fecha_emision->format('H:i A'))
                     ->sortable(),
 
                 TextColumn::make('tipo_comprobante')->badge()->color('gray')->toggleable(isToggledHiddenByDefault: true),
-                
-                TextColumn::make('comprobante') // Nombre lógico, state compuesto
+
+                TextColumn::make('comprobante')
                     ->label('Comprobante')
-                    ->state(fn(Sale $r) => $r->serie . '-' . $r->correlativo),
+                    ->state(fn(Sale $r) => $r->serie . '-' . $r->correlativo)
+                    ->searchable(['serie', 'correlativo'])
+                    ->sortable()
+                    ->weight('bold')
+                    ->color('primary')
+                    // 🟢 REDIRECCIÓN SPA:
+                    ->url(fn(Sale $record): string => SaleResource::getUrl('view', ['record' => $record]))
+                    // El método correcto para columnas es openUrlInNewTab(false)
+                    ->openUrlInNewTab(false),
 
                 TextColumn::make('nombre_cliente')
                     ->label('Cliente')

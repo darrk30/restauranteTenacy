@@ -19,7 +19,7 @@ class UnitCategoryResource extends Resource
 
     protected static ?string $navigationGroup = 'Configuración';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 125;
 
     protected static ?string $navigationLabel = 'Unidades de Medida';
 
@@ -68,7 +68,7 @@ class UnitCategoryResource extends Resource
     {
         return [
             'index' => Pages\ListUnitCategories::route('/'),
-            'create' => Pages\CreateUnitCategory::route('/create'),
+            // 'create' => Pages\CreateUnitCategory::route('/create'),
             'edit' => Pages\EditUnitCategory::route('/{record}/edit'),
         ];
     }

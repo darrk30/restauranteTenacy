@@ -9,8 +9,10 @@ use App\Models\Promotion;
 use App\Models\Product;
 use App\Models\Production;
 use App\Models\Variant;
+use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Components\CheckboxList;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Grid;
@@ -39,11 +41,11 @@ class PromotionResource extends Resource
     protected static ?string $model = Promotion::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-receipt-percent';
-    protected static ?string $navigationGroup = 'Inventarios';
     protected static ?string $navigationLabel = 'Promociones';
     protected static ?string $pluralModelLabel = 'Promociones';
     protected static ?string $recordTitleAttribute = 'name';
-    protected static ?int $navigationSort = 1;
+    protected static ?string $navigationGroup = 'Inventario';
+    protected static ?int $navigationSort = 20;
 
     public static function form(Form $form): Form
     {
@@ -59,12 +61,12 @@ class PromotionResource extends Resource
                             ->schema([
                                 Grid::make(['default' => 1, 'sm' => 2])->schema([
                                     FileUpload::make('image_path')
-                                        ->label('Imagen')
-                                        ->directory('promotions')
-                                        ->disk('public')
+                                        ->label('Imagen del la promoción')
                                         ->image()
-                                        ->openable()
-                                        ->downloadable()
+                                        ->disk('public')
+                                        ->directory('tenants/' . Filament::getTenant()->slug . '/promociones')
+                                        ->visibility('public')
+                                        ->preserveFilenames()
                                         ->columnSpanFull(),
 
                                     TextInput::make('name')
@@ -108,8 +110,16 @@ class PromotionResource extends Resource
                                                 ->inline(false)
                                                 ->default(true),
                                         ]),
-                                    DatetimePicker::make('date_start')->label('Fecha de Inicio')->hourMode(12)->displayFormat('d/m/y h:i A')->seconds(false),
-                                    DatetimePicker::make('date_end')->label('Fecha de Fin')->hourMode(12)->displayFormat('d/m/y h:i A')->seconds(false),
+
+                                    DatePicker::make('date_start')
+                                        ->label('Fecha de Inicio')
+                                        ->native(false)
+                                        ->displayFormat('d/m/Y H:i'),
+
+                                    DatePicker::make('date_end')
+                                        ->label('Fecha de Fin')
+                                        ->native(false)
+                                        ->displayFormat('d/m/Y H:i'),
 
                                     Textarea::make('description')->columnSpanFull(),
                                 ]),

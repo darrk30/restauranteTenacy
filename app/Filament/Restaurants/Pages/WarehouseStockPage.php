@@ -18,9 +18,10 @@ class WarehouseStockPage extends Page implements Tables\Contracts\HasTable
 
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
     protected static ?string $navigationLabel = 'Existencias';
-    protected static ?string $navigationGroup = 'Inventarios';
     protected static ?string $title = 'Existencias de Almacén';
     protected static string $view = 'filament.warehouse.pages.existencias';
+    protected static ?string $navigationGroup = 'Inventario';
+    protected static ?int $navigationSort = 25;
 
     protected function getHeaderActions(): array
     {

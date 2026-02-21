@@ -19,7 +19,6 @@ class DocumentSerie extends Model
         return $this->belongsTo(Restaurant::class);
     }
 
-
     protected static function booted(): void
     {
         static::addGlobalScope('restaurant', function (Builder $query) {
@@ -34,6 +33,16 @@ class DocumentSerie extends Model
             }
             if (filament()->getTenant()) {
                 $documentSerie->restaurant_id = filament()->getTenant()->id;
+            }
+        });
+
+        static::saving(function (DocumentSerie $documentSerie) {
+            if ($documentSerie->is_active) {
+                static::where('restaurant_id', $documentSerie->restaurant_id) //
+                    ->where('type_documento', $documentSerie->type_documento)
+                    ->where('id', '!=', $documentSerie->id)
+                    ->where('is_active', true)
+                    ->update(['is_active' => false]);
             }
         });
     }

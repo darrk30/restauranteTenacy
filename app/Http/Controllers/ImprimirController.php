@@ -103,11 +103,17 @@ class ImprimirController extends Controller
 
     public function printTicket(Sale $sale)
     {
-        // Cargamos relaciones para no tener errores de "undefined"
-        $sale->load(['details', 'user']);
+        // 1. Cargamos todas las relaciones necesarias de un solo golpe
+        // Cargamos 'restaurant' para obtener los datos del local y el logo
+        $sale->load(['details', 'user', 'restaurant']);
 
-        // Obtenemos los datos del restaurante (Tenant actual)
-        $tenant = Auth::user()->tenant;
+        // 2. Definimos el tenant desde la relación de la venta
+        $tenant = $sale->restaurant;
+
+        // 3. Validación de seguridad: Si no hay restaurante, lanzamos error 404
+        if (!$tenant) {
+            abort(404, 'Información del restaurante no encontrada.');
+        }
 
         return view('pdf.ticket-venta', compact('sale', 'tenant'));
     }

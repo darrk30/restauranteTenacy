@@ -13,7 +13,9 @@ class ListSales extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make()->label('Nuevo')
+                ->icon('heroicon-o-plus')
+                ->color('primary'),
         ];
     }
 }

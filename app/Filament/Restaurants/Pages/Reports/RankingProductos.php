@@ -26,6 +26,7 @@ class RankingProductos extends Page implements HasForms
     protected static ?string $navigationLabel = 'Ranking de Productos';
     protected static ?string $title = 'Ranking de Productos';
     protected static ?string $navigationGroup = 'Reportes';
+    protected static ?int $navigationSort = 70;
     protected static string $view = 'filament.reports.ventas.ranking-productos';
 
     // Propiedades públicas NECESARIAS para la sincronización de Livewire
@@ -78,7 +79,7 @@ class RankingProductos extends Page implements HasForms
                     Select::make('category_id')
                         ->label('Categoría')
                         ->placeholder('Todas las categorías (Ver por Áreas)')
-                        ->options(Category::where('status', 'active')->pluck('name', 'id'))
+                        ->options(Category::where('status', true)->pluck('name', 'id'))
                         ->live(),
 
                     DatePicker::make('fecha_desde')
@@ -135,20 +136,33 @@ class RankingProductos extends Page implements HasForms
             ->select(
                 'sale_details.product_name',
                 'sale_details.variant_id',
+                'sale_details.promotion_id',
                 DB::raw('SUM(sale_details.cantidad) as total_cantidad'),
                 DB::raw('SUM(sale_details.subtotal) as total_dinero')
             )
             ->join('sales', 'sale_details.sale_id', '=', 'sales.id')
-            ->join('products', 'sale_details.product_id', '=', 'products.id')
+            // 1. Join a productos
+            ->leftJoin('products', 'sale_details.product_id', '=', 'products.id')
+            // 2. Join a promociones para obtener su production_id
+            ->leftJoin('promotions', 'sale_details.promotion_id', '=', 'promotions.id')
+
             ->where('sales.restaurant_id', Filament::getTenant()->id)
             ->where('sales.status', 'completado')
-            // CORRECCIÓN AQUÍ: Cambiado 'tipo' por 'type'
-            ->where('products.type', 'producto')
-            ->when($productionId, fn($q) => $q->where('products.production_id', $productionId))
-            ->when($catId, fn($q) => $q->where('products.category_id', $catId))
+
+            // 🟢 FILTRO DE ÁREA CORREGIDO
+            ->when($productionId, function ($q) use ($productionId) {
+                $q->where(function ($sub) use ($productionId) {
+                    // Si es producto, usa products.production_id
+                    // Si es promo, usa promotions.production_id
+                    $sub->where('products.production_id', $productionId)
+                        ->orWhere('promotions.production_id', $productionId);
+                });
+            })
+
+            // (Mantén el resto de tus filtros de categoría y fechas igual...)
             ->whereDate('sales.fecha_emision', '>=', $desde)
             ->whereDate('sales.fecha_emision', '<=', $hasta)
-            ->groupBy('sale_details.product_name', 'sale_details.variant_id')
+            ->groupBy('sale_details.product_name', 'sale_details.variant_id', 'sale_details.promotion_id')
             ->orderByDesc('total_cantidad')
             ->limit(10)
             ->get();

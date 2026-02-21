@@ -40,8 +40,9 @@ class PurchaseResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
     protected static ?string $navigationLabel = 'Compras';
-    protected static ?string $navigationGroup = 'Inventario';
+    protected static ?string $navigationGroup = 'Compras';
 
+    protected static ?int $navigationSort = 40;
 
 
     public static function form(Form $form): Form

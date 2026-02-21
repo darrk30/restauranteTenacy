@@ -1,36 +1,23 @@
-<table class="min-w-full divide-y divide-gray-300 text-sm">
-    <thead class="bg-gray-100">
-        <tr>
-            <th class="px-4 py-2 text-left font-semibold text-gray-700">Producto</th>
-            <th class="px-4 py-2 text-left font-semibold text-gray-700">Variante</th>
-            <th class="px-4 py-2 text-left font-semibold text-gray-700">Cantidad</th>
-            <th class="px-4 py-2 text-left font-semibold text-gray-700">Unidad</th>
-        </tr>
-    </thead>
-
-    <tbody class="divide-y divide-gray-200">
-        @foreach($items as $item)
-
-            @php
-                $restaurantSlug = $item->product->restaurant->slug;
-                $productSlug = $item->product->slug;
-                $productUrl = url("/app/{$restaurantSlug}/gestion/products/{$productSlug}/edit");
-            @endphp
-
-            <tr>
-                <td class="px-4 py-2">
-                    <a 
-                        href="{{ $productUrl }}"
-                        class="text-primary-600 hover:text-primary-800 underline"
-                    >
-                        {{ $item->product->name }}
-                    </a>
-                </td>
-
-                <td class="px-4 py-2">{{ $item->variant->full_name ?? '—' }}</td>
-                <td class="px-4 py-2">{{ $item->cantidad }}</td>
-                <td class="px-4 py-2">{{ $item->unit->name }}</td>
+<div class="p-2">
+    <table class="w-full text-left text-sm">
+        <thead>
+            <tr class="border-b">
+                <th class="py-2">Producto</th>
+                <th class="py-2 text-center">Cantidad</th>
+                <th class="py-2">Unidad</th>
             </tr>
-        @endforeach
-    </tbody>
-</table>
+        </thead>
+        <tbody>
+            @foreach ($items as $item)
+                <tr class="border-b last:border-0">
+                    <td class="py-2">
+                        <span class="font-bold">{{ $item->product->name }}</span>
+                        <br><small class="text-gray-500">{{ $item->variant->full_name }}</small>
+                    </td>
+                    <td class="py-2 text-center font-mono">{{ number_format($item->cantidad, 2) }}</td>
+                    <td class="py-2 text-gray-600">{{ $item->unit->name }}</td>
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
+</div>

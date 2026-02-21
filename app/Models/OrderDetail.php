@@ -25,6 +25,8 @@ class OrderDetail extends Model
         'cortesia',
         'status',
         'notes',
+        'user_actualiza_id',
+        'user_id',
         'fecha_envio_cocina',
         'fecha_listo',
     ];
@@ -49,6 +51,16 @@ class OrderDetail extends Model
     public function promotion()
     {
         return $this->belongsTo(Promotion::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function userActualiza()
+    {
+        return $this->belongsTo(User::class, 'user_actualiza_id');
     }
 
 

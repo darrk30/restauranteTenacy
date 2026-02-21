@@ -9,4 +9,5 @@ use Filament\Resources\Pages\CreateRecord;
 class CreatePrinter extends CreateRecord
 {
     protected static string $resource = PrinterResource::class;
+    protected static ?string $title = 'Nueva Impresora';
 }

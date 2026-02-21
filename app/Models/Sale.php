@@ -13,6 +13,7 @@ class Sale extends Model
         'client_id',
         'nombre_cliente',
         'user_id',
+        'user_actualiza_id',
         'delivery_id',
         'nombre_delivery',
         'tipo_documento',
@@ -26,6 +27,7 @@ class Sale extends Model
         'total',
         'status',
         'notas',
+        'costo_total',
         'canal',
         'fecha_emision',
     ];

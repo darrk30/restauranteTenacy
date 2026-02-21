@@ -18,7 +18,7 @@ class UserResource extends Resource
 
     protected static ?string $navigationGroup = 'Configuración';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 120;
 
     protected static ?string $navigationLabel = 'Usuarios';
 

@@ -18,7 +18,7 @@ class PrinterResource extends Resource
 
     protected static ?string $navigationGroup = 'Configuración';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 110;
 
     protected static ?string $navigationLabel = 'Impresoras';
 
@@ -46,17 +46,19 @@ class PrinterResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
+                    ->label('Nombre')
+                    ->sortable()
                     ->searchable(),
                 Tables\Columns\TextColumn::make('description')
+                    ->label('Descripción')
+                    ->sortable()
                     ->placeholder('Ninguna')
                     ->searchable(),
                 Tables\Columns\IconColumn::make('status')
+                    ->label('Activo')
                     ->boolean(),
                 Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
+                    ->label('Creado')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -65,7 +67,9 @@ class PrinterResource extends Resource
                 //
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                Tables\Actions\EditAction::make()
+                    ->modalHeading('Editar Impresora') 
+                    ->modalSubmitActionLabel('Actualizar Impresora'),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

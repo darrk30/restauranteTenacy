@@ -14,7 +14,9 @@ class ListCategories extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make()->label('Nueva')->icon('heroicon-o-plus'),
+            CreateAction::make()->label('Nuevo')
+                ->icon('heroicon-o-plus')
+                ->color('primary'),
         ];
     }
 }

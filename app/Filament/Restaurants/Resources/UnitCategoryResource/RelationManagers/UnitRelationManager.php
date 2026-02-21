@@ -11,7 +11,8 @@ use Filament\Tables\Table;
 
 class UnitRelationManager extends RelationManager
 {
-    protected static string $relationship = 'units'; // ← asegúrate que coincide con la relación real
+    protected static string $relationship = 'units';
+    protected static ?string $title = 'Unidades de esta categoría';
 
     public function form(Form $form): Form
     {
@@ -73,10 +74,14 @@ class UnitRelationManager extends RelationManager
                     ->label('Es base'),
             ])
             ->headerActions([
-                Tables\Actions\CreateAction::make(),
+                Tables\Actions\CreateAction::make()->label('Nueva')
+                    ->icon('heroicon-o-plus')
+                    ->color('primary')
+                    ->modalHeading('Crear nueva unidad')
+                    ->modalSubmitActionLabel('Crear Unidad'),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                Tables\Actions\EditAction::make()->label('Editar'),
                 Tables\Actions\DeleteAction::make(),
             ])
             ->bulkActions([
