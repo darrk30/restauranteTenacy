@@ -19,22 +19,57 @@
     }" class="w-full h-full" @scroll.window="menuOpen = false">
 
         {{-- 1. BOTONES DE CANALES --}}
+        @php
+            $counts = $this->getChannelCounts();
+        @endphp
+
         <div class="main-channels">
-            <button @click="canalActivo = 'salon'" :class="canalActivo === 'salon' ? 'active' : ''"
-                class="channel-btn">🏢 SALÓN</button>
+            <button @click="canalActivo = 'salon'" :class="canalActivo === 'salon' ? 'active' : ''" class="channel-btn">
+                🏢 SALÓN
+                @if ($counts['salon'] > 0)
+                    <span class="badge-count badge-salon">{{ $counts['salon'] }}</span>
+                @endif
+            </button>
+
             <button @click="canalActivo = 'llevar'" :class="canalActivo === 'llevar' ? 'active' : ''"
-                class="channel-btn">🛍️ LLEVAR</button>
+                class="channel-btn">
+                🛍️ LLEVAR
+                @if ($counts['llevar'] > 0)
+                    <span class="badge-count badge-llevar">{{ $counts['llevar'] }}</span>
+                @endif
+            </button>
+
             <button @click="canalActivo = 'delivery'" :class="canalActivo === 'delivery' ? 'active' : ''"
-                class="channel-btn">🛵 DELIVERY</button>
+                class="channel-btn">
+                🛵 DELIVERY
+                @if ($counts['delivery'] > 0)
+                    <span class="badge-count badge-delivery">{{ $counts['delivery'] }}</span>
+                @endif
+            </button>
         </div>
 
         {{-- 2. SECCIÓN SALÓN --}}
         <div x-show="canalActivo === 'salon'" x-transition:enter.duration.200ms>
             <div x-data="{ tab: 1 }" style="width:100%;">
+                @php
+                    $stats = $this->getTableStats();
+                @endphp
+
                 <div class="summary-row">
-                    <div class="summary-badge free-bg">Libres</div>
-                    <div class="summary-badge occ-bg">Ocupadas</div>
-                    <div class="summary-badge pay-bg">Pagando</div>
+                    <div class="summary-badge free-bg">
+                        <span>Libres</span>
+                        <span class="count-pill">{{ $stats['libres'] }}</span>
+                    </div>
+
+                    <div class="summary-badge occ-bg">
+                        <span>Ocupadas</span>
+                        <span class="count-pill">{{ $stats['ocupadas'] }}</span>
+                    </div>
+
+                    <div class="summary-badge pay-bg">
+                        <span>Pagando</span>
+                        <span class="count-pill">{{ $stats['pagando'] }}</span>
+                    </div>
                 </div>
                 <div class="pdv-tabs">
                     @foreach ($floors as $i => $floor)
@@ -406,9 +441,9 @@
         <x-modal-ticket :orderId="$ordenGenerada->id" :jobId="$jobId" :areas="$areasUnicas" />
     @endif
 
-        <script>
-            window.APP_TENANT = @js($tenant->slug ?? 'default');
-        </script>
+    <script>
+        window.APP_TENANT = @js($tenant->slug ?? 'default');
+    </script>
     {{-- @push('scripts')
         <script src="{{ asset('js/mesas.js') }}" defer></script>
     @endpush --}}

@@ -46,7 +46,7 @@ class ProductResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-cube';
 
     protected static ?string $recordTitleAttribute = 'name';
-    
+
     protected static ?string $pluralModelLabel = 'Productos';
 
 
@@ -65,11 +65,13 @@ class ProductResource extends Resource
                                             FileUpload::make('image_path')
                                                 ->label('Imagen del producto')
                                                 ->image()
+                                                ->imageEditor()
                                                 ->disk('public')
                                                 ->directory('tenants/' . Filament::getTenant()->slug . '/products')
                                                 ->visibility('public')
-                                                ->preserveFilenames()
-                                                ->columnSpanFull(),
+                                                ->columnSpanFull()
+                                                ->optimize('webp', 80)
+                                                ->maxImageWidth(1200),
                                             TextInput::make('name')
                                                 ->label('Nombre')
                                                 ->required()

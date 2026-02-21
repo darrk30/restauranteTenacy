@@ -5,6 +5,7 @@ namespace App\Filament\Restaurants\Pages;
 use App\Models\Client;
 use App\Models\Floor;
 use App\Models\Order;
+use App\Models\Table;
 use App\Models\TypeDocument;
 use App\Models\User;
 use App\Services\DocumentoService;
@@ -15,7 +16,7 @@ use Illuminate\Http\Request;
 
 class PointOfSale extends Page
 {
-    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document';
+    protected static ?string $navigationIcon = 'heroicon-o-computer-desktop';
     protected static ?string $navigationLabel = 'Punto de venta';
     // protected static ?string $navigationGroup = 'Punto de venta';
     protected static ?string $title = 'Punto de venta';
@@ -69,6 +70,42 @@ class PointOfSale extends Page
                 Notification::make()->title('Delivery finalizado con éxito')->success()->send();
             }
         }
+    }
+
+    public function getTableStats(): array
+    {
+        $tables = Table::where('restaurant_id', Filament::getTenant()->id)->get();
+
+        return [
+            'libres'   => $tables->where('estado_mesa', 'libre')->count(), // Ajusta el string según tu BD
+            'ocupadas' => $tables->where('estado_mesa', 'ocupada')->count(),
+            'pagando'  => $tables->where('estado_mesa', 'pagando')->count(),
+        ];
+    }
+
+    public function getChannelCounts(): array
+    {
+        $tenantId = Filament::getTenant()->id;
+
+        // 1. Conteo de Salón (Mesas ocupadas o pagando)
+        $salonCount = Table::where('restaurant_id', $tenantId)
+            ->whereIn('estado_mesa', ['ocupada', 'pagando'])
+            ->count();
+
+        // Usamos la misma lógica de filtrado que tienes en getViewData para ser consistentes
+        $baseQuery = Order::where('restaurant_id', $tenantId)
+            ->where('status', '!=', 'cancelado')
+            ->where(function ($q) {
+                $q->where('status_llevar_delivery', '!=', 'entregado')
+                    ->orWhere('status', '!=', 'pagado')
+                    ->orWhereNull('status_llevar_delivery');
+            });
+
+        return [
+            'salon' => $salonCount,
+            'llevar' => (clone $baseQuery)->where('canal', 'llevar')->count(),
+            'delivery' => (clone $baseQuery)->where('canal', 'delivery')->count(),
+        ];
     }
 
     // 2. MÉTODO PARA VER DETALLES (Ojo)

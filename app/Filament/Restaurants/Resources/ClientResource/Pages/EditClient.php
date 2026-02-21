@@ -14,6 +14,11 @@ class EditClient extends EditRecord
     {
         return [
             // Actions\DeleteAction::make(),
+            \Filament\Actions\Action::make('ver_facturas')
+                ->label('Ver Facturas del Cliente')
+                ->icon('heroicon-m-document-magnifying-glass')
+                ->color('info')
+                ->url(fn() => ClientResource::getUrl('facturas', ['record' => $this->record])),
         ];
     }
 }

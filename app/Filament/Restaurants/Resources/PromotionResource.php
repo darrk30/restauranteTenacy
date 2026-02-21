@@ -61,13 +61,17 @@ class PromotionResource extends Resource
                             ->schema([
                                 Grid::make(['default' => 1, 'sm' => 2])->schema([
                                     FileUpload::make('image_path')
-                                        ->label('Imagen del la promoción')
+                                        ->label('Imagen de la promoción')
                                         ->image()
+                                        ->imageEditor() // Importante para banners de promociones
                                         ->disk('public')
                                         ->directory('tenants/' . Filament::getTenant()->slug . '/promociones')
                                         ->visibility('public')
+                                        ->columnSpanFull()
                                         ->preserveFilenames()
-                                        ->columnSpanFull(),
+                                        ->optimize('webp', 85) // Calidad 85 para que el banner no pierda nitidez
+                                        ->maxImageWidth(1600)  // Ancho mayor porque las promociones suelen ser horizontales
+                                        ->maxImageHeight(900),
 
                                     TextInput::make('name')
                                         ->label('Nombre')
