@@ -30,7 +30,7 @@ class ReporteAnulaciones extends Page implements HasForms, HasTable
 {
     use InteractsWithForms, InteractsWithTable;
 
-    protected static ?string $navigationIcon = 'heroicon-o-document-text';
+    protected static ?string $navigationIcon = 'heroicon-o-document-minus';
     protected static ?string $navigationGroup = 'Reportes';
     protected static ?int $navigationSort = 75;
     protected static ?string $navigationLabel = 'Anulaciones';

@@ -41,6 +41,11 @@ class Client extends Model
         return $this->belongsTo(Restaurant::class);
     }
 
+    public function sales()
+    {
+        return $this->hasMany(Sale::class);
+    }
+
     protected static function booted(): void
     {
         static::addGlobalScope('restaurant', function (Builder $query) {

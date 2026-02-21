@@ -9,6 +9,7 @@ use Database\Seeders\FloorSeeder;
 use Database\Seeders\TypeDocumentSeeder;
 use Database\Seeders\UnitSeeder;
 use Database\Seeders\WarehouseSeeder;
+use Illuminate\Support\Facades\Storage;
 
 class RestaurantObserver
 {
@@ -26,17 +27,32 @@ class RestaurantObserver
         app()->forgetInstance('bypass_tenant_scope');
     }
 
+    /**
+     * Se ejecuta cuando el restaurante se está actualizando.
+     */
     public function updated(Restaurant $restaurant): void
     {
-        // Puedes agregar lógica si cambia el nombre, slug, etc.
+        // Si el campo 'logo' cambió (se subió uno nuevo)
+        if ($restaurant->isDirty('logo')) {
+            $logoAntiguo = $restaurant->getOriginal('logo');
+
+            // Si existía un logo anterior y es distinto al nuevo, lo borramos del disco
+            if ($logoAntiguo && $logoAntiguo !== $restaurant->logo) {
+                Storage::disk('public')->delete($logoAntiguo);
+            }
+        }
     }
 
+    /**
+     * Se ejecuta cuando el restaurante se elimina.
+     */
     public function deleted(Restaurant $restaurant): void
     {
-        // Si deseas eliminar unidades asociadas manualmente, puedes hacerlo aquí.
-        // Aunque ya está en cascada por la FK.
+        // Borramos el logo si el restaurante deja de existir
+        if ($restaurant->logo) {
+            Storage::disk('public')->delete($restaurant->logo);
+        }
     }
-
     public function restored(Restaurant $restaurant): void
     {
         //

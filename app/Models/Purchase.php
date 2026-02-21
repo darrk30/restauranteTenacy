@@ -27,9 +27,9 @@ class Purchase extends Model
         'observaciones',
         'restaurant_id',
     ];
-
     protected $casts = [
         'tipo_documento' => Comprobantes::class,
+        'fecha_compra' => 'datetime', // 🟢 Esto convierte el string a un objeto Carbon automáticamente
     ];
 
     public function supplier()
@@ -50,6 +50,11 @@ class Purchase extends Model
     public function restaurant()
     {
         return $this->belongsTo(Restaurant::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 
     protected static function booted(): void

@@ -15,6 +15,7 @@ use Filament\PanelProvider;
 use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
 use Filament\Support\Enums\FontFamily;
+use Filament\Support\Facades\FilamentView;
 use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -22,6 +23,7 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Njxqlus\FilamentProgressbar\FilamentProgressbarPlugin;
 
@@ -165,19 +167,41 @@ class RestaurantsPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
-            ->spa()// para que las páginas se carguen sin refrescar toda la página
+            ->spa() // para que las páginas se carguen sin refrescar toda la página
             ->assets([
-            // Cargamos el script aquí para que esté disponible GLOBALMENTE
-                Js::make('mesas-script', asset('js/mesas.js')), 
-                Js::make('orden-mesa-script', asset('js/ordenmesa.js')), 
+                // Cargamos el script aquí para que esté disponible GLOBALMENTE
+                Js::make('mesas-script', asset('js/mesas.js')),
+                Js::make('orden-mesa-script', asset('js/ordenmesa.js')),
             ])
-            ->globalSearch(true)
+            ->globalSearch(false)
             ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
-            ->unsavedChangesAlerts()//para mostrar alertas de cambios no guardados
-            ->databaseTransactions()//para realizar transacciones en las páginas de recursos
+            ->unsavedChangesAlerts() //para mostrar alertas de cambios no guardados
+            ->databaseTransactions() //para realizar transacciones en las páginas de recursos
             ->discoverClusters(in: app_path('Filament/Clusters'), for: 'App\\Filament\\Clusters')
             ->tenant(Restaurant::class, slugAttribute: 'slug')
-            ->tenantDomain('{tenant:slug}.restaurantetenacy.test')
+            ->tenantDomain('{tenant:slug}.' . config('app.domain'))
             ->plugin(FilamentProgressbarPlugin::make()->color('#29b'));
+    }
+
+    public function boot()
+    {
+        FilamentView::registerRenderHook(
+            'panels::global-search.after',
+            fn(): string => Blade::render('
+                <div class="flex justify-center p-2">
+                    <x-filament::button 
+                        href="/app/point-of-sale" 
+                        tag="a" 
+                        icon="heroicon-o-computer-desktop" 
+                        color="success" 
+                        size="sm"
+                        {{-- 🟢 Esto activa la navegación SPA de Livewire --}}
+                        wire:navigate 
+                    >
+                        POS
+                    </x-filament::button>
+                </div>
+            '),
+        );
     }
 }
