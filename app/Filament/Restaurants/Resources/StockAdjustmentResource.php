@@ -19,6 +19,8 @@ use Filament\Forms\Set;
 use Filament\Notifications\Notification;
 use Filament\Tables\Table;
 use Filament\Resources\Resource;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class StockAdjustmentResource extends Resource
 {
@@ -26,117 +28,124 @@ class StockAdjustmentResource extends Resource
     protected static ?string $model = StockAdjustment::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-arrow-path-rounded-square';
-    protected static ?string $navigationGroup = 'Inventario';
     protected static ?string $navigationLabel = 'Ajustes de Stock';
     protected static ?string $pluralLabel = 'Ajustes de Stock';
     protected static ?string $label = 'Ajuste de Stock';
+    protected static ?string $navigationGroup = 'Inventario';
+
+    protected static ?int $navigationSort = 35;
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-
-                Forms\Components\Section::make('Información del ajuste')
+                Forms\Components\Grid::make(12) // 🟢 Definimos una rejilla de 12 columnas
                     ->schema([
-                        Forms\Components\Grid::make(2)
+                        // --- SECCIÓN IZQUIERDA (50%) ---
+                        Forms\Components\Section::make('Configuración General')
+                            ->description('Detalles del movimiento')
                             ->schema([
-                                Forms\Components\Grid::make(1)
-                                    ->schema([
-                                        Forms\Components\Select::make('tipo')
-                                            ->label('Tipo de ajuste')
-                                            ->options([
-                                                'entrada' => 'Entrada',
-                                                'salida' => 'Salida',
-                                            ])
-                                            ->required(),
+                                Forms\Components\Select::make('tipo')
+                                    ->label('Tipo de Movimiento')
+                                    ->options([
+                                        'entrada' => '➕ Entrada (Aumenta Stock)',
+                                        'salida' => '➖ Salida (Disminuye Stock)',
                                     ])
-                                    ->columnSpan(1),
-                                Forms\Components\Textarea::make('motivo')
-                                    ->label('Motivo del ajuste')
-                                    ->rows(5)
-                                    ->columnSpan(1),
+                                    ->required()
+                                    ->native(false)
+                                    ->preload(),
 
-                            ]),
+                                Forms\Components\Textarea::make('motivo')
+                                    ->label('Razón del Ajuste')
+                                    ->placeholder('Ej: Rotura de stock, inventario mensual, merma...')
+                                    ->required()
+                                    ->rows(3),
+                            ])
+                            ->columnSpan(6), // 🟢 6 de 12 es el 50%
+
+                        // --- SECCIÓN DERECHA (50%) ---
+                        Forms\Components\Section::make('Resumen')
+                            ->description('Información de control')
+                            ->schema([
+                                Forms\Components\Placeholder::make('created_at')
+                                    ->label('Fecha de registro')
+                                    ->content(now()->format('d/m/Y h:i A')),
+
+                                Forms\Components\Placeholder::make('usuario')
+                                    ->label('Responsable')
+                                    ->content(Auth::user()->name),
+
+                                // Agregamos un pequeño aviso visual
+                                Forms\Components\Placeholder::make('info')
+                                    ->label('Nota')
+                                    ->content('Los cambios afectarán el stock actual de forma inmediata.')
+                            ])
+                            ->columnSpan(6), // 🟢 6 de 12 es el 50%
                     ]),
 
-                Forms\Components\Section::make('Items del ajuste')
+                Forms\Components\Section::make('Listado de Productos a Ajustar')
                     ->schema([
                         Forms\Components\Repeater::make('items')
                             ->relationship()
                             ->label('')
+                            ->columns(6) // 🟢 Todo en una línea para ahorrar espacio
+                            ->addActionLabel('Agregar otro producto')
                             ->schema([
                                 Select::make('product_id')
-                                    ->label('Producto')
-                                    ->relationship('product', 'name', function ($query) {
-                                        $query->whereIn('type', [
-                                            TipoProducto::Producto->value,
-                                            TipoProducto::Insumo->value,
-                                        ])
-                                            ->where('control_stock', true)
-                                            ->where('status', StatusProducto::Activo->value); // solo activos
-                                    })
+                                    ->label('Producto / Insumo')
+                                    ->relationship(
+                                        'product',
+                                        'name',
+                                        fn($query) =>
+                                        $query->where('control_stock', true)->where('status', StatusProducto::Activo->value)
+                                    )
                                     ->searchable()
                                     ->preload()
                                     ->reactive()
                                     ->required()
                                     ->columnSpan(2)
                                     ->afterStateUpdated(function ($state, Set $set) {
-                                        if (!$state) {
-                                            $set('variant_id', null);
-                                            $set('unit_id', null);
-                                            return;
-                                        }
-                                        $variants = Variant::where('product_id', $state)->where('status', 'activo')->get();
-                                        $product = Product::with('unit')->find($state);
-                                        if ($variants->count() === 1) {
-                                            $set('variant_id', $variants->first()->id);
-                                        } else {
-                                            $set('variant_id', null);
-                                        }
-                                        if ($product?->unit?->id) {
-                                            $set('unit_id', $product->unit->id);
+                                        $set('variant_id', null);
+                                        if ($state) {
+                                            $product = Product::find($state);
+                                            $set('unit_id', $product?->unit_id);
                                         }
                                     }),
 
-                                // VARIANTE
                                 Select::make('variant_id')
-                                    ->label('Variante')
-                                    ->options(function (callable $get) {
+                                    ->columnSpan(2)
+                                    ->options(function ($get) {
                                         $productId = $get('product_id');
-                                        if (!$productId) {
+                                        if (blank($productId)) {
                                             return [];
                                         }
-                                        return Variant::where('product_id', $productId)->where('status', 'activo')->get()->pluck('full_name', 'id');
-                                    })
-                                    ->searchable()
-                                    ->preload()
-                                    ->required()
-                                    ->columnSpan(2),
+                                        return Variant::where('product_id', $productId)
+                                            ->where('status', 'activo')
+                                            ->get()
+                                            ->pluck('full_name', 'id');
+                                    }),
 
                                 Forms\Components\TextInput::make('cantidad')
-                                    ->label('Cantidad')
+                                    ->label('Cant.')
                                     ->numeric()
                                     ->minValue(0.01)
-                                    ->required(),
+                                    ->required()
+                                    ->columnSpan(1),
 
                                 Forms\Components\Select::make('unit_id')
                                     ->label('Unidad')
-                                    ->options(function (callable $get) {
+                                    ->options(function ($get) {
                                         $product = Product::with('unit')->find($get('product_id'));
-                                        $categoryId = $product?->unit?->unit_category_id;
-                                        return $categoryId ? Unit::where('unit_category_id', $categoryId)->pluck('name', 'id') : [];
+                                        return $product?->unit ? Unit::where('unit_category_id', $product->unit->unit_category_id)->pluck('name', 'id') : [];
                                     })
-                                    ->searchable()
-                                    ->preload()
                                     ->required()
-                                    ->required(),
-
+                                    ->columnSpan(1),
                             ])
-                            ->defaultItems(1)
-                            ->columns(6)
                             ->collapsible()
+                            ->cloneable() // 🟢 Permite duplicar filas rápido
                             ->itemLabel(
-                                fn($state) => $state['variant_id'] ? Variant::find($state['variant_id'])?->full_name : 'Nuevo ítem'
+                                fn($state) =>
+                                isset($state['variant_id']) ? Variant::find($state['variant_id'])?->full_name : 'Seleccione producto'
                             ),
                     ]),
             ]);
@@ -145,93 +154,79 @@ class StockAdjustmentResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->searchPlaceholder('Busca por codigo y almacén')
             ->columns([
                 Tables\Columns\TextColumn::make('codigo')
                     ->label('Código')
+                    ->searchable()
+                    ->weight('bold')
+                    ->fontFamily('mono')
+                    ->copyable() // 🟢 Permite copiar el código rápido
+                    ->formatStateUsing(
+                        fn($state, $record) =>
+                        $record->status === 'anulado' ? "<s>$state</s>" : $state
+                    )->html(),
+                Tables\Columns\TextColumn::make('user.name') 
+                    ->label('Responsable')
                     ->sortable()
                     ->searchable()
-                    ->formatStateUsing(function ($state, $record) {
-                        if ($record->status === 'anulado') {
-                            return "<span style='text-decoration: line-through; color: #dc2626;'>$state</span>";
-                        }
-                        return $state;
-                    })
-                    ->html(),
+                    ->icon('heroicon-m-user') // Icono para identificarlo rápido
+                    ->color('gray')
+                    ->description(fn($record) => $record->user->email ?? ''), // Opcional: muestra el correo debajo del nombre
 
                 Tables\Columns\TextColumn::make('created_at')
-                    ->label('Fecha')
+                    ->label('Fecha de Ajuste')
                     ->sortable()
-                    ->formatStateUsing(function ($state) {
-                        return '
-                    <div style="display:flex; flex-direction:column; line-height:1.2;">
-                        <span>' . \Carbon\Carbon::parse($state)->timezone('America/Lima')->format('d/m/Y') . '</span>
-                        <span>' . \Carbon\Carbon::parse($state)->timezone('America/Lima')->format('h:i A') . '</span>
-                    </div>';
-                    })
-                    ->html(),
+                    ->description(fn($record) => $record->created_at->diffForHumans()) // 🟢 Agrega "hace 2 horas"
+                    ->dateTime('d/m/Y h:i A'),
 
                 Tables\Columns\TextColumn::make('tipo')
                     ->badge()
-                    ->label('Tipo')
-                    ->colors([
-                        'success' => 'incremento',
-                        'danger'  => 'decremento',
-                    ])
-                    ->formatStateUsing(fn($state) => ucfirst($state)),
+                    ->label('Operación')
+                    ->icon(fn(string $state): string => match ($state) {
+                        'entrada' => 'heroicon-m-arrow-trending-up',
+                        'salida' => 'heroicon-m-arrow-trending-down',
+                        default => 'heroicon-m-minus',
+                    })
+                    ->color(fn(string $state): string => match ($state) {
+                        'entrada' => 'success',
+                        'salida' => 'danger',
+                        default => 'gray',
+                    })
+                    ->formatStateUsing(fn($state) => strtoupper($state)),
 
                 Tables\Columns\TextColumn::make('motivo')
-                    ->label('Motivo')
-                    ->placeholder('Sin motivo')
-                    ->sortable()
-                    ->searchable(),
+                    ->label('Observación')
+                    ->limit(30) // 🟢 Acorta textos largos
+                    ->tooltip(fn($state) => $state)
+                    ->color('gray'),
 
                 Tables\Columns\TextColumn::make('items_count')
                     ->counts('items')
                     ->label('Items')
-                    ->sortable()
-                    ->tooltip('Ver items')
+                    ->badge()
+                    ->color('gray')
                     ->alignment('center')
-                    ->html()
                     ->action(
                         Tables\Actions\Action::make('verItems')
-                            ->modalHeading('Productos')
-                            ->modalWidth('lg')
-                            ->modalContent(function ($record) {
-                                return view('filament.ajustes.items-list', [
-                                    'items' => $record->items()->with('product')->get(),
-                                ]);
-                            })
+                            ->modalHeading('Detalle de Productos Ajustados')
+                            ->modalWidth('xl')
+                            ->icon('heroicon-o-eye')
+                            ->modalContent(fn($record) => view('filament.ajustes.items-list', [
+                                'items' => $record->items()->with('product', 'variant', 'unit')->get(),
+                            ]))
                     ),
 
                 Tables\Columns\TextColumn::make('status')
                     ->label('Estado')
                     ->badge()
-                    ->colors([
-                        'success' => 'activo',
-                        'danger' => 'anulado',
-                    ]),
-            ])
-
-            ->filters([
-                Tables\Filters\Filter::make('created_at')
-                    ->form([
-                        Forms\Components\DateTimePicker::make('from')
-                            ->label('Desde')
-                            ->displayFormat('d/m/Y h:i A') // Vista 12h
-                            ->format('Y-m-d h:i A'),       // Formato guardado
-
-                        Forms\Components\DateTimePicker::make('until')
-                            ->label('Hasta')
-                            ->displayFormat('d/m/Y h:i A') // Vista 12h
-                            ->format('Y-m-d h:i A'),
-                    ])
-                    ->query(function ($query, array $data) {
-                        return $query
-                            ->when($data['from'] ?? null, fn($q, $date) => $q->where('created_at', '>=', $date))
-                            ->when($data['until'] ?? null, fn($q, $date) => $q->where('created_at', '<=', $date));
+                    ->formatStateUsing(fn($state) => ucfirst($state))
+                    ->color(fn(string $state): string => match ($state) {
+                        'activo' => 'success',
+                        'anulado' => 'danger',
+                        default => 'gray',
                     }),
             ])
+            ->defaultSort('created_at', 'desc')
             ->actions([
                 Tables\Actions\Action::make('anular')
                     ->tooltip('Anular')
@@ -243,22 +238,16 @@ class StockAdjustmentResource extends Resource
                     ->visible(fn($record) => $record->status !== 'anulado')
                     ->action(function ($record) {
                         (new StockAdjustmentService())->revert($record);
-
                         $record->update([
                             'status' => 'anulado',
                         ]);
-
                         Notification::make()
                             ->title('Ajuste anulado')
                             ->body('El stock ha sido revertido correctamente.')
                             ->success()
                             ->send();
                     }),
-            ])
-
-            ->bulkActions([
-                // Tables\Actions\DeleteBulkAction::make(),
-            ]);
+            ]); // 🟢 Filtros más accesibles
     }
 
     public static function getRelations(): array

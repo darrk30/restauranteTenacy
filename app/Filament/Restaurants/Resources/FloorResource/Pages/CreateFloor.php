@@ -9,4 +9,5 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateFloor extends CreateRecord
 {
     protected static string $resource = FloorResource::class;
+    protected static ?string $title = 'Nuevo Piso';
 }

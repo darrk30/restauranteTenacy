@@ -29,6 +29,8 @@ class ConceptoCajasResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-banknotes';
     protected static ?string $navigationLabel = 'Ingresos y Egresos';
     protected static ?string $modelLabel = 'Ingresos y Egresos';
+    protected static ?string $navigationGroup = 'Caja';
+    protected static ?int $navigationSort = 4;
 
 
     public static function form(Form $form): Form

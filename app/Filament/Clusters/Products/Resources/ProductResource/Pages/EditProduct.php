@@ -84,7 +84,7 @@ class EditProduct extends EditRecord
                 ->url(fn() => static::getResource()::getUrl('variants', ['record' => $this->record])),
 
 
-            \Filament\Actions\DeleteAction::make(),
+            // \Filament\Actions\DeleteAction::make(),
         ];
     }
 }

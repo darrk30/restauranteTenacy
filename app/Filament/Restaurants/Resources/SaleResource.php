@@ -18,6 +18,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\Grid;
 use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Tables\Actions\ActionGroup;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
@@ -27,6 +28,9 @@ class SaleResource extends Resource
     protected static ?string $model = Sale::class;
     protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
     protected static ?string $navigationLabel = 'Historial de Ventas';
+    protected static ?string $navigationGroup = 'Caja';
+    protected static ?string $pluralModelLabel = 'Historial de Ventas';
+    protected static ?int $navigationSort = 6;
 
     public static function canCreate(): bool
     {
@@ -125,147 +129,153 @@ class SaleResource extends Resource
                     ]),
             ])
             ->actions([
-                Tables\Actions\Action::make('anular')
-                    ->label('Anular')
-                    ->icon('heroicon-o-x-circle')
-                    ->color('danger')
-                    ->requiresConfirmation()
-                    ->modalHeading('Anular Venta')
-                    ->modalDescription('¿Está seguro de que desea anular esta venta?')
-                    ->hidden(
-                        fn(Sale $record) =>
-                        $record->status === 'anulado' ||
-                            !$sesionAbierta ||
-                            $record->created_at < $sesionAbierta->created_at
-                    )
-                    ->form(function (Sale $record) {
-                        $detalles = $record->details()->with([
-                            'product',
-                            'promotion.promotionproducts.product',
-                            'promotion.promotionproducts.variant'
-                        ])->get();
+                ActionGroup::make([
+                    Tables\Actions\Action::make('print')
+                        ->label('Reimprimir Ticket')
+                        ->icon('heroicon-o-printer')
+                        ->color('info')
+                        ->url(fn(Sale $record) => route('sale.ticket.print', $record), shouldOpenInNewTab: true),
+                    Tables\Actions\Action::make('anular')
+                        ->label('Anular')
+                        ->icon('heroicon-o-x-circle')
+                        ->color('danger')
+                        ->requiresConfirmation()
+                        ->modalHeading('Anular Venta')
+                        ->modalDescription('¿Está seguro de que desea anular esta venta?')
+                        ->hidden(
+                            fn(Sale $record) =>
+                            $record->status === 'anulado' ||
+                                !$sesionAbierta ||
+                                $record->created_at < $sesionAbierta->created_at
+                        )
+                        ->form(function (Sale $record) {
+                            $detalles = $record->details()->with([
+                                'product',
+                                'promotion.promotionproducts.product',
+                                'promotion.promotionproducts.variant'
+                            ])->get();
 
-                        // Verificamos si hay algo que controle stock para mostrar el toggle
-                        $hayStockParaRestablecer = $detalles->contains(function ($detalle) {
-                            if ($detalle->promotion_id && $detalle->promotion) {
-                                return $detalle->promotion->promotionproducts->contains(function ($hijo) {
-                                    $prod = $hijo->product;
-                                    $varProd = $hijo->variant?->product;
-                                    return ($prod && $prod->control_stock) || ($varProd && $varProd->control_stock);
-                                });
-                            }
-                            return $detalle->product && $detalle->product->control_stock;
-                        });
+                            // Verificamos si hay algo que controle stock para mostrar el toggle
+                            $hayStockParaRestablecer = $detalles->contains(function ($detalle) {
+                                if ($detalle->promotion_id && $detalle->promotion) {
+                                    return $detalle->promotion->promotionproducts->contains(function ($hijo) {
+                                        $prod = $hijo->product;
+                                        $varProd = $hijo->variant?->product;
+                                        return ($prod && $prod->control_stock) || ($varProd && $varProd->control_stock);
+                                    });
+                                }
+                                return $detalle->product && $detalle->product->control_stock;
+                            });
 
-                        return $hayStockParaRestablecer ? [
-                            Forms\Components\Toggle::make('restablecer_stock')
-                                ->label('¿Desea restablecer el stock?')
-                                ->helperText('Se devolverán los productos al inventario.')
-                                ->default(false)
-                                ->onColor('success')
-                                ->offColor('gray'),
-                        ] : [];
-                    })
-                    ->action(function (Sale $record, array $data) {
-                        DB::beginTransaction();
-                        try {
-                            $record->update(['status' => 'anulado']);
+                            return $hayStockParaRestablecer ? [
+                                Forms\Components\Toggle::make('restablecer_stock')
+                                    ->label('¿Desea restablecer el stock?')
+                                    ->helperText('Se devolverán los productos al inventario.')
+                                    ->default(false)
+                                    ->onColor('success')
+                                    ->offColor('gray'),
+                            ] : [];
+                        })
+                        ->action(function (Sale $record, array $data) {
+                            DB::beginTransaction();
+                            try {
+                                $record->update(['status' => 'anulado', 'user_actualiza_id' => Auth::id()]);
 
-                            if ($data['restablecer_stock'] ?? false) {
+                                if ($data['restablecer_stock'] ?? false) {
 
-                                // --- CLASE ANÓNIMA CON EL TRAIT ACTUALIZADO ---
-                                $stockManager = new class {
-                                    use \App\Traits\ManjoStockProductos;
+                                    // --- CLASE ANÓNIMA CON EL TRAIT ACTUALIZADO ---
+                                    $stockManager = new class {
+                                        use \App\Traits\ManjoStockProductos;
 
-                                    public function restaurarStock($item, $comprobante, $movimiento)
-                                    {
-                                        // 'entrada' para sumar stock devuelto
-                                        $this->processItem($item, 'entrada', $comprobante, $movimiento);
-                                    }
+                                        public function restaurarStock($item, $comprobante, $movimiento)
+                                        {
+                                            // 'entrada' para sumar stock devuelto
+                                            $this->processItem($item, 'entrada', $comprobante, $movimiento);
+                                        }
 
-                                    // Helper para conversión de unidades si está en el trait
-                                    public function convertirCantidad(\App\Models\Unit $u1, \App\Models\Unit $u2, $qty): float
-                                    {
-                                        return $qty; // Simplificación si usan misma unidad base, o usa la lógica del trait real
-                                    }
-                                };
-                                // ------------------------------------------------
+                                        // Helper para conversión de unidades si está en el trait
+                                        public function convertirCantidad(\App\Models\Unit $u1, \App\Models\Unit $u2, $qty): float
+                                        {
+                                            return $qty; // Simplificación si usan misma unidad base, o usa la lógica del trait real
+                                        }
+                                    };
+                                    // ------------------------------------------------
 
-                                $referencia = "{$record->serie}-{$record->correlativo}";
+                                    $referencia = "{$record->serie}-{$record->correlativo}";
 
-                                // ❌ ELIMINADO: Búsqueda de $almacenDefault
+                                    // ❌ ELIMINADO: Búsqueda de $almacenDefault
 
-                                foreach ($record->details as $detalle) {
+                                    foreach ($record->details as $detalle) {
 
-                                    // --- CASO 1: ES UNA PROMOCIÓN ---
-                                    if ($detalle->promotion_id) {
-                                        $promo = \App\Models\Promotion::with('promotionproducts.product', 'promotionproducts.variant')
-                                            ->find($detalle->promotion_id);
+                                        // --- CASO 1: ES UNA PROMOCIÓN ---
+                                        if ($detalle->promotion_id) {
+                                            $promo = \App\Models\Promotion::with('promotionproducts.product', 'promotionproducts.variant')
+                                                ->find($detalle->promotion_id);
 
-                                        if ($promo) {
-                                            foreach ($promo->promotionproducts as $hijo) {
-                                                $productoHijo = $hijo->product;
+                                            if ($promo) {
+                                                foreach ($promo->promotionproducts as $hijo) {
+                                                    $productoHijo = $hijo->product;
 
-                                                if ($productoHijo && $productoHijo->control_stock) {
+                                                    if ($productoHijo && $productoHijo->control_stock) {
 
-                                                    $cantidadTotal = $detalle->cantidad * $hijo->quantity;
+                                                        $cantidadTotal = $detalle->cantidad * $hijo->quantity;
 
-                                                    // Objeto virtual para pasar al Trait
-                                                    $itemVirtual = new \App\Models\SaleDetail([
-                                                        'product_id' => $hijo->product_id,
-                                                        'variant_id' => $hijo->variant_id,
-                                                        'cantidad'   => $cantidadTotal,
-                                                        'id'         => $detalle->id, // ID referencia para logs
-                                                    ]);
+                                                        // Objeto virtual para pasar al Trait
+                                                        $itemVirtual = new \App\Models\SaleDetail([
+                                                            'product_id' => $hijo->product_id,
+                                                            'variant_id' => $hijo->variant_id,
+                                                            'cantidad'   => $cantidadTotal,
+                                                            'id'         => $detalle->id, // ID referencia para logs
+                                                        ]);
 
-                                                    // Relaciones necesarias
-                                                    $itemVirtual->setRelation('product', $productoHijo);
-                                                    $itemVirtual->setRelation('variant', $hijo->variant);
-                                                    $itemVirtual->setRelation('unit', $productoHijo->unit);
+                                                        // Relaciones necesarias
+                                                        $itemVirtual->setRelation('product', $productoHijo);
+                                                        $itemVirtual->setRelation('variant', $hijo->variant);
+                                                        $itemVirtual->setRelation('unit', $productoHijo->unit);
 
-                                                    $stockManager->restaurarStock(
-                                                        $itemVirtual,
-                                                        $referencia,
-                                                        "Anulación: {$promo->name} (Componente)"
-                                                    );
+                                                        $stockManager->restaurarStock(
+                                                            $itemVirtual,
+                                                            $referencia,
+                                                            "Anulación: {$promo->name} (Componente)"
+                                                        );
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
-                                    // --- CASO 2: ES UN PRODUCTO NORMAL ---
-                                    elseif ($detalle->product_id && $detalle->product && $detalle->product->control_stock) {
-                                        if (!$detalle->relationLoaded('unit')) {
-                                            $detalle->setRelation('unit', $detalle->product->unit);
-                                        }
+                                        // --- CASO 2: ES UN PRODUCTO NORMAL ---
+                                        elseif ($detalle->product_id && $detalle->product && $detalle->product->control_stock) {
+                                            if (!$detalle->relationLoaded('unit')) {
+                                                $detalle->setRelation('unit', $detalle->product->unit);
+                                            }
 
-                                        $stockManager->restaurarStock(
-                                            $detalle,
-                                            $referencia,
-                                            "Anulación: {$detalle->product_name}"
-                                        );
+                                            $stockManager->restaurarStock(
+                                                $detalle,
+                                                $referencia,
+                                                "Anulación: {$detalle->product_name}"
+                                            );
+                                        }
                                     }
                                 }
+
+                                // Anulación de Movimientos de Caja
+                                $movimientosCaja = CashRegisterMovement::where('referencia_type', Sale::class)
+                                    ->where('referencia_id', $record->id)
+                                    ->where('status', 'aprobado')
+                                    ->get();
+
+                                foreach ($movimientosCaja as $movimiento) {
+                                    $movimiento->update(['status' => 'anulado']);
+                                }
+
+                                DB::commit();
+                                Notification::make()->title('Venta anulada correctamente')->success()->send();
+                            } catch (\Exception $e) {
+                                DB::rollBack();
+                                Notification::make()->title('Error al anular')->body($e->getMessage())->danger()->send();
                             }
-
-                            // Anulación de Movimientos de Caja
-                            $movimientosCaja = CashRegisterMovement::where('referencia_type', Sale::class)
-                                ->where('referencia_id', $record->id)
-                                ->where('status', 'aprobado')
-                                ->get();
-
-                            foreach ($movimientosCaja as $movimiento) {
-                                $movimiento->update(['status' => 'anulado']);
-                            }
-
-                            DB::commit();
-                            Notification::make()->title('Venta anulada correctamente')->success()->send();
-                        } catch (\Exception $e) {
-                            DB::rollBack();
-                            Notification::make()->title('Error al anular')->body($e->getMessage())->danger()->send();
-                        }
-                    }),
-                
-                Tables\Actions\ViewAction::make(),
+                        }),
+                    Tables\Actions\ViewAction::make(),
+                ]),
             ]);
     }
 

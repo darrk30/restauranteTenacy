@@ -72,6 +72,11 @@ class Restaurant extends Model
         return $this->hasMany(Promotion::class);
     }
 
+    public function unitCategories()
+    {
+        return $this->hasMany(UnitCategory::class);
+    }
+
     public function units()
     {
         return $this->hasMany(Unit::class);

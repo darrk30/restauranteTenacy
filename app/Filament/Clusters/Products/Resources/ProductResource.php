@@ -19,6 +19,7 @@ use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\ColorPicker;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -26,7 +27,6 @@ use Filament\Tables\Table;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Hidden;
@@ -41,16 +41,13 @@ use Filament\Forms\Set;
 class ProductResource extends Resource
 {
     protected static ?string $model = Product::class;
+    protected static ?string $cluster = ProductsCluster::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-cube';
 
-    protected static ?string $cluster = ProductsCluster::class;
-
     protected static ?string $recordTitleAttribute = 'name';
-
+    
     protected static ?string $pluralModelLabel = 'Productos';
-
-    protected static ?int $navigationSort = 1;
 
 
     public static function getSchema(): array
@@ -212,9 +209,11 @@ class ProductResource extends Resource
                                     ->numeric()
                                     ->nullable(),
 
-                                DateTimePicker::make('created_at')
+                                DatePicker::make('created_at')
                                     ->label('Fecha de Publicación')
-                                    ->disabled(),
+                                    ->native(false)
+                                    ->displayFormat('d/m/Y H:i')
+                                    ->default(now()->startOfMonth())
                             ]),
 
                             Section::make('Opciones')

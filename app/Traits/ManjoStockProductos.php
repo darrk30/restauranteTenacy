@@ -166,20 +166,37 @@ trait ManjoStockProductos
     /**
      * Lógica B: Procesa una Receta (Ceviche -> Arroz + Pescado)
      */
+    /**
+     * Lógica B: Procesa una Receta (Considerando si es Lote o Individual)
+     */
     private function processRecipeItem($item, $variant, $tipo, $comprobante, $movimiento): void
     {
         $ingredientes = $variant->recetas; // Asume relación hasMany
 
         if ($ingredientes->count() === 0) return;
 
+        // 🟢 1. Extraer configuración de la Variante (Plato vendido)
+        $isLote = $variant->lote ?? false;
+        $rendimiento = (float) ($variant->rendimiento ?? 1);
+
+        // Protección contra división por cero
+        if ($rendimiento <= 0) {
+            $rendimiento = 1;
+        }
+
         foreach ($ingredientes as $ingrediente) {
             // Cargar el Insumo (Variante) y su Producto Padre
-            $insumoVariant = Variant::with('product', 'product.unit')->find($ingrediente->insumo_id);
+            $insumoVariant = \App\Models\Variant::with('product', 'product.unit')->find($ingrediente->insumo_id);
 
             if ($insumoVariant && $insumoVariant->product) {
 
-                // A. Cantidad total requerida (Platos * Cantidad por plato)
-                $cantidadTotalReceta = $item->cantidad * $ingrediente->cantidad;
+                // 🟢 2. Calcular la cantidad de insumo requerida para UN SOLO PLATO
+                $cantidadPorPlato = $isLote
+                    ? ($ingrediente->cantidad / $rendimiento) // Si es olla: Divide la receta entre los platos que rinde
+                    : $ingrediente->cantidad;                 // Si es individual: Toma la receta tal cual
+
+                // 🟢 3. Cantidad total requerida (Platos vendidos * Cantidad por plato)
+                $cantidadTotalReceta = $item->cantidad * $cantidadPorPlato;
 
                 // B. Identificar Unidades para conversión
                 $unidadReceta = $ingrediente->unit; // Ej. Gramos
@@ -254,9 +271,7 @@ trait ManjoStockProductos
         if ($tipo === 'salida') {
             // Solo movemos cantidades, el costo se mantiene
             $allowsNegative = $variant->product->venta_sin_stock ?? false;
-            $nuevoStock = $allowsNegative
-                ? $stock->stock_real - $cantidadBase
-                : max(0, $stock->stock_real - $cantidadBase);
+            $nuevoStock = $allowsNegative ? $stock->stock_real - $cantidadBase : $stock->stock_real - $cantidadBase;
 
             $stock->stock_real = $nuevoStock;
             $stock->valor_inventario = $nuevoStock * $stock->costo_promedio;

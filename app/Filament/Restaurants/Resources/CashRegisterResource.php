@@ -21,21 +21,26 @@ class CashRegisterResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-computer-desktop';
 
     protected static ?string $navigationLabel = 'Cajas Registradoras';
-    
+
     protected static ?string $pluralModelLabel = 'Cajas Registradoras';
+
+    protected static ?string $navigationGroup = 'Configuración';
+    protected static ?int $navigationSort = 90;
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
                 Forms\Components\TextInput::make('name')
+                    ->label('Nombre')
                     ->required()
                     ->maxLength(255),
                 Forms\Components\TextInput::make('code')
+                    ->label('Código')
                     ->required()
                     ->maxLength(255),
                 Forms\Components\Toggle::make('status')
-                    ->label('Active')
+                    ->label('Activo')
                     ->default(true),
             ]);
     }
@@ -44,11 +49,11 @@ class CashRegisterResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')->label('Name')->sortable()->searchable(),
-                Tables\Columns\TextColumn::make('code')->label('Code')->sortable()->searchable(),
-                Tables\Columns\IconColumn::make('status')->label('Active')->sortable()->boolean(),
+                Tables\Columns\TextColumn::make('name')->label('Nombre')->sortable()->searchable(),
+                Tables\Columns\TextColumn::make('code')->label('Código')->sortable()->searchable(),
+                Tables\Columns\IconColumn::make('status')->label('Activo')->sortable()->boolean(),
                 Tables\Columns\TextColumn::make('created_at')
-                    ->label('Created At')
+                    ->label('Creado')
                     ->dateTime()
                     ->sortable(),
             ])
@@ -56,7 +61,9 @@ class CashRegisterResource extends Resource
                 //
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                Tables\Actions\EditAction::make()
+                    ->modalHeading('Editar Caja')
+                    ->modalSubmitActionLabel('Actualizar Caja'),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -76,7 +83,7 @@ class CashRegisterResource extends Resource
     {
         return [
             'index' => Pages\ListCashRegisters::route('/'),
-            'create' => Pages\CreateCashRegister::route('/create'),
+            // 'create' => Pages\CreateCashRegister::route('/create'),
             'edit' => Pages\EditCashRegister::route('/{record}/edit'),
         ];
     }

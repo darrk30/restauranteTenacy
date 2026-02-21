@@ -9,10 +9,12 @@ use App\Models\Product;
 use App\Models\Unit;
 use App\Models\Variant;
 use App\Models\WarehouseStock;
+use Filament\Facades\Filament;
 use Filament\Resources\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Repeater;
@@ -103,7 +105,10 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                     ->visible(fn() => $this->record->receta)
                     ->modalHeading(fn($record) => "Receta: " . $this->record->name . ($record->values->isNotEmpty() ? ' - ' . $record->full_name : ''))
                     ->fillForm(fn($record) => [
-                        'recetas' => $record->recetas->map(function ($receta) {
+                        // 🟢 Cargamos los nuevos campos
+                        'lote'        => $record->lote ?? false,
+                        'rendimiento' => $record->rendimiento ?? 1,
+                        'recetas'     => $record->recetas->map(function ($receta) {
                             return [
                                 'insumo_id' => $receta->insumo_id,
                                 'unit_id'   => $receta->unit_id,
@@ -112,15 +117,34 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                         })->toArray()
                     ])
                     ->form([
+                        // 🟢 NUEVOS CONTROLES PARA LOTE / RENDIMIENTO
+                        Forms\Components\Grid::make(2)->schema([
+                            Toggle::make('lote')
+                                ->label('¿Es receta por lote/olla?')
+                                ->helperText('Actívalo si vas a ingresar los ingredientes de una olla completa.')
+                                ->reactive() // Hace que el formulario reaccione al clic
+                                ->onColor('success')
+                                ->offColor('gray'),
+
+                            TextInput::make('rendimiento')
+                                ->label('¿Para cuántos platos rinde?')
+                                ->numeric()
+                                ->default(1)
+                                ->minValue(0.01)
+                                ->helperText('Ej: Si la olla rinde 10 platos, ingresa 10.')
+                                // Solo es visible y obligatorio si "lote" está activado
+                                ->visible(fn(Get $get) => $get('lote') === true)
+                                ->required(fn(Get $get) => $get('lote') === true),
+                        ])->columnSpanFull(),
+
                         TableRepeater::make('recetas')
                             ->label('Ingredientes')
                             ->addActionLabel('Agregar ingrediente')
                             ->defaultItems(0)
                             ->schema([
-
                                 // COLUMNA 1: INSUMO
                                 Select::make('insumo_id')
-                                    ->label('Insumo') // Se mantiene el label para la vista móvil
+                                    ->label('Insumo')
                                     ->placeholder('Seleccionar insumo...')
                                     ->options(function () {
                                         return \App\Models\Variant::query()
@@ -131,24 +155,19 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                                             ->where('status', 'activo')
                                             ->get()
                                             ->mapWithKeys(function ($variant) {
-                                                return [$variant->id => $variant->product->name];
+                                                return [$variant->id => "{$variant->product->name} ({$variant->product->unit->name}) - S/ {$variant->costo}"];
                                             });
-                                    })
-                                    // ESTO ES CLAVE: Permite ver el nombre guardado en lugar del ID "2"
-                                    ->getOptionLabelUsing(function ($value) {
-                                        $variant = \App\Models\Variant::with('product')->find($value);
-                                        return $variant ? $variant->product->name : null;
                                     })
                                     ->searchable()
                                     ->preload()
                                     ->required()
                                     ->reactive()
                                     ->afterStateUpdated(fn(Set $set) => $set('unit_id', null))
-                                    ->native(false), // false = Diseño bonito de Filament
+                                    ->native(false),
 
-                                // COLUMNA 2: UNIDAD
+                                // COLUMNA 2: UNIDAD (Filtrada por categoría)
                                 Select::make('unit_id')
-                                    ->label('Unidad')
+                                    ->label('Unidad Receta')
                                     ->placeholder('Selec.')
                                     ->options(function (Get $get) {
                                         $insumoId = $get('insumo_id');
@@ -159,20 +178,13 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
 
                                         if (!$unidadBase) return [];
 
-                                        // Lógica para traer unidades de la misma categoría o conversiones
                                         if ($unidadBase->unit_category_id) {
                                             return \App\Models\Unit::where('unit_category_id', $unidadBase->unit_category_id)
                                                 ->pluck('name', 'id');
                                         }
 
-                                        return \App\Models\Unit::where('id', $unidadBase->id)
-                                            ->orWhere('reference_unit_id', $unidadBase->id)
-                                            ->orWhere('id', $unidadBase->reference_unit_id)
-                                            ->pluck('name', 'id');
+                                        return [$unidadBase->id => $unidadBase->name];
                                     })
-                                    // ESTO ES CLAVE: Permite ver el nombre de la unidad guardada
-                                    ->getOptionLabelUsing(fn($value) => \App\Models\Unit::find($value)?->name)
-                                    ->searchable()
                                     ->required()
                                     ->native(false),
 
@@ -185,14 +197,71 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                             ])
                     ])
                     ->action(function (Variant $record, array $data) {
-                        // $record aquí es la Variante de la fila (el plato)
-                        $record->recetas()->delete();
+                        // 1. Configurar Lote y Rendimiento
+                        $isLote = $data['lote'] ?? false;
+                        $rendimiento = (float) ($data['rendimiento'] ?? 1);
 
-                        if (!empty($data['recetas'])) {
-                            $record->recetas()->createMany($data['recetas']);
+                        // Protección: Si no es lote, el rendimiento se fuerza a 1
+                        if (!$isLote || $rendimiento <= 0) {
+                            $rendimiento = 1;
                         }
 
-                        Notification::make()->title('Receta actualizada correctamente')->success()->send();
+                        // Actualizar la Variante con estos nuevos datos
+                        $record->update([
+                            'lote' => $isLote,
+                            'rendimiento' => $rendimiento
+                        ]);
+
+                        // 2. Borrar receta anterior
+                        $record->recetas()->delete();
+
+                        if (empty($data['recetas'])) {
+                            Notification::make()->title('Receta eliminada')->success()->send();
+                            return;
+                        }
+
+                        // 3. Guardar nueva receta
+                        $record->recetas()->createMany($data['recetas']);
+
+                        // 🟢 4. CÁLCULO DE COSTO MATEMÁTICO
+                        $costoTotalReceta = 0; // Costo de todo lo que ingresó el usuario
+
+                        foreach ($data['recetas'] as $item) {
+                            $insumo = \App\Models\Variant::with('product.unit')->find($item['insumo_id']);
+                            $unidadReceta = \App\Models\Unit::find($item['unit_id']);
+                            $cantidadReceta = (float) $item['cantidad'];
+
+                            if ($insumo && $unidadReceta && $insumo->product->unit) {
+                                $unidadStock = $insumo->product->unit;
+                                $costoInsumo = (float) $insumo->costo;
+
+                                $factorStock = (float) ($unidadStock->quantity ?? 1);
+                                $factorReceta = (float) ($unidadReceta->quantity ?? 1);
+
+                                if ($factorStock > 0) {
+                                    $costoPorUnidadBase = $costoInsumo / $factorStock;
+                                    $cantidadTotalBase = $cantidadReceta * $factorReceta;
+                                    $costoTotalReceta += ($costoPorUnidadBase * $cantidadTotalBase);
+                                }
+                            }
+                        }
+
+                        // 🟢 5. APLICAR LÓGICA DE LOTE
+                        // Si es lote, el costo del plato es Costo Total / Rendimiento. Si no, es el Costo Total.
+                        $nuevoCostoPlato = $isLote ? ($costoTotalReceta / $rendimiento) : $costoTotalReceta;
+
+                        // Actualizar el costo de la Variante
+                        $record->update(['costo' => round($nuevoCostoPlato, 2)]);
+
+                        Notification::make()
+                            ->title('Receta y Costo actualizados')
+                            ->body(
+                                $isLote
+                                    ? "Costo total olla: S/ " . number_format($costoTotalReceta, 2) . "\nRinde: {$rendimiento} platos.\nCosto Unitario: S/ " . number_format($nuevoCostoPlato, 2)
+                                    : "Costo del plato actualizado a: S/ " . number_format($nuevoCostoPlato, 2)
+                            )
+                            ->success()
+                            ->send();
                     }),
 
                 // --- BOTÓN EDITAR EXISTENTE ---
@@ -210,15 +279,14 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                         'status' => $record->status,
                     ])
                     ->form([
-                        Forms\Components\FileUpload::make('image_path')
-                            ->label('Imagen')
+                        FileUpload::make('image_path')
+                            ->label('Imagen de la presentación')
                             ->image()
-                            ->imageEditor()
-                            ->directory('products/variants')
                             ->disk('public')
+                            ->directory('tenants/' . Filament::getTenant()->slug . '/products/variants')
+                            ->visibility('public')
                             ->preserveFilenames()
                             ->columnSpanFull(),
-
                         Forms\Components\Grid::make(2)
                             ->schema([
                                 Forms\Components\TextInput::make('codigo_barras')

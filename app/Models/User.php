@@ -100,4 +100,9 @@ class User extends Authenticatable implements HasTenants
     {
         return $this->hasMany(ConceptoCaja::class);
     }
+
+    public function orderDetails()
+    {
+        return $this->hasMany(OrderDetail::class);
+    }
 }

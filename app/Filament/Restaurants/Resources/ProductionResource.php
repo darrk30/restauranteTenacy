@@ -19,7 +19,7 @@ class ProductionResource extends Resource
 
     protected static ?string $navigationGroup = 'Configuración';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 105;
 
     protected static ?string $navigationLabel = 'Areas de Producción';
 

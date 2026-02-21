@@ -10,10 +10,9 @@ class ProductsCluster extends Cluster
 
     protected static ?string $navigationLabel = 'Productos';
 
-    protected static ?string $navigationGroup = 'Inventarios';
+    protected static ?string $navigationGroup = 'Inventario';
 
-    protected static ?int $navigationSort = 0;
+    protected static ?int $navigationSort = 15;
 
     protected static ?string $slug = 'gestion';
-    
 }

@@ -13,7 +13,12 @@ class ListCashRegisters extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make()
+                ->label('Nuevo')
+                ->icon('heroicon-o-plus')
+                ->color('primary')
+                ->modalHeading('Nueva Caja') 
+                ->modalSubmitActionLabel('Crear Caja'), 
         ];
     }
 }

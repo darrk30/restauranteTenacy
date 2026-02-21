@@ -80,7 +80,12 @@ class RestaurantsPanelProvider extends PanelProvider
                 .fi-page-sub-navigation-sidebar-ctn {
                     width: 10rem !important;
                 }
-                
+
+                .fi-breadcrumbs {
+                    display: block !important;
+                    margin-bottom: 1rem;
+                }
+
                 html:not(.dark) {
 
                     /* Sidebar principal */

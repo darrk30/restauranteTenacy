@@ -26,7 +26,7 @@ class VentasCanalStats extends BaseWidget
         $filtros = $this->filters ?? [];
         $tenantId = Filament::getTenant()->id;
 
-        $query = Sale::query()->where('restaurant_id', $tenantId);
+        $query = Sale::query()->withoutGlobalScopes()->where('restaurant_id', $tenantId);
 
         // 1. LÓGICA DE FECHAS (Dashboard vs Reporte) -------------------------
         
