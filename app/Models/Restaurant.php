@@ -10,7 +10,23 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 #[ObservedBy([RestaurantObserver::class])]
 class Restaurant extends Model
 {
-    protected $fillable = ['name', 'name_comercial', 'ruc', 'address', 'phone', 'email', 'department', 'district', 'province', 'ubigeo', 'status', 'multialmacen', 'logo', 'slug'];
+    protected $fillable = [
+        'name',
+        'name_comercial',
+        'ruc',
+        'address',
+        'phone',
+        'email',
+        'department',
+        'district',
+        'province',
+        'ubigeo',
+        'status',
+        'logo',
+        'slug',
+        'carta_activa_cliente',
+        'carta_activa_admin',
+    ];
 
     public function getRouteKeyName()
     {
@@ -165,5 +181,10 @@ class Restaurant extends Model
     public function recetas()
     {
         return $this->hasMany(Receta::class);
+    }
+
+    public function banners()
+    {
+        return $this->hasMany(Banner::class);
     }
 }

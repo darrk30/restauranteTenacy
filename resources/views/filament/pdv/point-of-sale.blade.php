@@ -400,6 +400,10 @@
                         <button class="global-menu-item pay"
                             @click="window.location = '/app/pedidos/' + activeTable.orderId + '/pagar'"><x-heroicon-o-credit-card
                                 class="icon" /> <span>Pagar cuenta</span></button>
+                        <button class="global-menu-item" style="color: #6366f1;"
+                            @click="$wire.abrirModalCambioMesa(activeTable.id); menuOpen = false">
+                            <x-heroicon-o-arrows-right-left class="icon" /> <span>Cambiar de Mesa</span>
+                        </button>
                     </div>
                 </template>
                 <template x-if="activeTable.status === 'free'">
@@ -410,6 +414,74 @@
             </ul>
         </div>
     </div>
+
+    {{-- MODAL CAMBIO DE MESA --}}
+    @if ($mostrarModalCambioMesa)
+        <div class="modal-custom-overlay" style="z-index: 9999;">
+            <div class="modal-custom-box" style="max-width: 400px;">
+                <div class="modal-custom-header">
+                    <h3 class="flex items-center gap-2">
+                        <x-heroicon-o-arrows-right-left class="w-6 h-6 text-indigo-500" />
+                        <span>Transferir Orden</span>
+                    </h3>
+                    <button wire:click="cerrarModalCambioMesa" class="dm-close">&times;</button>
+                </div>
+
+                <div class="modal-custom-body" style="padding: 20px;">
+                    <p style="margin-bottom: 15px; color: #64748b; font-size: 14px;">
+                        Seleccione la mesa libre a la cual desea mover la orden actual.
+                    </p>
+
+                    <div class="field-group">
+                        <label class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2 block">
+                            Mesa Destino:
+                        </label>
+                        <select wire:model="mesaDestinoId" class="modal-custom-input w-full"
+                            style="padding: 10px; font-size: 16px;">
+                            <option value="">-- Seleccione una mesa libre --</option>
+                            @foreach ($floors as $floor)
+                                @php
+                                    // Filtramos solo las mesas libres de este piso
+                                    $mesasLibres = $floor->tables->filter(function ($t) {
+                                        return strtolower($t->estado_mesa ?? ($t->status ?? 'libre')) === 'libre';
+                                    });
+                                @endphp
+
+                                @if ($mesasLibres->count() > 0)
+                                    <optgroup label="{{ $floor->name }}">
+                                        @foreach ($mesasLibres as $mesa)
+                                            <option value="{{ $mesa->id }}">{{ $mesa->name }}</option>
+                                        @endforeach
+                                    </optgroup>
+                                @endif
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
+                <div class="modal-custom-footer"
+                    style="padding: 15px 20px; border-top: 1px solid #e2e8f0; display: flex; gap: 10px; justify-content: flex-end;">
+                    <button wire:click="cerrarModalCambioMesa" class="btn-modal btn-cancel flex-1"
+                        style="background: #f1f5f9; color: #475569;" wire:loading.attr="disabled"
+                        wire:target="cerrarModalCambioMesa" wire:loading.class="opacity-50 cursor-not-allowed">
+                        <span wire:loading.remove wire:target="cerrarModalCambioMesa">
+                            Cancelar
+                        </span>
+                        <span wire:loading wire:target="cerrarModalCambioMesa" style="color: #9ca3af;">
+                            Cancelando...
+                        </span>
+                    </button>
+                    <button wire:click="cambiarMesa" class="btn-modal flex-1"
+                        style="background: #6366f1; color: white;" wire:loading.attr="disabled"
+                        wire:target="cambiarMesa" wire:loading.class="opacity-75 cursor-not-allowed">
+
+                        <span wire:loading.remove wire:target="cambiarMesa">Confirmar Traslado</span>
+                        <span wire:loading wire:target="cambiarMesa">Moviendo...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
 
     {{-- LÓGICA DE TICKET --}}
     @php
@@ -444,7 +516,4 @@
     <script>
         window.APP_TENANT = @js($tenant->slug ?? 'default');
     </script>
-    {{-- @push('scripts')
-        <script src="{{ asset('js/mesas.js') }}" defer></script>
-    @endpush --}}
 </x-filament-panels::page>

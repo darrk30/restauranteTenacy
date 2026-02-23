@@ -71,6 +71,7 @@ class OrdenMesa extends Page implements HasActions
     public $delivery_id = null;
     public $cliente_id = null;
 
+    public $mostrarModalPrecuenta = false;
     public $mesa = null;
     public ?int $pedido = null;
 
@@ -852,6 +853,26 @@ class OrdenMesa extends Page implements HasActions
             });
     }
 
+    public function mostrarPrecuenta(): Action
+    {
+        return Action::make('mostrarPrecuenta')
+            ->label('Mostrar Precuenta')
+            ->icon('heroicon-o-document-text')
+            ->color('primary')
+            ->iconButton()
+            ->tooltip('Mostrar Precuenta')
+            ->extraAttributes([
+                'x-on:click' => 'mobileCartOpen = false',
+            ])
+            ->requiresConfirmation()
+            ->modalHeading('¿Mostrar Precuenta?')
+            ->modalDescription('¿Seguro que deseas mostrar la precuenta?')
+            ->modalSubmitActionLabel('Sí, Mostrar')
+            ->action(function () {
+                $this->mostrarTiketPrecuenta($this->pedido);
+            });
+    }
+
     public function ejecutarAnulacion($pedidoId)
     {
         if (!$pedidoId) return;
@@ -1339,6 +1360,27 @@ class OrdenMesa extends Page implements HasActions
         // Usamos el helper de ruta de Filament, pasando el ID del pedido
         return redirect()->to(PagarOrden::getUrl(['record' => $this->pedido]));
     }
+
+    public function mostrarTiketPrecuenta()
+    {
+        $this->mostrarModalPrecuenta = true;
+        if ($this->canal === 'salon' && $this->mesa) {
+            \App\Models\Table::where('id', $this->mesa)->update([
+                'estado_mesa' => 'pagando'
+            ]);
+            \Filament\Notifications\Notification::make()
+                ->title('Cuenta solicitada')
+                ->body('La mesa ha cambiado a estado "Pagando".')
+                ->info()
+                ->send();
+        }
+    }
+
+    public function cerrarPrecuenta()
+    {
+        $this->mostrarModalPrecuenta = false;
+    }
+
 
     public static function getSlug(): string
     {

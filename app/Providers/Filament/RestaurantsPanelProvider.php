@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Restaurants\Pages\Dashboard;
+use App\Filament\Restaurants\Widgets\QrMenuWidget;
 use App\Models\Restaurant;
 use Filament\FontProviders\GoogleFontProvider;
 use Filament\Http\Middleware\Authenticate;

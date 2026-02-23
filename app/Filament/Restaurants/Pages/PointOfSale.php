@@ -35,6 +35,9 @@ class PointOfSale extends Page
     public $repartidorId = '';
     public $mostrarModalDetalles = false;
     public ?Order $ordenParaDetalles = null;
+    public $mostrarModalCambioMesa = false;
+    public $mesaOrigenId = null;
+    public $mesaDestinoId = null;
 
     public function mount()
     {
@@ -286,6 +289,85 @@ class PointOfSale extends Page
     {
         session()->flash('personas_iniciales', $personas);
         return redirect()->to("/app/orden-mesa/{$mesaId}");
+    }
+
+    public function abrirModalCambioMesa($mesaOrigenId)
+    {
+        $this->mesaOrigenId = $mesaOrigenId;
+        $this->mesaDestinoId = null; // Resetear la selección anterior
+        $this->mostrarModalCambioMesa = true;
+    }
+
+    public function cerrarModalCambioMesa()
+    {
+        $this->mostrarModalCambioMesa = false;
+        $this->mesaOrigenId = null;
+        $this->mesaDestinoId = null;
+    }
+
+    public function cambiarMesa()
+    {
+        // 1. Validaciones
+        if (!$this->mesaOrigenId || !$this->mesaDestinoId) {
+            Notification::make()->title('Debe seleccionar una mesa de destino')->warning()->send();
+            return;
+        }
+
+        if ($this->mesaOrigenId == $this->mesaDestinoId) {
+            Notification::make()->title('La mesa de destino debe ser diferente a la actual')->warning()->send();
+            return;
+        }
+
+        // 2. Obtener las mesas
+        $mesaOrigen = Table::find($this->mesaOrigenId);
+        $mesaDestino = Table::find($this->mesaDestinoId);
+
+        if (!$mesaOrigen || !$mesaOrigen->order_id) {
+            Notification::make()->title('La mesa de origen no tiene una orden activa')->danger()->send();
+            $this->cerrarModalCambioMesa();
+            return;
+        }
+
+        if (!$mesaDestino || strtolower($mesaDestino->estado_mesa) !== 'libre') {
+            Notification::make()->title('La mesa de destino no está libre')->danger()->send();
+            return;
+        }
+
+        \Illuminate\Support\Facades\DB::beginTransaction();
+        try {
+            $orderId = $mesaOrigen->order_id;
+            $asientos = $mesaOrigen->asientos;
+
+            // 3. Actualizar la orden con la nueva mesa
+            Order::where('id', $orderId)->update(['table_id' => $mesaDestino->id]);
+
+            // 4. Actualizar la mesa de destino (Ocuparla)
+            $mesaDestino->update([
+                'estado_mesa' => 'ocupada',
+                'order_id' => $orderId,
+                'asientos' => $asientos
+            ]);
+
+            // 5. Liberar la mesa de origen
+            $mesaOrigen->update([
+                'estado_mesa' => 'libre',
+                'order_id' => null,
+                'asientos' => 0
+            ]);
+
+            \Illuminate\Support\Facades\DB::commit();
+
+            Notification::make()
+                ->title('Orden movida con éxito')
+                ->body("La orden se trasladó a la mesa {$mesaDestino->name}.")
+                ->success()
+                ->send();
+
+            $this->cerrarModalCambioMesa();
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            Notification::make()->title('Error al cambiar de mesa')->body($e->getMessage())->danger()->send();
+        }
     }
 
     public function getHeading(): string

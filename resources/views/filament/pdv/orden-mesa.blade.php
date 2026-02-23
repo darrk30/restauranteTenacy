@@ -291,6 +291,7 @@
                     @if ($pedido && !(count($carrito) === 0))
                         {{-- ESTO RENDERIZA EL BOTÓN ROJO CON EL MODAL AUTOMÁTICO --}}
                         {{ $this->anularPedidoAction }}
+                        {{ $this->mostrarPrecuenta }}
                     @endif
                 </div>
 
@@ -727,6 +728,30 @@
     @endif
     {{-- ========================================================================= --}}
 
+    @if ($mostrarModalPrecuenta)
+        <div class="pantalla-exito-overlay"
+            style="display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); position: fixed; inset: 0; z-index: 9999;">
+            <div class="modal-exito-contenedor"
+                style="background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center;">
+                <h2 style="font-weight: bold; margin-bottom: 15px;">Imprimir Pre-cuenta</h2>
+
+                <div style="border: 1px solid #ddd; border-radius: 8px; overflow: hidden; margin-bottom: 20px;">
+                    <iframe id="iframe-precuenta" src="{{ route('order.precuenta.print', $pedido) }}"
+                        style="width: 100%; height: 350px; border: none;"></iframe>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button wire:click="cerrarPrecuenta"
+                        style="flex: 1; padding: 12px; border-radius: 8px; background: #EEE; font-weight: bold;">CERRAR</button>
+                    <button onclick="imprimirIframe('iframe-precuenta')"
+                        style="flex: 1; padding: 12px; border-radius: 8px; background: #2563EB; color: white; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 5px;">
+                        <x-heroicon-o-printer style="width: 18px; height: 18px;" /> IMPRIMIR
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
+
     @if ($productoSeleccionado)
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div class="absolute inset-0" wire:click="cerrarModal"></div>
@@ -740,6 +765,12 @@
         <script>
             window.scrollAnimation = window.scrollAnimation || null;
 
+            function imprimirIframe(id) {
+                const frame = document.getElementById(id);
+                frame.contentWindow.focus();
+                frame.contentWindow.print();
+            }
+
             function scrollCategories(direction) {
                 const container = document.getElementById('categoryList');
                 if (!container) return;
@@ -749,6 +780,7 @@
                 const change = direction === 'left' ? -distance : distance;
                 const startTime = performance.now();
                 cancelAnimationFrame(window.scrollAnimation);
+
                 function animate(currentTime) {
                     const elapsed = currentTime - startTime;
                     const progress = Math.min(elapsed / duration, 1);
