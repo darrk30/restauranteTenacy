@@ -40,28 +40,48 @@ class TablesRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('name')->label('Mesa'),
                 Tables\Columns\TextColumn::make('asientos')->label('Asientos'),
                 Tables\Columns\IconColumn::make('status')->boolean()->label('Disponible'),
-                Tables\Columns\TextColumn::make('created_at')->dateTime()->label('Creado'),
-            ])
-            ->filters([
-                //
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make()->label('Nueva')
                     ->icon('heroicon-o-plus')
                     ->color('primary')
-                    ->modalHeading('Nueva Mesa') 
-                ->modalSubmitActionLabel('Crear Mesa'),
+                    ->modalHeading('Nueva Mesa')
+                    ->modalSubmitActionLabel('Crear Mesa'),
             ])
             ->actions([
+                // 🟢 NUEVA ACCIÓN: VER Y DESCARGAR QR DE LA MESA
+                Tables\Actions\Action::make('qr_code')
+                    ->label('QR Mesa')
+                    ->icon('heroicon-o-qr-code')
+                    ->color('info')
+                    ->modalHeading(fn($record) => 'Código QR - ' . $record->name)
+                    ->modalContent(function ($record) {
+                        $tenant = filament()->getTenant();
+
+                        // 🟢 AQUÍ ESTÁ LA MAGIA: Le pasamos el ID de la mesa por la URL
+                        $url = route('carta.digital', ['tenant' => $tenant->slug, 'mesa' => $record->id]);
+
+                        // Generamos el QR en SVG
+                        $qrHtml = \SimpleSoftwareIO\QrCode\Facades\QrCode::size(250)
+                            ->style('round')
+                            ->margin(1)
+                            ->color(15, 100, 59) // Verde oscuro, puedes cambiarlo
+                            ->generate($url);
+
+                        return view('filament.pisos.qr-mesa-modal', [
+                            'qrHtml' => $qrHtml,
+                            'mesa' => $record,
+                            'url' => $url,
+                            'tenantSlug' => $tenant->slug,
+                        ]);
+                    })
+                    ->modalSubmitAction(false) // No necesitamos botón "Guardar"
+                    ->modalCancelActionLabel('Cerrar'),
+
                 Tables\Actions\EditAction::make()
                     ->modalHeading('Editar Mesa')
                     ->modalSubmitActionLabel('Actualizar Mesa'),
                 Tables\Actions\DeleteAction::make(),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
             ]);
     }
 }

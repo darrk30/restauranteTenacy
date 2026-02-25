@@ -7,6 +7,7 @@ use App\Filament\Restaurants\Widgets\CantidadVentasCanalChart;
 use App\Filament\Restaurants\Widgets\ComprasMensualesChart;
 use App\Filament\Restaurants\Widgets\GananciasStats;
 use App\Filament\Restaurants\Widgets\IngresosEgresosStats;
+use App\Filament\Restaurants\Widgets\QrMenuWidget;
 use App\Filament\Restaurants\Widgets\VentasCanalStats;
 use App\Filament\Restaurants\Widgets\VentasPorDiaChart;
 use App\Filament\Restaurants\Widgets\VentasPorMetodoPagoStats;
@@ -34,6 +35,7 @@ class Dashboard extends BaseDashboard
             VentasPorDiaChart::make(),
             CantidadVentasCanalChart::make(),
             ComprasMensualesChart::make(),
+            QrMenuWidget::make(),
         ];
     }
 

@@ -16,22 +16,28 @@ class Order extends Model
         'table_id',
         'code',
         'canal',
+        'web',
         'client_id',
         'delivery_id',
         'nombre_delivery',
         'nombre_cliente',
+        'telefono',
+        'direccion',
         'status',
         'status_llevar_delivery',
         'subtotal',
         'igv',
         'total',
+        'notas',
         'fecha_pedido',
         'user_id',
         'user_actualiza_id',
+        'payment_method_id',
     ];
 
     protected $casts = [
         'status' => statusPedido::class,
+        'web' => 'boolean',
     ];
 
     public function restaurant()
@@ -57,6 +63,11 @@ class Order extends Model
     public function userActualiza()
     {
         return $this->belongsTo(User::class, 'user_actualiza_id');
+    }
+
+    public function paymentMethod()
+    {
+        return $this->belongsTo(PaymentMethod::class);
     }
 
     /*

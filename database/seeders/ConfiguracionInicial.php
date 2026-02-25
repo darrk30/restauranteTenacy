@@ -10,6 +10,7 @@ use App\Models\Production;
 use App\Models\Restaurant;
 use App\Models\TypeDocument;
 use App\Models\CashRegister; // IMPORTANTE: Agregar el modelo
+use App\Models\Configuration;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -131,5 +132,32 @@ class ConfiguracionInicial extends Seeder
                 'is_active' => true,
             ]);
         }
+
+        Configuration::firstOrCreate(
+            ['restaurant_id' => $restaurant->id],
+            [
+                // Impresión Directa
+                'impresion_directa_precuenta' => false,
+                'impresion_directa_comprobante' => false,
+                'impresion_directa_comanda' => true, // Por defecto imprimen comanda
+
+                // Modal
+                'mostrar_modal_impresion_comanda' => false,
+                'mostrar_modal_impresion_precuenta' => false,
+                'mostrar_modal_impresion_comprobante' => false,
+
+                // KDS
+                'mostrar_pantalla_cocina' => false,
+
+                // Web
+                'guardar_pedidos_web' => true,
+                'habilitar_delivery_web' => true,
+                'habilitar_recojo_web' => true,
+
+                // Facturación
+                'precios_incluyen_impuesto' => true,
+                'porcentaje_impuesto' => 18.00,
+            ]
+        );
     }
 }

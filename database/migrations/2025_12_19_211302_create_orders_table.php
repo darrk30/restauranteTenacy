@@ -15,8 +15,11 @@ return new class extends Migration
             $table->id();
             $table->string('code');
             $table->string('canal')->nullable();
+            $table->boolean('web')->default(false);
             $table->foreignId('client_id')->nullable()->constrained()->nullOnDelete();
             $table->string('nombre_cliente')->nullable();
+            $table->string('telefono')->nullable();
+            $table->string('direccion')->nullable();
             $table->foreignId('delivery_id')->nullable()->constrained('users'); // Delivery
             $table->string('nombre_delivery')->nullable();
             $table->string('status')->default('pendiente');
@@ -24,10 +27,12 @@ return new class extends Migration
             $table->decimal('subtotal', 10, 2)->default(0);
             $table->decimal('igv', 10, 2)->default(0);
             $table->decimal('total', 10, 2)->default(0);
+            $table->text('notas')->nullable();
             $table->timestamp('fecha_pedido')->useCurrent();
             $table->foreignId('table_id')->nullable()->constrained('tables')->nullOnDelete();
-            $table->foreignId('user_id')->constrained()->restrictOnDelete();
+            $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('user_actualiza_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('payment_method_id')->nullable()->constrained('payment_methods');
             $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
             $table->unique(['restaurant_id', 'code']);
             $table->timestamps();

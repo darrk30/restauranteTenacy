@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->boolean('status')->default(true);
+            $table->integer('sort_order')->default(0);
             $table->foreignId('restaurant_id')->constrained('restaurants')->onDelete('cascade');
             $table->unique(['restaurant_id', 'name']);
             $table->timestamps();

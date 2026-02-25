@@ -140,21 +140,23 @@
     <table>
         <thead>
             @if ($tipo_reporte == 'ordenes')
-                {{-- CABECERA PARA ÓRDENES --}}
+                {{-- 🟢 CABECERA PARA ÓRDENES (Agregada Mesa) --}}
                 <tr>
                     <th>Nro Pedido</th>
                     <th>Fecha / Hora</th>
                     <th>Canal</th>
+                    <th>Mesa</th>
                     <th>Atendido por</th>
                     <th>Anulado por</th>
                     <th class="text-right">Monto Total</th>
                 </tr>
             @else
-                {{-- CABECERA PARA PRODUCTOS --}}
+                {{-- 🟢 CABECERA PARA PRODUCTOS (Agregada Mesa y Fecha Anulación) --}}
                 <tr>
                     <th>Orden</th>
-                    <th>Fecha</th>
+                    <th>Fecha Anulación</th>
                     <th>Canal</th>
+                    <th>Mesa</th>
                     <th>Producto</th>
                     <th>Atendido por</th>
                     <th>Anulado por</th>
@@ -167,17 +169,21 @@
             @forelse($anulaciones as $item)
                 <tr>
                     @if ($tipo_reporte == 'ordenes')
-                        {{-- FILA PARA ÓRDENES --}}
+                        {{-- 🟢 FILA PARA ÓRDENES --}}
                         <td>#{{ $item->code }}</td>
                         <td>{{ \Carbon\Carbon::parse($item->created_at)->format('d/m/Y h:i A') }}</td>
                         <td style="text-transform: capitalize;">{{ $item->canal }}</td>
+                        <td>{{ $item->table->name ?? '---' }}</td>
                         <td>{{ $item->user->name ?? 'N/A' }}</td>
                         <td>{{ $item->userActualiza->name ?? 'El mismo' }}</td>
                         <td class="text-right text-danger">S/ {{ number_format($item->total, 2) }}</td>
                     @else
+                        {{-- 🟢 FILA PARA PRODUCTOS --}}
                         <td>#{{ $item->order->code }}</td>
-                        <td>{{ $item->created_at->format('d/m/H i:A') }}</td>
+                        {{-- Usamos updated_at que es cuando se cambió el estado a cancelado --}}
+                        <td>{{ \Carbon\Carbon::parse($item->updated_at)->format('d/m/Y h:i A') }}</td>
                         <td style="text-transform: capitalize;">{{ $item->order->canal }}</td>
+                        <td>{{ $item->order->table->name ?? '---' }}</td>
                         <td>
                             {{ $item->product_name }}
                             @if ($item->cortesia)
@@ -192,7 +198,8 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="{{ $tipo_reporte == 'ordenes' ? 6 : 6 }}" class="text-center">
+                    {{-- 🟢 Ajustamos los colspan para que ocupen toda la tabla cuando esté vacía --}}
+                    <td colspan="{{ $tipo_reporte == 'ordenes' ? 7 : 9 }}" class="text-center">
                         No se encontraron anulaciones en este periodo.
                     </td>
                 </tr>

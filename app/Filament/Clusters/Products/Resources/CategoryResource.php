@@ -43,17 +43,28 @@ class CategoryResource extends Resource
                     ->required()
                     ->default(true)
                     ->inline(false),
+                
+                // Opcional: puedes agregar el campo en el form si quieres editarlo manualmente
+                // aunque con la funcionalidad de arrastrar en la tabla no suele ser necesario.
             ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
+            // 1. Habilitamos la función de arrastrar para ordenar
+            ->reorderable('sort_order') 
+            // 2. Establecemos el orden por defecto para que la tabla coincida con la lógica
+            ->defaultSort('sort_order') 
             ->columns([
                 TextColumn::make('name')->label('Nombre')
                     ->searchable(),
                 IconColumn::make('status')->label('Publicado')
                     ->boolean(),
+                // Agregamos la columna de orden solo para visualizar (opcional)
+                TextColumn::make('sort_order')
+                    ->label('Orden')
+                    ->sortable(),
             ])
             ->filters([
                 //
@@ -80,8 +91,6 @@ class CategoryResource extends Resource
     {
         return [
             'index' => ListCategories::route('/'),
-            // 'create' => Pages\CreateCategory::route('/create'),
-            // 'edit' => Pages\EditCategory::route('/{record}/edit'),
         ];
     }
 }
