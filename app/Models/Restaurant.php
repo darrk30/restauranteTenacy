@@ -6,6 +6,7 @@ use App\Observers\RestaurantObserver;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Facades\Cache;
 
 #[ObservedBy([RestaurantObserver::class])]
 class Restaurant extends Model
@@ -31,6 +32,30 @@ class Restaurant extends Model
     public function getRouteKeyName()
     {
         return 'slug';
+    }
+
+    public function getCachedConfigAttribute()
+    {
+        $cacheKey = "tenant_{$this->id}_config";
+
+        return Cache::rememberForever($cacheKey, function () {
+            // Si existe en la BD, lo retorna. 
+            // Si no, devuelve un modelo temporal (solo en RAM) CON sus atributos por defecto.
+            return $this->configuration ?? new Configuration([
+                'impresion_directa_precuenta' => false,
+                'impresion_directa_comprobante' => false,
+                'impresion_directa_comanda' => false,
+                'mostrar_modal_impresion_comanda' => false,
+                'mostrar_modal_impresion_precuenta' => false,
+                'mostrar_modal_impresion_comprobante' => false,
+                'mostrar_pantalla_cocina' => false,
+                'guardar_pedidos_web' => true,
+                'habilitar_delivery_web' => true,
+                'habilitar_recojo_web' => true,
+                'precios_incluyen_impuesto' => true,
+                'porcentaje_impuesto' => 18.00,
+            ]);
+        });
     }
 
     public function users(): BelongsToMany
@@ -186,5 +211,10 @@ class Restaurant extends Model
     public function banners()
     {
         return $this->hasMany(Banner::class);
+    }
+
+    public function configuration()
+    {
+        return $this->hasOne(Configuration::class);
     }
 }

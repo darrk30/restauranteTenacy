@@ -38,6 +38,8 @@ class PointOfSale extends Page
     public $mostrarModalCambioMesa = false;
     public $mesaOrigenId = null;
     public $mesaDestinoId = null;
+        // Añade esta variable pública a tu componente
+    public $repartidorAsignadoRapido = '';
 
     public function mount()
     {
@@ -119,10 +121,14 @@ class PointOfSale extends Page
     }
 
     // Método optimizado para ser llamado desde el modal
-    public function cargarDetallesOrden($orderId)
+public function cargarDetallesOrden($id)
     {
-        // Simplemente cargamos la orden, la vista se actualizará reactivamente
-        $this->ordenParaDetalles = Order::with(['details', 'user'])->find($orderId);
+        $this->ordenParaDetalles = \App\Models\Order::with('details')->find($id);
+
+        // 🟢 INICIALIZAMOS EL SELECT CON EL REPARTIDOR ACTUAL (Si existe)
+        if ($this->ordenParaDetalles && $this->ordenParaDetalles->canal === 'delivery') {
+            $this->repartidorAsignadoRapido = $this->ordenParaDetalles->delivery_id ?? '';
+        }
     }
 
     // Método para limpiar al cerrar (opcional, para ahorrar memoria)
@@ -178,7 +184,7 @@ class PointOfSale extends Page
         $rules = ['nombresCliente' => 'required|min:3'];
 
         // Si hay documento o es Delivery, apellidos son obligatorios (excepto RUC)
-        if (($canal === 'delivery' || !empty($this->numDoc)) && $this->tipoDoc === 'DNI') {
+        if ((!empty($this->numDoc)) && $this->tipoDoc === 'DNI') {
             $rules['apellidosCliente'] = 'required|min:2';
         }
 
@@ -190,7 +196,6 @@ class PointOfSale extends Page
 
         $this->validate($rules, [
             'nombresCliente.required' => 'El nombre es obligatorio',
-            'apellidosCliente.required' => 'Los apellidos son obligatorios',
             'repartidorId.required' => 'Seleccione un repartidor',
             'direccionCliente.required' => 'La dirección es obligatoria',
         ]);
@@ -367,6 +372,34 @@ class PointOfSale extends Page
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\DB::rollBack();
             Notification::make()->title('Error al cambiar de mesa')->body($e->getMessage())->danger()->send();
+        }
+    }
+
+    public function asignarRepartidorRapido($orderId)
+    {
+        $order = \App\Models\Order::find($orderId);
+        
+        // Si se selecciona un repartidor, lo asignamos. Si se selecciona la opción vacía, lo removemos.
+        $repartidorId = $this->repartidorAsignadoRapido ?: null;
+        $repartidorNombre = null;
+
+        if ($repartidorId) {
+            $repartidor = \App\Models\User::find($repartidorId);
+            $repartidorNombre = $repartidor ? $repartidor->name : null;
+        }
+
+        if ($order) {
+            $order->update([
+                'delivery_id' => $repartidorId,
+                'nombre_delivery' => $repartidorNombre,
+            ]);
+
+            \Filament\Notifications\Notification::make()
+                ->title($repartidorId ? 'Repartidor asignado/cambiado' : 'Repartidor removido')
+                ->success()
+                ->send();
+                
+            $this->cargarDetallesOrden($orderId); // Recargamos el modal
         }
     }
 

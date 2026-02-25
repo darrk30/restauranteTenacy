@@ -17,6 +17,7 @@ return new class extends Migration
 
             // estado actual
             $table->string('estado_mesa')->default('libre'); // libre, ocupada, pagando
+            $table->string('qr_code')->nullable();
 
             // cantidad de asientos fijos
             $table->integer('asientos')->default(1);

@@ -1,73 +1,26 @@
 @props(['slides' => [], 'interval' => 4000])
 
-@php
-    $sliderId = 'slider-' . Str::random(8);
-@endphp
-
-<style>
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-    /* Estilos para el contenido HTML del Textarea */
-    .slider-content p { display: block; margin-bottom: 1rem; line-height: 1.4; }
-    .slider-content a { pointer-events: auto !important; position: relative; z-index: 50; }
-
-    /* Animación de entrada */
-    .slide-active .animate-text { animation: slideUp 0.6s ease-out forwards; }
-    @keyframes slideUp {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Ajuste para que la imagen NO SE CORTE */
-    .img-fit-full {
-        width: 100%;
-        height: 100%;
-        object-fit: contain; /* Muestra la imagen completa sin recortes */
-        position: relative;
-        z-index: 10;
-    }
-
-    /* Fondo de seguridad para imágenes completas */
-    .bg-full-slider {
-        background-color: #ffffff;
-    }
-
-    /* Diseño mixto en móviles */
-    @media (max-width: 768px) {
-        .mixed-image-container {
-            opacity: 0.3;
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: cover !important;
-        }
-    }
-</style>
-
 @if (count($slides) > 0)
-    <div id="{{ $sliderId }}" class="relative w-full max-w-6xl mx-auto group overflow-hidden rounded-2xl md:rounded-3xl shadow-lg mb-10 bg-gray-100">
+    {{-- 🟢 Agregamos 'app-slider-wrapper' y 'data-interval' para que el JS lo detecte --}}
+    <div class="app-slider-wrapper relative w-full max-w-6xl mx-auto group overflow-hidden rounded-2xl md:rounded-3xl shadow-lg mb-10 bg-gray-100" data-interval="{{ $interval }}">
 
         <div class="slider-track flex overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar cursor-grab h-64 md:h-96 relative">
 
             @foreach ($slides as $index => $slide)
                 <div class="slide-item w-full shrink-0 snap-center relative flex items-center h-full overflow-hidden transition-all duration-700 {{ $index === 0 ? 'slide-active' : '' }} {{ $slide['type'] === 'full_image' ? 'bg-full-slider' : '' }}"
-                    style="{{ $slide['type'] !== 'full_image' ? 'background-color: ' . ($slide['bg_color'] ?? '#0f643b') : '' }}"
+                    style="{{ $slide['type'] !== 'full_image' ? 'background-color: ' . ($slide['bg_color'] ?? '#ce6439') : '' }}"
                     data-index="{{ $index }}">
 
-                    {{-- Link general para banners de imagen completa --}}
                     @if (!empty($slide['link']) && $slide['type'] === 'full_image')
                         <a href="{{ $slide['link'] }}" class="absolute inset-0 z-30"></a>
                     @endif
 
-                    {{-- CONTENIDO SEGÚN TIPO --}}
                     @if ($slide['type'] === 'full_image')
-                        {{-- CASO 1: IMAGEN COMPLETA RESPONSIVA --}}
                         <picture class="w-full h-full flex justify-center items-center">
                             <source media="(max-width: 767px)" srcset="{{ $slide['image_mobile'] ?? $slide['image'] }}">
                             <img src="{{ $slide['image'] }}" class="img-fit-full" alt="Promoción">
                         </picture>
                     @else
-                        {{-- CASO 2: MIXTO O SOLO TEXTO --}}
                         <div class="relative w-full h-full flex items-center px-8 md:px-16 z-20">
                             <div class="w-full {{ $slide['type'] === 'mixed' ? 'md:w-3/5' : 'text-center' }} slider-content text-white animate-text">
                                 {!! $slide['title'] !!}
@@ -82,14 +35,10 @@
                                 </div>
                             @endif
                         </div>
-                        
-                        {{-- Overlay para móviles en modo mixto/texto --}}
                         <div class="absolute inset-0 bg-black/20 md:hidden z-0"></div>
                     @endif
-
                 </div>
             @endforeach
-
         </div>
 
         {{-- Controles --}}
@@ -106,48 +55,4 @@
             @endforeach
         </div>
     </div>
-
-    <script>
-        (function() {
-            const sliderWrapper = document.getElementById('{{ $sliderId }}');
-            if (!sliderWrapper) return;
-            const track = sliderWrapper.querySelector('.slider-track');
-            const items = sliderWrapper.querySelectorAll('.slide-item');
-            const dots = sliderWrapper.querySelectorAll('.dot');
-            let currentIndex = 0;
-            let timer;
-
-            function updateUI(index) {
-                dots.forEach((dot, i) => {
-                    dot.classList.toggle('bg-white', i === index);
-                    dot.classList.toggle('w-10', i === index);
-                    dot.classList.toggle('bg-white/40', i !== index);
-                    dot.classList.toggle('w-4', i !== index);
-                });
-                items.forEach((item, i) => item.classList.toggle('slide-active', i === index));
-            }
-
-            function goTo(index) {
-                if (index >= items.length) index = 0;
-                if (index < 0) index = items.length - 1;
-                currentIndex = index;
-                track.scrollTo({ left: track.clientWidth * currentIndex, behavior: 'smooth' });
-                updateUI(currentIndex);
-            }
-
-            const start = () => { clearInterval(timer); timer = setInterval(() => goTo(currentIndex + 1), {{ $interval }}); };
-            sliderWrapper.querySelector('.next-btn').onclick = () => { goTo(currentIndex + 1); start(); };
-            sliderWrapper.querySelector('.prev-btn').onclick = () => { goTo(currentIndex - 1); start(); };
-            dots.forEach(dot => dot.onclick = (e) => { goTo(parseInt(e.target.dataset.index)); start(); });
-            
-            track.onscroll = () => {
-                clearTimeout(window.isScrolling);
-                window.isScrolling = setTimeout(() => {
-                    const newIndex = Math.round(track.scrollLeft / track.clientWidth);
-                    if (newIndex !== currentIndex) { currentIndex = newIndex; updateUI(currentIndex); }
-                }, 100);
-            };
-            start();
-        })();
-    </script>
 @endif

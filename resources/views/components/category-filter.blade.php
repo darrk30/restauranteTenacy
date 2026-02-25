@@ -36,19 +36,19 @@
                 class="hidden absolute right-0 top-full mt-1 z-50 w-40 origin-top-right rounded-xl bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none overflow-hidden transition-all duration-200 opacity-0 -translate-y-2">
                 <div class="py-1">
                     <button
-                        class="sort-option block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-[#0f643b] hover:text-white transition-colors"
+                        class="sort-option block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-[#ce6439] hover:text-white transition-colors"
                         data-sort="default">Por defecto</button>
                     <button
-                        class="sort-option block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-[#0f643b] hover:text-white transition-colors"
+                        class="sort-option block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-[#ce6439] hover:text-white transition-colors"
                         data-sort="price_asc">Menor Precio</button>
                     <button
-                        class="sort-option block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-[#0f643b] hover:text-white transition-colors"
+                        class="sort-option block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-[#ce6439] hover:text-white transition-colors"
                         data-sort="price_desc">Mayor Precio</button>
                     <button
-                        class="sort-option block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-[#0f643b] hover:text-white transition-colors"
+                        class="sort-option block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-[#ce6439] hover:text-white transition-colors"
                         data-sort="name_asc">A - Z</button>
                     <button
-                        class="sort-option block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-[#0f643b] hover:text-white transition-colors"
+                        class="sort-option block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-[#ce6439] hover:text-white transition-colors"
                         data-sort="name_desc">Z - A</button>
                 </div>
             </div>
@@ -58,12 +58,12 @@
     @if (count($categories) > 0)
         <div class="flex overflow-x-auto no-scrollbar gap-2 pb-2 -mx-4 px-4 md:mx-0 md:px-0">
             <button data-filter="todos"
-                class="category-btn shrink-0 px-5 py-2 bg-[#0f643b] text-white text-sm font-semibold rounded-full shadow-md transition-transform active:scale-95">
+                class="category-btn shrink-0 px-5 py-2 bg-[#ce6439] text-white text-sm font-semibold rounded-full shadow-md transition-transform active:scale-95">
                 Todos
             </button>
             @foreach ($categories as $category)
                 <button data-filter="{{ strtolower(is_array($category) ? $category['name'] : $category->name) }}"
-                    class="category-btn shrink-0 px-5 py-2 bg-white border border-gray-200 text-gray-600 text-sm font-medium rounded-full hover:bg-[#0f643b]/10 hover:text-[#0f643b] hover:border-[#0f643b] transition-all active:scale-95 shadow-sm">
+                    class="category-btn shrink-0 px-5 py-2 bg-white border border-gray-200 text-gray-600 text-sm font-medium rounded-full hover:bg-[#ce6439]/10 hover:text-[#ce6439] hover:border-[#ce6439] transition-all active:scale-95 shadow-sm">
                     {{ is_array($category) ? $category['name'] : $category->name }}
                 </button>
             @endforeach

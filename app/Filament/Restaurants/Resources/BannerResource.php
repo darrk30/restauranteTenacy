@@ -15,10 +15,8 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
-use Filament\Forms\Components\Group;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\ColorColumn;
 use Filament\Tables\Columns\ToggleColumn;
 
 class BannerResource extends Resource
@@ -26,64 +24,47 @@ class BannerResource extends Resource
     protected static ?string $model = Banner::class;
     protected static ?string $navigationIcon = 'heroicon-o-photo';
     protected static ?string $navigationLabel = 'Banners / Promociones';
+    protected static ?string $navigationGroup = 'Configuración';
+    protected static ?int $navigationSort = 130;
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
                 Section::make('Configuración del Banner')
-                    ->description('Define si el banner será una imagen completa o un diseño con texto.')
+                    ->description('Sube las imágenes para tu banner promocional.')
                     ->schema([
-                        Select::make('type')
-                            ->label('Tipo de Diseño')
-                            ->options([
-                                'mixed' => 'Diseño Mixto (Texto + Imagen lateral)',
-                                'full_image' => 'Imagen Completa (Borde a borde)',
-                                'only_text' => 'Solo Texto (Fondo de color)',
-                            ])
-                            ->default('mixed')
-                            ->live() // Permite ocultar/mostrar campos dinámicamente
-                            ->required()
-                            ->columnSpanFull(),
+                        // Ocultamos el selector de tipo y lo forzamos a imagen completa
+                        Forms\Components\Hidden::make('type')
+                            ->default('full_image'),
 
-                        // Grupo dinámico: Se oculta si es Imagen Completa
-                        Group::make([
-                            Textarea::make('title')
-                                ->label('Contenido HTML del Banner')
-                                ->helperText('Usa clases de Tailwind. Ej: <h2 class="text-4xl font-bold">Título</h2>')
-                                ->rows(8)
-                                ->autosize()
-                                ->extraInputAttributes([
-                                    'style' => 'font-family: monospace; font-size: 14px; line-height: 1.5;',
-                                ])
-                                ->placeholder('<h2 class="text-white text-3xl md:text-5xl font-black">...</h2>')
-                                ->columnSpanFull(),
+                        // Ocultamos el área de texto HTML
+                        Textarea::make('title')
+                            ->hidden(),
 
-                            ColorPicker::make('bg_color')
-                                ->label('Color de fondo')
-                                ->default('#0f643b')
-                                ->required()
-                                ->dehydrated(fn($state, Forms\Get $get) => $get('type') !== 'full_image'),
-                        ])
-                            ->columnSpanFull()
-                            ->hidden(fn(Forms\Get $get) => $get('type') === 'full_image'),
+                        // Ocultamos el selector de color
+                        ColorPicker::make('bg_color')
+                            ->hidden(),
 
                         FileUpload::make('image')
-                            ->label('Imagen para PC')
+                            ->label('Imagen para PC / Tablet')
+                            ->helperText('Formato recomendado: 1200x400px')
                             ->directory('banners')
                             ->imageEditor()
-                            ->required(),
+                            ->required()
+                            ->columnSpan(1),
 
                         FileUpload::make('image_mobile')
                             ->label('Imagen para Móvil (Opcional)')
+                            ->helperText('Si se deja vacío, se usará la de PC.')
                             ->directory('banners')
                             ->imageEditor()
-                            ->helperText('Si no se sube, se usará la de PC en móviles.'),
+                            ->columnSpan(1),
 
                         Toggle::make('is_active')
-                            ->label('¿Mostrar este banner?')
+                            ->label('¿Banner visible?')
                             ->default(true)
-                            ->inline(false),
+                            ->columnSpanFull(),
                     ])->columns(2)
             ]);
     }
@@ -93,32 +74,28 @@ class BannerResource extends Resource
         return $table
             ->columns([
                 ImageColumn::make('image')
-                    ->label('Imagen')
+                    ->label('Imagen PC')
                     ->circular()
-                    ->size(50),
+                    ->size(60),
 
-                TextColumn::make('title')
-                    ->label('Contenido')
-                    ->words(8)
-                    ->html()
-                    ->searchable()
-                    ->placeholder('Sin contenido (Imagen full)'),
-
-                TextColumn::make('type')
-                    ->label('Tipo')
-                    ->badge()
-                    ->color('gray'),
-
-                ColorColumn::make('bg_color')
-                    ->label('Color'),
+                ImageColumn::make('image_mobile')
+                    ->label('Imagen Móvil')
+                    ->circular()
+                    ->size(60)
+                    ->placeholder('Usa PC'),
 
                 ToggleColumn::make('is_active')
                     ->label('Activo'),
+
+                TextColumn::make('sort_order')
+                    ->label('Orden')
+                    ->sortable(),
             ])
             ->defaultSort('sort_order')
             ->reorderable('sort_order')
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
