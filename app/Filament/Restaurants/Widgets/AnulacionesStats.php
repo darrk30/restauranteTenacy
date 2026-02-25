@@ -14,43 +14,50 @@ class AnulacionesStats extends BaseWidget
 {
     use InteractsWithPageFilters;
 
-    // Propiedad interna para no mutar los filtros reactivos
     public string $currentTab = 'ordenes';
 
     #[On('update-anulaciones-stats')]
-    public function updateStats(array $filters): void
+    public function updateStats(array $filters, string $tab): void
     {
-        // 🟢 Solo actualizamos la pestaña activa, los filtros se leen de InteractsWithPageFilters
-        if (isset($filters['activeTab'])) {
-            $this->currentTab = $filters['activeTab'];
-        }
+        $this->currentTab = $tab;
     }
 
     protected function getStats(): array
     {
-        // Los filtros se obtienen automáticamente mediante el trait InteractsWithPageFilters
         $filtros = $this->filters ?? [];
         $tenantId = Filament::getTenant()->id;
 
+        $fechaDesde = $filtros['fecha_desde'] ?? null;
+        $fechaHasta = $filtros['fecha_hasta'] ?? null;
+        $canal      = $filtros['canal'] ?? null;
+        $userId     = $filtros['user_id'] ?? null;
+        $tableId    = $filtros['table_id'] ?? null; // 🟢 Capturamos el filtro de mesa
+
         if ($this->currentTab === 'ordenes') {
-            // Consulta para Órdenes Completas
             $query = Order::query()
                 ->where('restaurant_id', $tenantId)
                 ->where('status', 'cancelado');
 
-            $this->aplicarFiltrosQuery($query, $filtros);
+            if ($fechaDesde) $query->where('created_at', '>=', $fechaDesde);
+            if ($fechaHasta) $query->where('created_at', '<=', $fechaHasta);
+            if ($canal) $query->where('canal', $canal);
+            if ($userId) $query->where('user_id', $userId);
+            if ($tableId) $query->where('table_id', $tableId); // 🟢 Aplicamos filtro
 
             $cantidad = $query->count();
             $monto = (float) $query->sum('total');
             $label = 'Pedidos Anulados';
         } else {
-            // Consulta para Productos Individuales
             $query = OrderDetail::query()
                 ->where('status', 'cancelado')
-                ->whereHas('order', function ($q) use ($tenantId, $filtros) {
+                ->whereHas('order', function ($q) use ($tenantId, $fechaDesde, $fechaHasta, $canal, $tableId) {
                     $q->where('restaurant_id', $tenantId);
-                    $this->aplicarFiltrosQuery($q, $filtros);
-                });
+                    if ($fechaDesde) $q->where('created_at', '>=', $fechaDesde);
+                    if ($fechaHasta) $q->where('created_at', '<=', $fechaHasta);
+                    if ($canal) $q->where('canal', $canal);
+                    if ($tableId) $q->where('table_id', $tableId); // 🟢 Aplicamos filtro
+                })
+                ->when($userId, fn($q) => $q->where('updated_by', $userId)); // Filtrar por quien anuló
 
             $cantidad = $query->sum('cantidad');
             $monto = (float) $query->sum('subTotal');
@@ -68,13 +75,5 @@ class AnulacionesStats extends BaseWidget
                 ->icon('heroicon-o-banknotes')
                 ->color('danger'),
         ];
-    }
-
-    private function aplicarFiltrosQuery($query, $filtros)
-    {
-        if (!empty($filtros['fecha_desde'])) $query->where('created_at', '>=', $filtros['fecha_desde']);
-        if (!empty($filtros['fecha_hasta'])) $query->where('created_at', '<=', $filtros['fecha_hasta']);
-        if (!empty($filtros['canal'])) $query->where('canal', $filtros['canal']);
-        if (!empty($filtros['user_id'])) $query->where('user_id', $filtros['user_id']);
     }
 }

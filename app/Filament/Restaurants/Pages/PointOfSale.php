@@ -35,6 +35,11 @@ class PointOfSale extends Page
     public $repartidorId = '';
     public $mostrarModalDetalles = false;
     public ?Order $ordenParaDetalles = null;
+    public $mostrarModalCambioMesa = false;
+    public $mesaOrigenId = null;
+    public $mesaDestinoId = null;
+        // Añade esta variable pública a tu componente
+    public $repartidorAsignadoRapido = '';
 
     public function mount()
     {
@@ -116,10 +121,14 @@ class PointOfSale extends Page
     }
 
     // Método optimizado para ser llamado desde el modal
-    public function cargarDetallesOrden($orderId)
+public function cargarDetallesOrden($id)
     {
-        // Simplemente cargamos la orden, la vista se actualizará reactivamente
-        $this->ordenParaDetalles = Order::with(['details', 'user'])->find($orderId);
+        $this->ordenParaDetalles = \App\Models\Order::with('details')->find($id);
+
+        // 🟢 INICIALIZAMOS EL SELECT CON EL REPARTIDOR ACTUAL (Si existe)
+        if ($this->ordenParaDetalles && $this->ordenParaDetalles->canal === 'delivery') {
+            $this->repartidorAsignadoRapido = $this->ordenParaDetalles->delivery_id ?? '';
+        }
     }
 
     // Método para limpiar al cerrar (opcional, para ahorrar memoria)
@@ -175,7 +184,7 @@ class PointOfSale extends Page
         $rules = ['nombresCliente' => 'required|min:3'];
 
         // Si hay documento o es Delivery, apellidos son obligatorios (excepto RUC)
-        if (($canal === 'delivery' || !empty($this->numDoc)) && $this->tipoDoc === 'DNI') {
+        if ((!empty($this->numDoc)) && $this->tipoDoc === 'DNI') {
             $rules['apellidosCliente'] = 'required|min:2';
         }
 
@@ -187,7 +196,6 @@ class PointOfSale extends Page
 
         $this->validate($rules, [
             'nombresCliente.required' => 'El nombre es obligatorio',
-            'apellidosCliente.required' => 'Los apellidos son obligatorios',
             'repartidorId.required' => 'Seleccione un repartidor',
             'direccionCliente.required' => 'La dirección es obligatoria',
         ]);
@@ -286,6 +294,113 @@ class PointOfSale extends Page
     {
         session()->flash('personas_iniciales', $personas);
         return redirect()->to("/app/orden-mesa/{$mesaId}");
+    }
+
+    public function abrirModalCambioMesa($mesaOrigenId)
+    {
+        $this->mesaOrigenId = $mesaOrigenId;
+        $this->mesaDestinoId = null; // Resetear la selección anterior
+        $this->mostrarModalCambioMesa = true;
+    }
+
+    public function cerrarModalCambioMesa()
+    {
+        $this->mostrarModalCambioMesa = false;
+        $this->mesaOrigenId = null;
+        $this->mesaDestinoId = null;
+    }
+
+    public function cambiarMesa()
+    {
+        // 1. Validaciones
+        if (!$this->mesaOrigenId || !$this->mesaDestinoId) {
+            Notification::make()->title('Debe seleccionar una mesa de destino')->warning()->send();
+            return;
+        }
+
+        if ($this->mesaOrigenId == $this->mesaDestinoId) {
+            Notification::make()->title('La mesa de destino debe ser diferente a la actual')->warning()->send();
+            return;
+        }
+
+        // 2. Obtener las mesas
+        $mesaOrigen = Table::find($this->mesaOrigenId);
+        $mesaDestino = Table::find($this->mesaDestinoId);
+
+        if (!$mesaOrigen || !$mesaOrigen->order_id) {
+            Notification::make()->title('La mesa de origen no tiene una orden activa')->danger()->send();
+            $this->cerrarModalCambioMesa();
+            return;
+        }
+
+        if (!$mesaDestino || strtolower($mesaDestino->estado_mesa) !== 'libre') {
+            Notification::make()->title('La mesa de destino no está libre')->danger()->send();
+            return;
+        }
+
+        \Illuminate\Support\Facades\DB::beginTransaction();
+        try {
+            $orderId = $mesaOrigen->order_id;
+            $asientos = $mesaOrigen->asientos;
+
+            // 3. Actualizar la orden con la nueva mesa
+            Order::where('id', $orderId)->update(['table_id' => $mesaDestino->id]);
+
+            // 4. Actualizar la mesa de destino (Ocuparla)
+            $mesaDestino->update([
+                'estado_mesa' => 'ocupada',
+                'order_id' => $orderId,
+                'asientos' => $asientos
+            ]);
+
+            // 5. Liberar la mesa de origen
+            $mesaOrigen->update([
+                'estado_mesa' => 'libre',
+                'order_id' => null,
+                'asientos' => 0
+            ]);
+
+            \Illuminate\Support\Facades\DB::commit();
+
+            Notification::make()
+                ->title('Orden movida con éxito')
+                ->body("La orden se trasladó a la mesa {$mesaDestino->name}.")
+                ->success()
+                ->send();
+
+            $this->cerrarModalCambioMesa();
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            Notification::make()->title('Error al cambiar de mesa')->body($e->getMessage())->danger()->send();
+        }
+    }
+
+    public function asignarRepartidorRapido($orderId)
+    {
+        $order = \App\Models\Order::find($orderId);
+        
+        // Si se selecciona un repartidor, lo asignamos. Si se selecciona la opción vacía, lo removemos.
+        $repartidorId = $this->repartidorAsignadoRapido ?: null;
+        $repartidorNombre = null;
+
+        if ($repartidorId) {
+            $repartidor = \App\Models\User::find($repartidorId);
+            $repartidorNombre = $repartidor ? $repartidor->name : null;
+        }
+
+        if ($order) {
+            $order->update([
+                'delivery_id' => $repartidorId,
+                'nombre_delivery' => $repartidorNombre,
+            ]);
+
+            \Filament\Notifications\Notification::make()
+                ->title($repartidorId ? 'Repartidor asignado/cambiado' : 'Repartidor removido')
+                ->success()
+                ->send();
+                
+            $this->cargarDetallesOrden($orderId); // Recargamos el modal
+        }
     }
 
     public function getHeading(): string

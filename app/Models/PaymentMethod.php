@@ -36,6 +36,11 @@ class PaymentMethod extends Model
         return $this->hasMany(CierreCajaDetalle::class);
     }
 
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
     protected static function booted(): void
     {
         static::addGlobalScope('restaurant', function (Builder $query) {

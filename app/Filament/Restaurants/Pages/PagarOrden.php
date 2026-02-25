@@ -69,6 +69,7 @@ class PagarOrden extends Page implements HasForms, HasActions
 
     public $ventaExitosaId = null; // ID de la venta recién creada
     public $mostrarPantallaExito = false;
+    public $puedeImprimirComprobante = false;
     public $canal_orden;
 
     public function mount($record)
@@ -429,6 +430,11 @@ class PagarOrden extends Page implements HasForms, HasActions
 
             DB::commit();
 
+            $config = \Filament\Facades\Filament::getTenant()->cached_config;
+
+            // Validamos si tiene permiso de ver el modal de impresión o impresión directa
+            $this->puedeImprimirComprobante = $config->mostrar_modal_impresion_comprobante;
+
             Notification::make()->title('Venta exitosa')->success()->send();
             $this->ventaExitosaId = $sale->id;
             $this->mostrarPantallaExito = true;
@@ -446,5 +452,10 @@ class PagarOrden extends Page implements HasForms, HasActions
     public function getHeading(): string
     {
         return '';
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
     }
 }
