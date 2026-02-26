@@ -46,10 +46,6 @@ Route::get('/precuenta/{order}', function (\App\Models\Order $order) {
     return view('pdf.precuenta-ticket', ['order' => $order]);
 })->name('order.precuenta.print');
 
-Route::get('/ingresar', function () {
-    return view('auth.login');
-})->name('login');
-
 Route::domain('{tenant:slug}.' . env('APP_DOMAIN', 'restaurantetenacy.test'))->group(function () {
     Route::get('/carta', [CartaController::class, 'index'])->name('carta.digital');
     Route::post('/carta/procesar-pedido', [CartaController::class, 'procesarPedido'])->name('carta.procesar');
