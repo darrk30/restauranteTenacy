@@ -243,30 +243,72 @@
                     // ... (Mantenemos locateUser y getAddress igual que antes)
                     locateUser() {
                         if (!navigator.geolocation) return;
-                        this.map.locate({
-                            setView: true,
-                            maxZoom: 16
-                        });
-                        this.map.on('locationfound', (e) => {
-                            this.marker.setLatLng(e.latlng);
-                            this.getAddress(e.latlng.lat, e.latlng.lng);
-                        });
+
+                        // Forzamos alta precisión para móviles
+                        const options = {
+                            enableHighAccuracy: true,
+                            timeout: 5000,
+                            maximumAge: 0
+                        };
+
+                        navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                                const pos = {
+                                    lat: position.coords.latitude,
+                                    lng: position.coords.longitude
+                                };
+                                this.map.setView(pos, 17); // Zoom más cercano
+                                this.marker.setLatLng(pos);
+                                this.getAddress(pos.lat, pos.lng);
+                            },
+                            (error) => {
+                                console.error("Error detectado:", error.message);
+                                // Intento de respaldo si falla el GPS fino
+                                this.map.locate({
+                                    setView: true,
+                                    maxZoom: 17
+                                });
+                            },
+                            options
+                        );
                     },
 
                     async getAddress(lat, lng) {
                         try {
+                            // Añadimos 'addressdetails=1' para que nos separe calle, número, etc.
                             const response = await fetch(
-                                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+                                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`
                             );
                             const data = await response.json();
-                            if (data.display_name) {
-                                this.form.direccion = data.display_name;
+
+                            if (data.address) {
+                                const a = data.address;
+                                // Construimos una dirección "limpia" (Calle + Número o Proximidad)
+                                const calle = a.road || a.suburb || '';
+                                const numero = a.house_number ? ` ${a.house_number}` : '';
+                                const distrito = a.city_district || a.district || a.town || '';
+
+                                // Si Nominatim no encuentra calle, usamos el display_name como respaldo
+                                const direccionCorta = calle ? `${calle}${numero}, ${distrito}` : data
+                                    .display_name;
+
+                                // IMPORTANTE: Asegúrate de que 'this.form' sea accesible desde este componente
+                                // Si leafletMapComponent está separado de cartSidebarComponent, 
+                                // usa un evento para pasar la dirección:
+                                this.form.direccion = direccionCorta;
+
+                                // Opcional: Emitir evento por si otro componente lo necesita
+                                window.dispatchEvent(new CustomEvent('direccion-actualizada', {
+                                    detail: direccionCorta
+                                }));
                             }
                         } catch (error) {
-                            console.error("Error Nominatim:", error);
+                            console.error("Error al obtener dirección:", error);
                         }
                     }
                 }));
+
+
             });
         </script>
     @endpush
