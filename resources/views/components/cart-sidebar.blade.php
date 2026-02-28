@@ -64,7 +64,7 @@
                                 <button @click="$store.cart.changeQty(item.cartItemId, 1)" class="px-2 py-1">+</button>
                             </div>
                             <div class="text-[#ce6439] font-black text-sm"
-                                x-text="`S/ ${(item.price * item.qty).toFixed(2)}` text-sm"></div>
+                                x-text="`S/ ${(item.price * item.qty).toFixed(2)}`"></div>
                         </div>
                     </div>
                 </div>
@@ -76,7 +76,7 @@
             <div class="flex justify-between items-center mb-4">
                 <span class="text-gray-500 text-sm">Total estimado</span>
                 <span class="text-2xl font-black text-[#ce6439]"
-                    x-text="`S/ ${$store.cart.total.toFixed(2)}` text-sm"></span>
+                    x-text="`S/ ${$store.cart.total.toFixed(2)}`"></span>
             </div>
 
             <button :disabled="$store.cart.items.length === 0 || isProcessing"
@@ -148,7 +148,7 @@
                                 </div>
 
                                 {{-- Dirección Final --}}
-                                <input type="text" x-model="form.direccion" readonly
+                                <input type="text" x-model="form.direccion"
                                     class="w-full border-2 border-gray-100 rounded-xl p-3 bg-gray-50 text-sm font-medium"
                                     placeholder="Usa el buscador del mapa o mueve el pin...">
 
