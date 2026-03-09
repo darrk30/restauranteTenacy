@@ -11,6 +11,8 @@ use App\Models\Restaurant;
 use App\Models\TypeDocument;
 use App\Models\CashRegister; // IMPORTANTE: Agregar el modelo
 use App\Models\Configuration;
+use App\Models\Permission;
+use App\Models\Role;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -26,6 +28,96 @@ class ConfiguracionInicial extends Seeder
 
     public function runForRestaurant(Restaurant $restaurant): void
     {
+        $adminRestaurante = Role::firstOrCreate([
+            'name' => 'Administrador',
+            'guard_name' => 'web',
+            'restaurant_id' => $restaurant->id // 🟢 Ahora el rol le pertenece a este restaurante
+        ]);
+        $adminRestaurante->syncPermissions(Permission::where('scope', 'restaurant')->get());
+
+        // 1.2 CAJERO
+        $cajero = Role::firstOrCreate([
+            'name' => 'Cajero',
+            'guard_name' => 'web',
+            'restaurant_id' => $restaurant->id
+        ]);
+        $cajero->syncPermissions([
+            'ver_dashboard_ventas_rest',
+            'ver_dashboard_metodos_pago_rest',
+            'ver_punto_venta_rest',
+            'ver_salon_rest',
+            'ver_llevar_rest',
+            'ver_delivery_rest',
+            'crear_orden_llevar_rest',
+            'crear_orden_delivery_rest',
+            'ordenar_pedido_rest',
+            'cobrar_pedido_rest',
+            'asignar_repartidor_rest',
+            'listar_apertura_cierre_rest',
+            'aperturar_caja_rest',
+            'cerrar_caja_rest',
+            'listar_ingresos_egresos_rest',
+            'registrar_ingreso_rest',
+            'registrar_egreso_rest',
+            'listar_historial_ventas_rest',
+            'ver_detalle_venta_rest',
+            'reimprimir_ticket_rest',
+            'listar_clientes_rest',
+            'crear_cliente_rest',
+            'editar_cliente_rest',
+            'ver_facturas_cliente_rest',
+        ]);
+
+        // 1.3 MOZO
+        $mozo = Role::firstOrCreate([
+            'name' => 'Mozo',
+            'guard_name' => 'web',
+            'restaurant_id' => $restaurant->id
+        ]);
+        $mozo->syncPermissions([
+            'ver_punto_venta_rest',
+            'ver_salon_rest',
+            'ordenar_pedido_rest',
+            'listar_clientes_rest',
+            'crear_cliente_rest'
+        ]);
+
+        // 1.4 DELIVERY
+        $delivery = Role::firstOrCreate([
+            'name' => 'Delivery',
+            'guard_name' => 'web',
+            'restaurant_id' => $restaurant->id
+        ]);
+        $delivery->syncPermissions([
+            'ver_punto_venta_rest',
+            'ver_delivery_rest'
+        ]);
+
+        // 1.5 ALMACENERO
+        $almacenero = Role::firstOrCreate([
+            'name' => 'Almacenero',
+            'guard_name' => 'web',
+            'restaurant_id' => $restaurant->id
+        ]);
+        $almacenero->syncPermissions([
+            'listar_productos_rest',
+            'crear_producto_rest',
+            'editar_producto_rest',
+            'ver_variantes_producto_rest',
+            'listar_categorias_rest',
+            'listar_marcas_rest',
+            'listar_existencias_rest',
+            'listar_kardex_rest',
+            'listar_ajustes_stock_rest',
+            'crear_ajuste_stock_rest',
+            'listar_compras_rest',
+            'crear_compra_rest',
+            'editar_compra_rest',
+            'listar_proveedores_rest',
+            'crear_proveedor_rest',
+            'editar_proveedor_rest'
+        ]);
+
         // 1. Buscar el ID del tipo de documento DNI por su código
         $dniType = TypeDocument::where('code', 'DNI')->first();
 

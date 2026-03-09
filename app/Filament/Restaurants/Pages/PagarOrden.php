@@ -98,6 +98,25 @@ class PagarOrden extends Page implements HasForms, HasActions
         $this->calculateTotalServer();
     }
 
+    public static function canAccess(): bool
+    {
+        if (! Filament::getTenant()) {
+            return false;
+        }
+
+        $user = auth()->user();
+
+        if ($user->hasRole('Super Admin')) {
+            return false;
+        }
+
+        try {
+            return $user->hasPermissionTo('cobrar_pedido_rest');
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
     public function cargarSeries()
     {
         $this->series = DocumentSerie::where('is_active', true)

@@ -11,6 +11,7 @@ use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ListSuppliers extends ListRecords
@@ -26,6 +27,7 @@ class ListSuppliers extends ListRecords
                     ->label('Importar Datos')
                     ->icon('heroicon-o-arrow-up-tray')
                     ->color('warning')
+                    ->visible(fn() => Auth::user()->can('importar_proveedores_rest'))
                     ->form([
                         FileUpload::make('archivo')
                             ->label('Archivo Excel (.xlsx)')
@@ -84,6 +86,7 @@ class ListSuppliers extends ListRecords
                     ->label('Exportar Datos')
                     ->icon('heroicon-o-document-arrow-down')
                     ->color('success')
+                    ->visible(fn() => Auth::user()->can('exportar_proveedores_rest'))
                     ->action(function () {
                         return Excel::download(new SuppliersExport, 'Proveedores_' . now()->format('dmY_His') . '.xlsx');
                     }),

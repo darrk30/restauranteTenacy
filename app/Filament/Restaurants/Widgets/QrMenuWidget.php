@@ -12,6 +12,7 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
 use Filament\Forms\Components\Toggle;
+use Illuminate\Support\Facades\Auth;
 
 // 🟢 Agregamos "implements HasForms"
 class QrMenuWidget extends Widget implements HasForms
@@ -46,6 +47,7 @@ class QrMenuWidget extends Widget implements HasForms
                     // Lo bloquea automáticamente si el Admin lo desactivó
                     ->disabled(!$this->cartaActivaAdmin) 
                     ->live() // Hace que guarde al instante al hacer clic
+                    ->visible(fn() => Auth::user()->can('activar_menu_publico_rest'))
                     ->afterStateUpdated(function ($state) {
                         // Esta función se ejecuta sola al mover el interruptor
                         $tenant = Filament::getTenant();

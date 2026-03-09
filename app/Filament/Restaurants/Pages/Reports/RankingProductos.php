@@ -17,6 +17,7 @@ use Filament\Forms\Get;
 use Filament\Actions\Action;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\Auth;
 
 class RankingProductos extends Page implements HasForms
 {
@@ -46,6 +47,27 @@ class RankingProductos extends Page implements HasForms
             'fecha_hasta' => $this->fecha_hasta,
             'category_id' => null,
         ]);
+    }
+
+    public static function canAccess(): bool
+    {
+        $user = Auth::user();
+        
+        // 1. Pase VIP
+        if ($user->hasRole('Super Admin')) {
+            return true;
+        }
+
+        // 2. Determinamos el sufijo según el panel
+        $sufijo = Filament::getTenant() ? '_rest' : '_admin';
+        $permisoBuscado = 'ver_reporte_ranking_productos' . $sufijo;
+
+        // 3. Escudo Anti-Crash
+        try {
+            return $user->hasPermissionTo($permisoBuscado);
+        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+            return false; // Si olvidaste crear el permiso, oculta la página sin crashear
+        }
     }
 
     protected function getFormSchema(): array

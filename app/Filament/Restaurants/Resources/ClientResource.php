@@ -20,6 +20,7 @@ use Illuminate\Validation\Rule;
 use Filament\Forms\Components\Actions\Action;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 
 class ClientResource extends Resource
 {
@@ -89,8 +90,6 @@ class ClientResource extends Resource
                                     'max_digits' => 'El número no debe tener más de :max dígitos.',
                                     'unique' => 'Este cliente ya está registrado.',
                                 ])
-
-                                // 🔥 2. ACCIÓN DE BÚSQUEDA CORREGIDA Y ROBUSTA
                                 ->suffixAction(
                                     Action::make('buscar_sunat_reniec')
                                         ->icon('heroicon-m-magnifying-glass')
@@ -306,6 +305,7 @@ class ClientResource extends Resource
                     ->label('Facturas')
                     ->icon('heroicon-o-clipboard-document-list')
                     ->color('success')
+                    ->visible(fn() => Auth::user()->can('ver_facturas_cliente_rest'))
                     ->url(fn(Client $record): string => static::getUrl('facturas', ['record' => $record])),
             ])
             ->bulkActions([

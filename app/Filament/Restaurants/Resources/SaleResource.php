@@ -134,6 +134,7 @@ class SaleResource extends Resource
                         ->label('Reimprimir Ticket')
                         ->icon('heroicon-o-printer')
                         ->color('info')
+                        ->visible(fn() => Auth::user()->can('reimprimir_ticket_rest'))
                         ->url(fn(Sale $record) => route('sale.ticket.print', $record), shouldOpenInNewTab: true),
                     Tables\Actions\Action::make('anular')
                         ->label('Anular')
@@ -141,6 +142,7 @@ class SaleResource extends Resource
                         ->color('danger')
                         ->requiresConfirmation()
                         ->modalHeading('Anular Venta')
+                        ->visible(fn() => Auth::user()->can('anular_venta_rest'))
                         ->modalDescription('¿Está seguro de que desea anular esta venta?')
                         ->hidden(
                             fn(Sale $record) =>

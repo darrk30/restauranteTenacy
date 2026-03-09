@@ -9,6 +9,7 @@ use App\Models\DocumentSerie;
 use App\Models\PaymentMethod;
 use App\Models\Sale;
 use Filament\Actions\Action;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList; // Para el exportar
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
@@ -27,6 +28,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ReporteVentasPorCanal extends Page implements HasForms, HasTable
@@ -50,6 +52,27 @@ class ReporteVentasPorCanal extends Page implements HasForms, HasTable
             'fecha_hasta' => now()->endOfMonth(),
             'status' => 'completado', // Valor por defecto útil
         ]);
+    }
+    
+    public static function canAccess(): bool
+    {
+        $user = Auth::user();
+        
+        // 1. Pase VIP
+        if ($user->hasRole('Super Admin')) {
+            return true;
+        }
+
+        // 2. Determinamos el sufijo según el panel
+        $sufijo = Filament::getTenant() ? '_rest' : '_admin';
+        $permisoBuscado = 'ver_reporte_ventas' . $sufijo;
+
+        // 3. Escudo Anti-Crash
+        try {
+            return $user->hasPermissionTo($permisoBuscado);
+        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+            return false; // Si olvidaste crear el permiso, oculta la página sin crashear
+        }
     }
 
     // Este método actualiza los widgets cuando cambias el formulario superior

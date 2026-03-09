@@ -272,12 +272,14 @@
                     </div>
 
                     {{-- ✅ MEJORADO: Botón deshabilitado si es Factura sin RUC --}}
-                    <button class="btn-finish" wire:click="procesarPagoFinal" wire:loading.attr="disabled"
-                        :disabled="faltante > 0 || (tipo === 'Factura' && !esClienteRucValido)">
+                    @can('cobrar_pedido_rest')
+                        <button class="btn-finish" wire:click="procesarPagoFinal" wire:loading.attr="disabled"
+                            :disabled="faltante > 0 || (tipo === 'Factura' && !esClienteRucValido)">
 
-                        <span wire:loading.remove wire:target="procesarPagoFinal">COMPLETAR VENTA</span>
-                        <span wire:loading wire:target="procesarPagoFinal">PROCESANDO...</span>
-                    </button>
+                            <span wire:loading.remove wire:target="procesarPagoFinal">COMPLETAR VENTA</span>
+                            <span wire:loading wire:target="procesarPagoFinal">PROCESANDO...</span>
+                        </button>
+                    @endcan
                 </div>
             </div>
         </div>

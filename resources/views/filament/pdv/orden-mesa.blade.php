@@ -305,7 +305,9 @@
                         {{-- Botones de Acción (Solo si hay pedido e ítems) --}}
                         @if ($pedido && count($carrito) > 0)
                             <div class="flex items-center gap-2 mt-1">
-                                {{ $this->anularPedidoAction }}
+                                @can('anular_pedido_rest')
+                                    {{ $this->anularPedidoAction }}
+                                @endcan
                                 {{ $this->mostrarPrecuenta }}
                             </div>
                         @endif
@@ -450,21 +452,25 @@
 
                     <div class="mt-4">
                         @if (!$pedido)
+                            @can('ordenar_pedido_rest')
                             {{-- CASO 1: ORDENAR NUEVO --}}
-                            <button wire:key="btn-ordenar-nuevo" class="btn-checkout bg-blue"
-                                wire:click="procesarOrden" wire:loading.attr="disabled"
-                                @if (count($carrito) == 0) disabled @endif>
+                                <button wire:key="btn-ordenar-nuevo" class="btn-checkout bg-blue"
+                                    wire:click="procesarOrden" wire:loading.attr="disabled"
+                                    @if (count($carrito) == 0) disabled @endif>
 
-                                <span wire:loading.remove wire:target="procesarOrden">
-                                    ORDENAR (S/ {{ number_format($total, 2) }})
-                                </span>
+                                    <span wire:loading.remove wire:target="procesarOrden">
+                                        ORDENAR (S/ {{ number_format($total, 2) }})
+                                    </span>
 
-                                <div wire:loading wire:target="procesarOrden">
-                                    <x-spiner-text>PROCESANDO...</x-spiner-text>
-                                </div>
-                            </button>
+                                    <div wire:loading wire:target="procesarOrden">
+                                        <x-spiner-text>PROCESANDO...</x-spiner-text>
+                                    </div>
+                                </button>
+                            @endcan
                         @else
+                        
                             @if ($hayCambios)
+                            @can('ordenar_pedido_rest')
                                 {{-- SUB-CASO A: ACTUALIZAR --}}
                                 <button wire:key="btn-actualizar-pedido" class="btn-checkout bg-yellow"
                                     wire:click="actualizarOrden" wire:loading.attr="disabled">
@@ -475,8 +481,10 @@
                                         <x-spiner-text>GUARDANDO...</x-spiner-text>
                                     </div>
                                 </button>
+                                @endcan
                             @elseif (count($carrito) === 0)
                                 {{-- SUB-CASO B: ANULAR --}}
+                                @can('ordenar_pedido_rest')
                                 <button wire:key="btn-anular-pedido" class="btn-checkout bg-red"
                                     wire:click="mountAction('anularPedido')" wire:loading.attr="disabled">
 
@@ -487,8 +495,10 @@
                                         <x-spiner-text>ANULANDO...</x-spiner-text>
                                     </div>
                                 </button>
+                                @endcan
                             @else
                                 {{-- SUB-CASO C: COBRAR --}}
+                                @can('cobrar_pedido_rest')
                                 <button wire:key="btn-cobrar-pedido" class="btn-checkout bg-green"
                                     wire:click="pagarOrden" wire:loading.attr="disabled">
 
@@ -500,6 +510,7 @@
                                         <x-spiner-text>COBRANDO...</x-spiner-text>
                                     </div>
                                 </button>
+                                @endcan
                             @endif
                         @endif
                     </div>
@@ -544,7 +555,10 @@
                             </span>
                         </div>
                         @if ($pedido && !(count($carrito) === 0))
-                            {{ $this->anularPedidoAction }}
+                            @can('anular_pedido_rest')
+                                {{ $this->anularPedidoAction }}
+                            @endcan
+                            {{ $this->mostrarPrecuenta }}
                         @endif
                     </div>
                     <button class="close-modal-btn" @click="mobileCartOpen = false">✕</button>
@@ -652,55 +666,63 @@
                     <div class="mt-4">
                         @if (!$pedido)
                             {{-- CASO 1: ORDENAR NUEVO --}}
-                            <button wire:key="btn-ordenar-nuevo" class="btn-checkout bg-blue"
-                                wire:click="procesarOrden" wire:loading.attr="disabled"
-                                @if (count($carrito) == 0) disabled @endif>
+                            @can('ordenar_pedido_rest')
+                                <button wire:key="btn-ordenar-nuevo" class="btn-checkout bg-blue"
+                                    wire:click="procesarOrden" wire:loading.attr="disabled"
+                                    @if (count($carrito) == 0) disabled @endif>
 
-                                <span wire:loading.remove wire:target="procesarOrden">
-                                    ORDENAR (S/ {{ number_format($total, 2) }})
-                                </span>
-
-                                <div wire:loading wire:target="procesarOrden">
-                                    <x-spiner-text>PROCESANDO...</x-spiner-text>
-                                </div>
-                            </button>
-                        @else
-                            @if ($hayCambios)
-                                {{-- SUB-CASO A: ACTUALIZAR --}}
-                                <button wire:key="btn-actualizar-pedido" class="btn-checkout bg-yellow"
-                                    wire:click="actualizarOrden" wire:loading.attr="disabled">
-
-                                    <span wire:loading.remove wire:target="actualizarOrden">ACTUALIZAR</span>
-
-                                    <div wire:loading wire:target="actualizarOrden">
-                                        <x-spiner-text>GUARDANDO...</x-spiner-text>
-                                    </div>
-                                </button>
-                            @elseif (count($carrito) === 0)
-                                {{-- SUB-CASO B: ANULAR --}}
-                                <button wire:key="btn-anular-pedido" class="btn-checkout bg-red"
-                                    wire:click="mountAction('anularPedido')" wire:loading.attr="disabled">
-
-                                    <span wire:loading.remove wire:target="mountAction('anularPedido')">ANULAR
-                                        PEDIDO</span>
-
-                                    <div wire:loading wire:target="mountAction('anularPedido')">
-                                        <x-spiner-text>ANULANDO...</x-spiner-text>
-                                    </div>
-                                </button>
-                            @else
-                                {{-- SUB-CASO C: COBRAR --}}
-                                <button wire:key="btn-cobrar-pedido" class="btn-checkout bg-green"
-                                    wire:click="pagarOrden" wire:loading.attr="disabled">
-
-                                    <span wire:loading.remove wire:target="pagarOrden">
-                                        COBRAR S/ {{ number_format($total, 2) }}
+                                    <span wire:loading.remove wire:target="procesarOrden">
+                                        ORDENAR (S/ {{ number_format($total, 2) }})
                                     </span>
 
-                                    <div wire:loading wire:target="pagarOrden">
-                                        <x-spiner-text>COBRANDO...</x-spiner-text>
+                                    <div wire:loading wire:target="procesarOrden">
+                                        <x-spiner-text>PROCESANDO...</x-spiner-text>
                                     </div>
                                 </button>
+                            @endcan
+                        @else
+                            @if ($hayCambios)
+                                @can('ordenar_pedido_rest')
+                                {{-- SUB-CASO A: ACTUALIZAR --}}
+                                    <button wire:key="btn-actualizar-pedido" class="btn-checkout bg-yellow"
+                                        wire:click="actualizarOrden" wire:loading.attr="disabled">
+
+                                        <span wire:loading.remove wire:target="actualizarOrden">ACTUALIZAR</span>
+
+                                        <div wire:loading wire:target="actualizarOrden">
+                                            <x-spiner-text>GUARDANDO...</x-spiner-text>
+                                        </div>
+                                    </button>
+                                @endcan
+                            @elseif (count($carrito) === 0)
+                                {{-- SUB-CASO B: ANULAR --}}
+                                @can('ordenar_pedido_rest')
+                                    <button wire:key="btn-anular-pedido" class="btn-checkout bg-red"
+                                        wire:click="mountAction('anularPedido')" wire:loading.attr="disabled">
+
+                                        <span wire:loading.remove wire:target="mountAction('anularPedido')">ANULAR
+                                            PEDIDO</span>
+
+                                        <div wire:loading wire:target="mountAction('anularPedido')">
+                                            <x-spiner-text>ANULANDO...</x-spiner-text>
+                                        </div>
+                                    </button>
+                                @endcan
+                            @else
+                                {{-- SUB-CASO C: COBRAR --}}
+                                @can('cobrar_pedido_rest')
+                                    <button wire:key="btn-cobrar-pedido" class="btn-checkout bg-green"
+                                        wire:click="pagarOrden" wire:loading.attr="disabled">
+
+                                        <span wire:loading.remove wire:target="pagarOrden">
+                                            COBRAR S/ {{ number_format($total, 2) }}
+                                        </span>
+
+                                        <div wire:loading wire:target="pagarOrden">
+                                            <x-spiner-text>COBRANDO...</x-spiner-text>
+                                        </div>
+                                    </button>
+                                @endcan
                             @endif
                         @endif
                     </div>

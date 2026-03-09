@@ -11,6 +11,7 @@ use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ListProducts extends ListRecords
@@ -26,6 +27,7 @@ class ListProducts extends ListRecords
                     ->label('Importar Datos')
                     ->icon('heroicon-o-arrow-up-tray')
                     ->color('warning')
+                    ->visible(fn() => Auth::user()->can('importar_productos_rest'))
                     ->form([
                         FileUpload::make('archivo')
                             ->label('Archivo Excel (.xlsx o .csv)')
@@ -86,6 +88,7 @@ class ListProducts extends ListRecords
                     ->label('Exportar Datos')
                     ->icon('heroicon-o-document-arrow-down')
                     ->color('success')
+                    ->visible(fn() => Auth::user()->can('exportar_productos_rest'))
                     ->action(function () {
                         return Excel::download(new ProductsExport, 'Productos_' . now()->format('dmY_His') . '.xlsx');
                     }),
@@ -99,6 +102,7 @@ class ListProducts extends ListRecords
                             ->helperText('Formato: CODIGO | NOMBRE | PRECIO_BASE | ATRIBUTO | VALORES | PRECIOS_EXTRA')
                             ->storeFiles(false)
                             ->required()
+                            ->visible(fn() => Auth::user()->can('actualizar_precios_productos_rest'))
                             ->acceptedFileTypes([
                                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                             ])

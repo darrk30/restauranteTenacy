@@ -10,7 +10,9 @@ use Filament\Tables\Table;
 use Filament\Actions\Action;
 use Filament\Tables\Filters\SelectFilter;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class WarehouseStockPage extends Page implements Tables\Contracts\HasTable
 {
@@ -30,8 +32,28 @@ class WarehouseStockPage extends Page implements Tables\Contracts\HasTable
                 ->label('Descargar PDF')
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('danger')
+                ->visible(fn() => Auth::user()->can('descargar_pdf_existencias_rest'))
                 ->action(fn() => $this->exportarPdf()),
         ];
+    }
+
+    public static function canAccess(): bool
+    {
+        if (! Filament::getTenant()) {
+            return false;
+        }
+
+        $user = auth()->user();
+
+        if ($user->hasRole('Super Admin')) {
+            return false;
+        }
+
+        try {
+            return $user->hasPermissionTo('listar_existencias_rest');
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 
     public function exportarPdf()
