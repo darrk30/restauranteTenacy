@@ -237,14 +237,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // --- ORDENAMIENTO DE PRODUCTOS ---
+// --- ORDENAMIENTO DE PRODUCTOS ---
     const sortBtn = document.getElementById('sort-btn');
     const sortDropdown = document.getElementById('sort-dropdown');
     const sortOptions = document.querySelectorAll('.sort-option');
     const sortText = document.getElementById('sort-text');
     const sortIcon = document.getElementById('sort-icon');
 
-    if (sortBtn && sortDropdown) {
+    if (sortBtn && sortDropdown && gridContainer) {
+        
+        // 🟢 1. LA FOTO ORIGINAL: Guardamos el estado exacto de cómo cargó la web
+        const originalProducts = Array.from(gridContainer.querySelectorAll('.product-card'));
+        
+        // Creamos una copia para poder jugar con ella sin arruinar la original
+        let productsToSort = [...originalProducts];
+
         sortBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             const isHidden = sortDropdown.classList.contains('hidden');
@@ -264,22 +271,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sortMode = e.target.dataset.sort;
                 sortText.innerText = e.target.innerText;
 
-                // Ordenar el array
-                products.sort((a, b) => {
-                    const priceA = parseFloat(a.dataset.price);
-                    const priceB = parseFloat(b.dataset.price);
-                    const nameA = a.dataset.name;
-                    const nameB = b.dataset.name;
+                // 🟢 2. MODO RESET: Limpia todo y restaura la web a su estado original
+                if (sortMode === 'default') {
+                    gridContainer.innerHTML = '';
+                    
+                    // Restauramos los productos originales intactos
+                    originalProducts.forEach(p => {
+                        // Nos aseguramos de que vuelvan a ser visibles si estaban ocultos por filtros
+                        p.style.display = ''; 
+                        gridContainer.appendChild(p);
+                    });
+                    
+                    // Limpiamos los filtros de categorías simulando un clic en "Todos"
+                    const btnTodos = document.querySelector('button[data-filter="todos"]');
+                    if (btnTodos) btnTodos.click();
+
+                    closeSortDropdown();
+                    return; // Terminamos aquí, no seguimos ordenando
+                }
+
+                // 3. MODO ORDENAR: Ordenamos la copia de trabajo
+                productsToSort.sort((a, b) => {
+                    const priceA = parseFloat(a.dataset.price) || 0;
+                    const priceB = parseFloat(b.dataset.price) || 0;
+                    const nameA = a.dataset.name || '';
+                    const nameB = b.dataset.name || '';
 
                     if (sortMode === 'price_asc') return priceA - priceB;
                     if (sortMode === 'price_desc') return priceB - priceA;
                     if (sortMode === 'name_asc') return nameA.localeCompare(nameB);
                     if (sortMode === 'name_desc') return nameB.localeCompare(nameA);
+                    
                     return 0;
                 });
 
+                // Pintamos los elementos ordenados
                 gridContainer.innerHTML = '';
-                products.forEach(p => gridContainer.appendChild(p));
+                productsToSort.forEach(p => gridContainer.appendChild(p));
                 
                 closeSortDropdown();
             });
