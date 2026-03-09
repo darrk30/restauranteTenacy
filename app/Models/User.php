@@ -2,47 +2,35 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Models\Contracts\HasAvatar;
+use Filament\Models\Contracts\HasName;
+use Filament\Models\Contracts\HasTenants;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Filament\Models\Contracts\HasTenants;
-use Filament\Panel;
 use Illuminate\Support\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements HasTenants
+class User extends Authenticatable implements HasTenants, HasName, FilamentUser, HasAvatar
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasRoles;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
-        'name',
+        'name',       // 🟢 Usamos 'name' como está en tu BD
         'email',
         'password',
+        'avatar_url', // 🟢 Agregado para que puedas guardar el avatar
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
@@ -51,15 +39,41 @@ class User extends Authenticatable implements HasTenants
         ];
     }
 
-    public function getFilamentAvatarUrl(): ?string
-    {
-        return $this->avatar_url;
-    }
+    // ==========================================
+    // RELACIONES DE BASE DE DATOS
+    // ==========================================
 
     public function restaurants(): BelongsToMany
     {
         return $this->belongsToMany(Restaurant::class);
     }
+
+    public function orders() { return $this->hasMany(Order::class); }
+    public function stockAdjustments() { return $this->hasMany(StockAdjustment::class); }
+    public function cashRegisters() { return $this->belongsToMany(CashRegister::class); }
+    public function sesionCashRegisters() { return $this->hasMany(SessionCashRegister::class); }
+    public function cashRegisterMovements() { return $this->hasMany(CashRegisterMovement::class); }
+    public function conceptoCajas() { return $this->hasMany(ConceptoCaja::class); }
+    public function orderDetails() { return $this->hasMany(OrderDetail::class); }
+
+    // ==========================================
+    // INTERFAZ DE FILAMENT (TEXTOS E IMÁGENES)
+    // ==========================================
+
+    public function getFilamentName(): string
+    {
+        // 🟢 CORREGIDO: Usamos 'name' para evitar que Filament colapse buscando columnas que no existen
+        return $this->name;
+    }
+
+    public function getFilamentAvatarUrl(): ?string
+    {
+        return $this->avatar_url;
+    }
+
+    // ==========================================
+    // LÓGICA DE MULTI-EMPRESA (TENANCY)
+    // ==========================================
 
     public function getTenants(Panel $panel): Collection
     {
@@ -71,38 +85,8 @@ class User extends Authenticatable implements HasTenants
         return $this->restaurants()->whereKey($tenant)->exists();
     }
 
-    public function orders()
+    public function canAccessPanel(Panel $panel): bool
     {
-        return $this->hasMany(Order::class);
-    }
-
-    public function stockAdjustments()
-    {
-        return $this->hasMany(StockAdjustment::class);
-    }
-
-    public function cashRegisters()
-    {
-        return $this->belongsToMany(CashRegister::class);
-    }
-
-    public function sesionCashRegisters()
-    {
-        return $this->hasMany(SessionCashRegister::class);
-    }
-
-    public function cashRegisterMovements()
-    {
-        return $this->hasMany(CashRegisterMovement::class);
-    }
-
-    public function conceptoCajas()
-    {
-        return $this->hasMany(ConceptoCaja::class);
-    }
-
-    public function orderDetails()
-    {
-        return $this->hasMany(OrderDetail::class);
+        return true;
     }
 }

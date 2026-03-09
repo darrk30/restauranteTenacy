@@ -24,6 +24,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Actions\Action;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Auth;
 
 class ReporteAnulaciones extends Page implements HasForms, HasTable
 {
@@ -38,6 +39,27 @@ class ReporteAnulaciones extends Page implements HasForms, HasTable
 
     public ?array $data = [];
     public string $activeTab = 'ordenes'; // Controla si vemos Órdenes o Productos
+
+    public static function canAccess(): bool
+    {
+        $user = Auth::user();
+        
+        // 1. Pase VIP
+        if ($user->hasRole('Super Admin')) {
+            return true;
+        }
+
+        // 2. Determinamos el sufijo según el panel
+        $sufijo = Filament::getTenant() ? '_rest' : '_admin';
+        $permisoBuscado = 'ver_reporte_anulaciones' . $sufijo;
+
+        // 3. Escudo Anti-Crash
+        try {
+            return $user->hasPermissionTo($permisoBuscado);
+        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+            return false; // Si olvidaste crear el permiso, oculta la página sin crashear
+        }
+    }
 
     protected function getHeaderActions(): array
     {

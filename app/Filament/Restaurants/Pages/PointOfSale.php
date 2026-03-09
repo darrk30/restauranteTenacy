@@ -52,6 +52,26 @@ class PointOfSale extends Page
         }
     }
 
+    public static function canAccess(): bool
+    {
+        if (! Filament::getTenant()) {
+            return false;
+        }
+
+        $user = auth()->user();
+
+        if ($user->hasRole('Super Admin')) {
+            return false;
+        }
+
+        try {
+            return $user->hasPermissionTo('ver_punto_venta_rest');
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+
     public function avanzarEstado($orderId)
     {
         $order = Order::find($orderId);

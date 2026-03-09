@@ -157,17 +157,20 @@ class ConceptoCajasResource extends Resource
                     ->modalHeading('Anular Movimiento')
                     ->modalDescription('¿Estás seguro de anular este movimiento? El monto se revertirá de la caja.')
                     ->modalSubmitActionLabel('Sí, Anular')
+                    ->visible(function ($record) use ($sesionAbierta) {
+                        if ($record->estado !== 'aprobado' || $sesionAbierta === null || $record->session_cash_register_id !== $sesionAbierta->id) {
+                            return false;
+                        }
+                        $user = Auth::user();
+                        if ($user->hasRole('Super Admin')) return true;
 
-                    // 🔥 CONDICIÓN ESTRICTA PARA MOSTRAR BOTÓN:
-                    // 1. El estado debe ser 'aprobado'.
-                    // 2. Debe existir una sesión abierta ($sesionAbierta !== null).
-                    // 3. El movimiento debe pertenecer a ESA sesión abierta ($record->session_cash_register_id === $sesionAbierta->id).
-                    ->visible(
-                        fn($record) =>
-                        $record->estado === 'aprobado' &&
-                            $sesionAbierta !== null &&
-                            $record->session_cash_register_id === $sesionAbierta->id
-                    )
+                        $sufijo = filament()->getTenant() ? '_rest' : '_admin';
+                        try {
+                            return $user->hasPermissionTo('anular_ingreso_egreso' . $sufijo);
+                        } catch (\Exception $e) {
+                            return false;
+                        }
+                    })
                     ->action(function ($record) {
                         $record->update(['estado' => 'anulado']);
 
@@ -187,7 +190,19 @@ class ConceptoCajasResource extends Resource
                     ->icon('heroicon-o-arrow-trending-up')
                     ->color('success')
                     ->modalHeading('Nuevo Ingreso a Caja')
-                    ->visible(fn() => $sesionAbierta !== null)
+                    ->visible(function () use ($sesionAbierta) {
+                        if ($sesionAbierta === null) return false;
+
+                        $user = Auth::user();
+                        if ($user->hasRole('Super Admin')) return true;
+
+                        $sufijo = filament()->getTenant() ? '_rest' : '_admin';
+                        try {
+                            return $user->hasPermissionTo('registrar_ingreso' . $sufijo);
+                        } catch (\Exception $e) {
+                            return false;
+                        }
+                    })
                     ->form([
                         TextInput::make('persona_externa')
                             ->label('Recibido De')
@@ -221,7 +236,19 @@ class ConceptoCajasResource extends Resource
                     ->icon('heroicon-o-arrow-trending-down')
                     ->color('danger')
                     ->modalHeading('Registrar Salida de Dinero')
-                    ->visible(fn() => $sesionAbierta !== null)
+                    ->visible(function () use ($sesionAbierta) {
+                        if ($sesionAbierta === null) return false;
+
+                        $user = Auth::user();
+                        if ($user->hasRole('Super Admin')) return true;
+
+                        $sufijo = filament()->getTenant() ? '_rest' : '_admin';
+                        try {
+                            return $user->hasPermissionTo('registrar_egreso' . $sufijo);
+                        } catch (\Exception $e) {
+                            return false;
+                        }
+                    })
                     ->form([
                         Grid::make(1)->schema([
                             Select::make('categoria')

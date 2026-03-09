@@ -4,6 +4,8 @@ namespace App\Providers\Filament;
 
 use App\Filament\Restaurants\Pages\Dashboard;
 use App\Filament\Restaurants\Widgets\QrMenuWidget;
+use App\Http\Middleware\CheckRestaurantStatus;
+use App\Http\Middleware\SyncSpatieTenant;
 use App\Models\Restaurant;
 use Filament\FontProviders\GoogleFontProvider;
 use Filament\Http\Middleware\Authenticate;
@@ -168,6 +170,10 @@ class RestaurantsPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
+            ->tenantMiddleware([
+                CheckRestaurantStatus::class,
+                SyncSpatieTenant::class,
+            ], isPersistent: true)
             ->spa() // para que las páginas se carguen sin refrescar toda la página
             ->assets([
                 // Cargamos el script aquí para que esté disponible GLOBALMENTE
@@ -189,19 +195,22 @@ class RestaurantsPanelProvider extends PanelProvider
         FilamentView::registerRenderHook(
             'panels::global-search.after',
             fn(): string => Blade::render('
-                <div class="flex justify-center p-2">
-                    <x-filament::button 
-                        href="/app/point-of-sale" 
-                        tag="a" 
-                        icon="heroicon-o-computer-desktop" 
-                        color="success" 
-                        size="sm"
-                        {{-- 🟢 Esto activa la navegación SPA de Livewire --}}
-                        wire:navigate 
-                    >
-                        POS
-                    </x-filament::button>
-                </div>
+                {{-- 🟢 Envolvemos todo el botón con el @can --}}
+                @can("ver_punto_venta_rest")
+                    <div class="flex justify-center p-2">
+                        <x-filament::button 
+                            href="/app/point-of-sale" 
+                            tag="a" 
+                            icon="heroicon-o-computer-desktop" 
+                            color="success" 
+                            size="sm"
+                            {{-- Esto activa la navegación SPA de Livewire --}}
+                            wire:navigate 
+                        >
+                            POS
+                        </x-filament::button>
+                    </div>
+                @endcan
             '),
         );
     }
