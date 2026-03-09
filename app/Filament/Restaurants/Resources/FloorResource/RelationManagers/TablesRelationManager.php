@@ -9,6 +9,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\Facades\Auth;
 
 class TablesRelationManager extends RelationManager
 {
@@ -54,6 +55,7 @@ class TablesRelationManager extends RelationManager
                     ->label('QR Mesa')
                     ->icon('heroicon-o-qr-code')
                     ->color('info')
+                    ->visible(fn() => Auth::user()->can('ver_qr_mesa_rest'))
                     ->modalHeading(fn($record) => 'Código QR - ' . $record->name)
                     ->modalContent(function ($record) {
                         $tenant = filament()->getTenant();

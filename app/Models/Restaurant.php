@@ -217,4 +217,14 @@ class Restaurant extends Model
     {
         return $this->hasOne(Configuration::class);
     }
+
+    public function roles()
+    {
+        return $this->hasMany(Role::class);
+    }
+
+    public function permissions()
+    {
+        return $this->hasMany(Permission::class);
+    }
 }

@@ -28,6 +28,16 @@ class ManageConfiguration extends Page implements HasForms
 
     public ?array $data = [];
 
+    // 🟢 1. Oculta la página del menú si no tiene NINGÚN permiso de configuración
+    public static function canAccess(): bool
+    {
+        return auth()->user()->canAny([
+            'guardar_configuracion_impresion_cocina_rest',
+            'guardar_configuracion_carta_web_rest',
+            'guardar_configuracion_facturacion_rest'
+        ]);
+    }
+
     public function mount(): void
     {
         $tenant = Filament::getTenant();
@@ -49,6 +59,8 @@ class ManageConfiguration extends Page implements HasForms
                         // 🖨️ PESTAÑA: IMPRESIÓN
                         Tabs\Tab::make('Impresión y Cocina')
                             ->icon('heroicon-o-printer')
+                            // 🟢 2. Muestra esta pestaña solo si tiene este permiso específico
+                            ->visible(fn () => auth()->user()->can('guardar_configuracion_impresion_cocina_rest'))
                             ->schema([
 
                                 Section::make('Impresión Automática / Directa')
@@ -83,6 +95,8 @@ class ManageConfiguration extends Page implements HasForms
                         // 📱 PESTAÑA: CARTA DIGITAL Y WEB
                         Tabs\Tab::make('Carta Web')
                             ->icon('heroicon-o-globe-alt')
+                            // 🟢 3. Muestra esta pestaña solo si tiene este permiso específico
+                            ->visible(fn () => auth()->user()->can('guardar_configuracion_carta_web_rest'))
                             ->schema([
                                 Grid::make(2)->schema([
                                     Toggle::make('guardar_pedidos_web')
@@ -104,6 +118,8 @@ class ManageConfiguration extends Page implements HasForms
                         // 💰 PESTAÑA: FACTURACIÓN
                         Tabs\Tab::make('Facturación')
                             ->icon('heroicon-o-receipt-percent')
+                            // 🟢 4. Muestra esta pestaña solo si tiene este permiso específico
+                            ->visible(fn () => auth()->user()->can('guardar_configuracion_facturacion_rest'))
                             ->schema([
                                 Grid::make(2)->schema([
                                     Toggle::make('precios_incluyen_impuesto')
@@ -132,15 +148,14 @@ class ManageConfiguration extends Page implements HasForms
         $data = $this->form->getState();
         $tenant = Filament::getTenant();
 
-        // 🟢 updateOrCreate: Busca por el restaurant_id. 
-        // Si lo encuentra, lo actualiza. Si NO lo encuentra, lo crea con los datos del formulario.
+        // 💡 NOTA SEGURA: Si una pestaña está oculta por falta de permisos,
+        // Filament no envía sus campos en $data. 
+        // `updateOrCreate` solo actualizará las columnas que vengan en el $data,
+        // por lo tanto, no borrará accidentalmente la configuración de las pestañas ocultas.
         $config = Configuration::updateOrCreate(
             ['restaurant_id' => $tenant->id],
             $data
         );
-
-        // Al usarse updateOrCreate, el modelo Configuration dispara su evento "saved"
-        // y borra la caché vieja automáticamente de forma garantizada.
 
         Notification::make()
             ->success()

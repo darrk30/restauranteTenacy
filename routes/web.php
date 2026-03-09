@@ -51,3 +51,7 @@ Route::domain('{tenant:slug}.' . env('APP_DOMAIN', 'restaurantetenacy.test'))->g
     Route::post('/carta/procesar-pedido', [CartaController::class, 'procesarPedido'])->name('carta.procesar');
     Route::post('/carta/procesar-wsp', [CartaController::class, 'procesarPedidoSoloWsp'])->name('carta.procesar.wsp');
 });
+
+Route::get('/cuenta-suspendida', function () {
+    return view('filament.suspendido');
+})->name('suspendido');

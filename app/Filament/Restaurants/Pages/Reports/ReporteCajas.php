@@ -49,6 +49,27 @@ class ReporteCajas extends Page implements HasForms, HasTable
         ]);
     }
 
+    public static function canAccess(): bool
+    {
+        $user = Auth::user();
+        
+        // 1. Pase VIP
+        if ($user->hasRole('Super Admin')) {
+            return true;
+        }
+
+        // 2. Determinamos el sufijo según el panel
+        $sufijo = Filament::getTenant() ? '_rest' : '_admin';
+        $permisoBuscado = 'ver_reporte_cajas' . $sufijo;
+
+        // 3. Escudo Anti-Crash
+        try {
+            return $user->hasPermissionTo($permisoBuscado);
+        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+            return false; // Si olvidaste crear el permiso, oculta la página sin crashear
+        }
+    }
+
     public function form(Form $form): Form
     {
         return $form

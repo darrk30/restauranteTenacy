@@ -11,6 +11,7 @@ use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ListClients extends ListRecords
@@ -26,6 +27,7 @@ class ListClients extends ListRecords
                     ->label('Importar Datos')
                     ->icon('heroicon-o-arrow-up-tray')
                     ->color('warning')
+                    ->visible(fn() => Auth::user()->can('importar_clientes_rest'))
                     ->form([
                         FileUpload::make('archivo')
                             ->label('Archivo Excel (.xlsx)')
@@ -88,15 +90,16 @@ class ListClients extends ListRecords
                     ->label('Exportar Datos')
                     ->icon('heroicon-o-document-arrow-down')
                     ->color('success')
+                    ->visible(fn() => Auth::user()->can('exportar_clientes_rest'))
                     ->action(function () {
                         return Excel::download(new ClientExporter, 'Clientes_' . now()->format('dmY_His') . '.xlsx');
                     }),
             ])
-                ->label('Opciones de Datos')
-                ->icon('heroicon-m-chevron-down')
-                ->iconPosition('after')
-                ->button()
-                ->color('info'),
+            ->label('Opciones de Datos')
+            ->icon('heroicon-m-chevron-down')
+            ->iconPosition('after')
+            ->button() 
+            ->color('info'),
 
             Actions\CreateAction::make()->label('Nuevo')
                 ->icon('heroicon-o-plus')

@@ -23,6 +23,7 @@ use Filament\Forms\Set;
 use Filament\Notifications\Notification;
 use Filament\Forms\Components\Toggle;
 use Icetalker\FilamentTableRepeater\Forms\Components\TableRepeater;
+use Illuminate\Support\Facades\Auth;
 
 class ProductVariants extends Page implements Tables\Contracts\HasTable
 {
@@ -36,6 +37,28 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
 
     public function mount(Product $record): void
     {
+        // ==========================================
+        // 🟢 SEGURIDAD DE LA PÁGINA DE VARIANTES
+        // ==========================================
+        $user = auth()->user();
+
+        // Verificamos si NO es Super Admin para evaluar los permisos
+        if (! $user->hasRole('Super Admin')) {
+            $sufijo = Filament::getTenant() ? '_rest' : '_admin';
+
+            try {
+                // Evaluamos el permiso
+                if (! $user->hasPermissionTo('ver_variantes_producto' . $sufijo)) {
+                    // Si no tiene el permiso, lo botamos mostrando un error 403 (Acceso Denegado)
+                    abort(403, 'No tienes permiso para ver las variantes de este producto.');
+                }
+            } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+                // Si el permiso no existe, también denegamos el acceso para evitar el crash
+                abort(403, 'Permiso de variantes no configurado.');
+            }
+        }
+
+        // Si pasó el escudo de seguridad, cargamos el producto
         $this->record = $record;
     }
 
@@ -271,6 +294,7 @@ class ProductVariants extends Page implements Tables\Contracts\HasTable
                     ->button()
                     ->color('primary')
                     ->modalHeading('Editar Variante')
+                    ->visible(fn() => Auth::user()->can('editar_variante_producto_rest'))
                     ->fillForm(fn($record) => [
                         'image_path' => $record->image_path,
                         'codigo_barras' => $record->codigo_barras,

@@ -33,6 +33,13 @@ class RestaurantProfile extends Page
         }
     }
 
+        public static function canAccess(): bool
+    {
+        return auth()->user()->canAny([
+            'editar_mi_restaurante_rest',
+        ]);
+    }
+
     protected function getHeaderActions(): array
     {
         return [

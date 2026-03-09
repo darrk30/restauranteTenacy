@@ -4,6 +4,7 @@ namespace App\Filament\Restaurants\Pages;
 
 use App\Models\Kardex;
 use App\Models\Variant;
+use Filament\Facades\Filament;
 use Filament\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -24,6 +25,26 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
     protected static string $view = 'filament.kardex.kardex-page';
     protected static ?string $navigationGroup = 'Inventario';
     protected static ?int $navigationSort = 30;
+
+
+    public static function canAccess(): bool
+    {
+        if (! Filament::getTenant()) {
+            return false;
+        }
+
+        $user = auth()->user();
+
+        if ($user->hasRole('Super Admin')) {
+            return false;
+        }
+
+        try {
+            return $user->hasPermissionTo('listar_kardex_rest');
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
 
     public function table(Table $table): Table
     {

@@ -7,6 +7,7 @@ use App\Filament\Clusters\Products\Traits\SyncProductAttributesTrait;
 use App\Models\Variant;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Support\Facades\Auth;
 
 class EditProduct extends EditRecord
 {
@@ -80,9 +81,22 @@ class EditProduct extends EditRecord
                 ->label(fn() => "Variantes (" . $this->record->variants()->where('status', 'activo')->count() . ")")
                 ->color('info')
                 ->icon('heroicon-o-squares-2x2')
-                ->visible(fn() => $this->record->exists)
-                ->url(fn() => static::getResource()::getUrl('variants', ['record' => $this->record])),
-
+                ->url(fn() => static::getResource()::getUrl('variants', ['record' => $this->record]))
+                ->visible(function () {
+                    if (! $this->record->exists) {
+                        return false;
+                    }
+                    $user = auth()->user();
+                    if ($user->hasRole('Super Admin')) {
+                        return true;
+                    }
+                    $sufijo = filament()->getTenant() ? '_rest' : '_admin';
+                    try {
+                        return $user->hasPermissionTo('ver_variantes_producto' . $sufijo);
+                    } catch (\Exception $e) {
+                        return false;
+                    }
+                }),
 
             // \Filament\Actions\DeleteAction::make(),
         ];
