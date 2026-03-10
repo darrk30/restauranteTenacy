@@ -141,7 +141,7 @@ class PointOfSale extends Page
     }
 
     // Método optimizado para ser llamado desde el modal
-public function cargarDetallesOrden($id)
+    public function cargarDetallesOrden($id)
     {
         $this->ordenParaDetalles = \App\Models\Order::with('details')->find($id);
 
@@ -280,9 +280,10 @@ public function cargarDetallesOrden($id)
     }
 
     // 3. CONSULTA FILTRADA (getViewData)
-    protected function getViewData(): array
+protected function getViewData(): array
     {
         $tenant = Filament::getTenant();
+        $user = auth()->user(); // 🟢 Obtenemos al usuario actual
 
         // Filtro común: status de pago no cancelado Y status logístico NO entregado
         $baseQuery = Order::where('restaurant_id', $tenant->id)
@@ -293,14 +294,37 @@ public function cargarDetallesOrden($id)
                     ->orWhereNull('status_llevar_delivery');             // O es nuevo
             });
 
+        // 🟢 1. Separamos la consulta de delivery
+        $queryDelivery = (clone $baseQuery)->where('canal', 'delivery');
+
+        // 🟢 2. TU LÓGICA DE PERMISOS
+        $sufijo = $tenant ? '_rest' : '_admin';
+        $permisoRestringido = 'ver_deliverys_usuario' . $sufijo;
+
+        $debeFiltrar = false;
+        try {
+            // Usamos hasPermissionTo() que es mucho más estricto que can()
+            $debeFiltrar = $user->hasPermissionTo($permisoRestringido);
+        } catch (\Exception $e) {
+            // Si el permiso no existe en la base de datos, ignoramos
+        }
+
+        // 🛡️ EL ESCUDO: Si el usuario TIENE el permiso de ver solo lo suyo, lo limitamos.
+        // EXCEPTO si es Super Admin o Administrador (a ellos siempre les muestra todo, tengan o no el permiso)
+        if ($debeFiltrar && ! $user->hasRole(['Super Admin', 'Administrador'])) {
+            
+            // Filtramos las órdenes a solo las de ese motorizado
+            $queryDelivery->where('delivery_id', $user->id);
+            
+        } 
+        // Si NO tiene el permiso, el if se ignora y "queryDelivery" carga absolutamente TODO.
+
         return [
             'floors' => Floor::with('tables')->get(),
             'tenant' => $tenant,
             'repartidores' => $tenant->users()->get(['users.id', 'users.name']),
-
-            // Filtramos por canal sobre la query base
             'ordersLlevar' => (clone $baseQuery)->where('canal', 'llevar')->latest()->get(),
-            'ordersDelivery' => (clone $baseQuery)->where('canal', 'delivery')->latest()->get(),
+            'ordersDelivery' => $queryDelivery->latest()->get(), // 🟢 3. Ejecutamos la consulta
         ];
     }
 

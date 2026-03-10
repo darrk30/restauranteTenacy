@@ -36,7 +36,7 @@ Route::get('/precuenta/{order}', function (\App\Models\Order $order) {
     // 🟢 Cargamos las relaciones, pero filtramos los detalles para excluir los cancelados
     $order->load([
         'details' => function ($query) {
-            $query->where('status', '!=', \App\Enums\statusPedido::Cancelado);
+            $query->where('status', '!=', \App\Enums\StatusPedido::Cancelado);
         },
         'table.floor', 
         'user', 

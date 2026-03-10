@@ -75,8 +75,7 @@
         <div x-show="!showCheckoutForm" class="border-t border-gray-200 p-6 bg-white" style="display: none;">
             <div class="flex justify-between items-center mb-4">
                 <span class="text-gray-500 text-sm">Total estimado</span>
-                <span class="text-2xl font-black text-[#ce6439]"
-                    x-text="`S/ ${$store.cart.total.toFixed(2)}`"></span>
+                <span class="text-2xl font-black text-[#ce6439]" x-text="`S/ ${$store.cart.total.toFixed(2)}`"></span>
             </div>
 
             <button :disabled="$store.cart.items.length === 0 || isProcessing"
@@ -141,7 +140,7 @@
                                     </div>
 
                                     {{-- Botón "Mi ubicación" --}}
-                                    <button type="button" @click="locateUser()"
+                                    <button type="button" @click.prevent="locateUser()"
                                         class="absolute bottom-3 right-3 z-[1000] bg-white p-2.5 rounded-full shadow-md border border-gray-100 text-[#ce6439] hover:bg-orange-50 active:scale-95 transition-all">
                                         <x-heroicon-s-map-pin class="w-5 h-5" />
                                     </button>
@@ -149,6 +148,7 @@
 
                                 {{-- Dirección Final --}}
                                 <input type="text" x-model="form.direccion"
+                                    @direccion-actualizada.window="form.direccion = $event.detail"
                                     class="w-full border-2 border-gray-100 rounded-xl p-3 bg-gray-50 text-sm font-medium"
                                     placeholder="Usa el buscador del mapa o mueve el pin...">
 

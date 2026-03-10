@@ -1,9 +1,9 @@
 @php
-    use App\Enums\statusPedido;
+    use App\Enums\StatusPedido;
 
     $stLogistico = $order->status_llevar_delivery ?? 'preparando';
     $statusEnum = $order->status;
-    $stPagoValue = $statusEnum instanceof statusPedido ? $statusEnum->value : $statusEnum;
+    $stPagoValue = $statusEnum instanceof StatusPedido ? $statusEnum->value : $statusEnum;
 
     $colorBarra = '#eab308'; 
     $textoBtn = '...';
@@ -33,7 +33,7 @@
         $colorBarra = '#10b981';
         $badgeLogisticoClass = 'badge-custom-green';
 
-        if ($stPagoValue !== statusPedido::Pagado->value) {
+        if ($stPagoValue !== StatusPedido::Pagado->value) {
             $textoBtn = 'Cobrar 💵';
             $claseBtnCustom = 'btn-custom-primary';
             $accionBoton = $redireccionPago;
@@ -44,8 +44,8 @@
     }
 
     $claseBadgePago = match ($stPagoValue) {
-        statusPedido::Pagado->value => 'badge-custom-green',
-        statusPedido::Cancelado->value => 'badge-custom-red',
+        StatusPedido::Pagado->value => 'badge-custom-green',
+        StatusPedido::Cancelado->value => 'badge-custom-red',
         default => 'badge-custom-gray',
     };
 
@@ -181,7 +181,7 @@
         </div>
 
         <div class="tc-badges">
-            <span class="badge-custom {{ $claseBadgePago }}">{{ $statusEnum instanceof statusPedido ? $statusEnum->getLabel() : ucfirst($stPagoValue) }}</span>
+            <span class="badge-custom {{ $claseBadgePago }}">{{ $statusEnum instanceof StatusPedido ? $statusEnum->getLabel() : ucfirst($stPagoValue) }}</span>
             <span class="badge-custom {{ $badgeLogisticoClass }}">{{ strtoupper($stLogistico) }}</span>
         </div>
     </div>
@@ -191,7 +191,7 @@
             <x-heroicon-o-eye style="width: 24px; height: 24px;" />
         </button>
 
-        @if ($stLogistico === 'entregado' && $stPagoValue !== statusPedido::Pagado->value)
+        @if ($stLogistico === 'entregado' && $stPagoValue !== StatusPedido::Pagado->value)
             <button onclick="{{ $accionBoton }}" class="btn-custom-main {{ $claseBtnCustom }}">
                 {{ $textoBtn }}
             </button>

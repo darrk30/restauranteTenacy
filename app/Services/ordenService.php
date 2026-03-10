@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Enums\statusPedido;
+use App\Enums\StatusPedido;
 use App\Enums\TipoProducto;
 use App\Models\Category;
 use App\Models\Order;
@@ -182,7 +182,7 @@ class OrdenService
                     'cantidad'     => $cantidad,
                     'subTotal'     => $subTotalReal, // Dato seguro de BD
                     'cortesia'     => $esCortesia,
-                    'status'       => statusPedido::Pendiente,
+                    'status'       => StatusPedido::Pendiente,
                     'notes'        => strip_tags($item['notes'] ?? ''), // Limpiamos HTML malicioso
                     'area_id'      => $areaData['id'],
                     'area_nombre'  => $areaData['name']
@@ -210,7 +210,7 @@ class OrdenService
                 'direccion'       => strip_tags($datosOrden['direccion'] ?? null),
                 'telefono'        => strip_tags($datosOrden['telefono'] ?? null),
                 'code'            => $codigoFinal,
-                'status'          => statusPedido::Pendiente,
+                'status'          => StatusPedido::Pendiente,
                 'subtotal'        => $subtotalSeguro, // SEGURO
                 'igv'             => $igvSeguro,      // SEGURO
                 'total'           => $totalSeguroCalculado, // SEGURO
