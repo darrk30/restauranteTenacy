@@ -242,6 +242,8 @@
 
                     // ... (Mantenemos locateUser y getAddress igual que antes)
                     locateUser() {
+                        console.log("UBICANDO..");
+                        
                         if (!navigator.geolocation) return;
 
                         // Forzamos alta precisión para móviles
@@ -263,7 +265,17 @@
                             },
                             (error) => {
                                 console.error("Error detectado:", error.message);
-                                // Intento de respaldo si falla el GPS fino
+                                
+                                // 🟢 Le avisamos al usuario exactamente qué falló
+                                if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+                                    Alpine.store('toast').trigger('El GPS requiere una conexión segura (HTTPS)', 'error');
+                                } else if (error.code === error.PERMISSION_DENIED) {
+                                    Alpine.store('toast').trigger('Permiso de GPS denegado por el navegador', 'error');
+                                } else {
+                                    Alpine.store('toast').trigger('No se pudo obtener la ubicación precisa', 'error');
+                                }
+
+                                // Intento de respaldo de Leaflet si falla el GPS fino
                                 this.map.locate({
                                     setView: true,
                                     maxZoom: 17
@@ -275,7 +287,6 @@
 
                     async getAddress(lat, lng) {
                         try {
-                            // Añadimos 'addressdetails=1' para que nos separe calle, número, etc.
                             const response = await fetch(
                                 `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`
                             );
@@ -283,24 +294,35 @@
 
                             if (data.address) {
                                 const a = data.address;
-                                // Construimos una dirección "limpia" (Calle + Número o Proximidad)
-                                const calle = a.road || a.suburb || '';
+                                
+                                // 1. Buscamos el nombre de la vía
+                                const calle = a.road || a.pedestrian || a.street || '';
+                                // 2. Buscamos el número (si existe en el mapa)
                                 const numero = a.house_number ? ` ${a.house_number}` : '';
-                                const distrito = a.city_district || a.district || a.town || '';
+                                // 3. Buscamos la urbanización o barrio
+                                const barrio = a.neighbourhood || a.suburb || a.residential || '';
+                                // 4. Buscamos el distrito/ciudad
+                                const distrito = a.city_district || a.district || a.city || a.town || '';
 
-                                // Si Nominatim no encuentra calle, usamos el display_name como respaldo
-                                const direccionCorta = calle ? `${calle}${numero}, ${distrito}` : data
-                                    .display_name;
+                                let direccionCorta = '';
 
-                                // IMPORTANTE: Asegúrate de que 'this.form' sea accesible desde este componente
-                                // Si leafletMapComponent está separado de cartSidebarComponent, 
-                                // usa un evento para pasar la dirección:
-                                this.form.direccion = direccionCorta;
+                                // Armamos la dirección exacta
+                                if (calle) {
+                                    direccionCorta = `${calle}${numero}`;
+                                    if (barrio) direccionCorta += `, ${barrio}`;
+                                    if (distrito && !direccionCorta.includes(distrito)) direccionCorta += `, ${distrito}`;
+                                } else {
+                                    // Si estamos en un descampado o lugar sin nombre de calle, usamos el nombre completo
+                                    direccionCorta = data.display_name;
+                                }
 
-                                // Opcional: Emitir evento por si otro componente lo necesita
+                                // 🔥 LA SOLUCIÓN: Disparamos el evento global enviando la dirección
                                 window.dispatchEvent(new CustomEvent('direccion-actualizada', {
                                     detail: direccionCorta
                                 }));
+                                
+                                // (Opcional) Intentamos actualizar directamente por si están anidados
+                                if(this.form) this.form.direccion = direccionCorta;
                             }
                         } catch (error) {
                             console.error("Error al obtener dirección:", error);

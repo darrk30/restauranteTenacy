@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Enums\statusPedido; // Asegúrate de importar tu Enum
+use App\Enums\StatusPedido; // Asegúrate de importar tu Enum
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -119,7 +119,7 @@ class OrderDetail extends Model
             }
 
             // --- PREPARAR VALORES NORMALIZADOS PARA COMPARAR ---
-            $enumCancelado = \App\Enums\statusPedido::Cancelado;
+            $enumCancelado = \App\Enums\StatusPedido::Cancelado;
             $valorCancelado = $enumCancelado instanceof \BackedEnum ? $enumCancelado->value : $enumCancelado;
 
             // Normalizamos el estado ACTUAL del modelo (puede ser Enum o Scalar)
@@ -154,7 +154,7 @@ class OrderDetail extends Model
 
         // 3. EVENTO DELETED (Restar al Eliminar registro)
         static::deleted(function ($detail) {
-            $enumCancelado = \App\Enums\statusPedido::Cancelado;
+            $enumCancelado = \App\Enums\StatusPedido::Cancelado;
             $valorCancelado = $enumCancelado instanceof \BackedEnum ? $enumCancelado->value : $enumCancelado;
 
             // Normalizamos el status que tenía el registro antes de morir

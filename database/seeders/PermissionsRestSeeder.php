@@ -46,6 +46,7 @@ class PermissionsRestSeeder extends Seeder
                     'anular_pedido_rest' => 'Anular Pedido',
                     'cobrar_pedido_rest' => 'Compleatr pago de pedido',
                     'asignar_repartidor_rest' => 'Asignar repartidor en Delivery',
+                    'ver_deliverys_usuario_rest' => 'Ver ordenes de delivery por usuario',
                 ]
             ],
 

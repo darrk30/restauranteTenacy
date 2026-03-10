@@ -361,7 +361,7 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach ($ordenParaDetalles->details->where('status', '!=', \App\Enums\statusPedido::Cancelado) as $det)
+                                            @foreach ($ordenParaDetalles->details->where('status', '!=', \App\Enums\StatusPedido::Cancelado) as $det)
                                                 <tr style="border-top: 1px solid rgba(156, 163, 175, 0.2);">
                                                     <td style="text-align: center; padding: 8px;">
                                                         <span class="dm-qty-badge" style="background: rgba(99, 102, 241, 0.1); padding: 2px 8px; border-radius: 6px; font-weight: bold; font-size: 12px; display: inline-block;">{{ $det->cantidad }}</span>
