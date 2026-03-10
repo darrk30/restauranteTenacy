@@ -77,7 +77,7 @@ class PagarOrden extends Page implements HasForms, HasActions
         $this->tenantSlug = Filament::getTenant()->slug;
         $this->order = Order::with([
             'details' => function ($query) {
-                $query->where('status', '!=', \App\Enums\statusPedido::Cancelado);
+                $query->where('status', '!=', \App\Enums\StatusPedido::Cancelado);
             },
             'details.product.unit',
             'details.variant',
@@ -342,7 +342,7 @@ class PagarOrden extends Page implements HasForms, HasActions
 
             // 3. PROCESAMIENTO DE ITEMS CON PRECISIÓN 100% (LÓGICA TOP-DOWN)
             foreach ($this->items as $item) {
-                if ($item->status === \App\Enums\statusPedido::Cancelado) {
+                if ($item->status === \App\Enums\StatusPedido::Cancelado) {
                     continue;
                 }
                 $esPromocion = ($item->item_type === 'Promocion');

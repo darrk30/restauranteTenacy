@@ -2,7 +2,7 @@
 
 namespace App\Filament\Restaurants\Pages;
 
-use App\Enums\statusPedido;
+use App\Enums\StatusPedido;
 use App\Enums\TipoProducto;
 use App\Models\Order;
 use App\Models\OrderDetail;
@@ -111,10 +111,10 @@ class OrdenMesa extends Page implements HasActions
 
         if ($this->pedido) {
             $ordenExistente = Order::with(['details' => function ($query) {
-                $query->where('status', '!=', statusPedido::Cancelado);
+                $query->where('status', '!=', StatusPedido::Cancelado);
             }, 'details.product'])->find($this->pedido);
 
-            if (!$ordenExistente || $ordenExistente->status === statusPedido::Cancelado) {
+            if (!$ordenExistente || $ordenExistente->status === StatusPedido::Cancelado) {
                 return redirect()->to("/app/point-of-sale");
             }
 
@@ -298,7 +298,7 @@ class OrdenMesa extends Page implements HasActions
                         'cantidad'           => $item['quantity'],
                         'subTotal'           => $item['total'],
                         'cortesia'           => $item['is_cortesia'] ? 1 : 0,
-                        'status'             => statusPedido::Pendiente,
+                        'status'             => StatusPedido::Pendiente,
                         'notes'              => $item['notes'],
                         'fecha_envio_cocina' => now(),
                         'user_id'            => Auth::id(),
@@ -322,7 +322,7 @@ class OrdenMesa extends Page implements HasActions
                                 $detalleAnulado = $detalle->replicate();
                                 $detalleAnulado->cantidad = $cantidadAnulada;
                                 $detalleAnulado->subTotal = $cantidadAnulada * $detalle->price;
-                                $detalleAnulado->status = statusPedido::Cancelado;
+                                $detalleAnulado->status = StatusPedido::Cancelado;
                                 $detalleAnulado->user_actualiza_id = Auth::id();
                                 $detalleAnulado->notes = "Anulación parcial de " . Auth::user()->name;
                                 $detalleAnulado->save();
@@ -369,7 +369,7 @@ class OrdenMesa extends Page implements HasActions
                 foreach ($detallesABorrar as $borrado) {
 
                     // 🟢 BUG CORREGIDO: Evitamos reprocesar si ya estaba cancelado
-                    if ($borrado->status === statusPedido::Cancelado) continue;
+                    if ($borrado->status === StatusPedido::Cancelado) continue;
 
                     $eraPromo = $borrado->item_type === TipoProducto::Promocion->value || $borrado->promotion_id;
                     $areaData = OrdenService::obtenerDatosArea($borrado->product_id, $borrado->promotion_id ?? null);
@@ -390,7 +390,7 @@ class OrdenMesa extends Page implements HasActions
                     }
 
                     $borrado->update([
-                        'status' => statusPedido::Cancelado,
+                        'status' => StatusPedido::Cancelado,
                         'user_actualiza_id' => Auth::id(),
                         'notes' => $borrado->notes . " (Eliminado por " . Auth::user()->name . ")",
                     ]);
@@ -453,7 +453,7 @@ class OrdenMesa extends Page implements HasActions
             $order = \App\Models\Order::with([
                 // 🟢 Agregamos un Closure (función anónima) para filtrar los detalles
                 'details' => function ($query) {
-                    $query->where('status', '!=', \App\Enums\statusPedido::Cancelado);
+                    $query->where('status', '!=', \App\Enums\StatusPedido::Cancelado);
                 },
                 // Y mantenemos la carga profunda anidada para los detalles que SÍ pasen el filtro
                 'details.product.production.printer'
@@ -462,7 +462,7 @@ class OrdenMesa extends Page implements HasActions
 
             foreach ($order->details as $detail) {
                 // 🟢 BUG CORREGIDO: Si el ítem YA estaba cancelado antes, lo ignoramos por completo
-                if ($detail->status === statusPedido::Cancelado) {
+                if ($detail->status === StatusPedido::Cancelado) {
                     continue;
                 }
 
@@ -484,13 +484,13 @@ class OrdenMesa extends Page implements HasActions
                     OrdenService::gestionarStockPromocion($detail->promotion_id, $detail->cantidad, 'sumar');
                 }
 
-                $detail->status = statusPedido::Cancelado;
+                $detail->status = StatusPedido::Cancelado;
                 $detail->user_actualiza_id = Auth::id();
                 $detail->save();
             }
 
             $order->user_actualiza_id = Auth::id();
-            $order->update(['status' => statusPedido::Cancelado]);
+            $order->update(['status' => StatusPedido::Cancelado]);
 
             if ($order->table_id) {
                 Table::where('id', $order->table_id)->update([

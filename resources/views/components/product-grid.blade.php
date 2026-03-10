@@ -43,7 +43,9 @@
                 x-transition:enter-start="opacity-0 transform scale-95"
                 x-transition:enter-end="opacity-100 transform scale-100" x-data="{ productData: {{ $productPayload }} }"
                 class="product-card bg-white rounded-2xl shadow-sm p-3 flex flex-col relative border border-gray-100 transition-all duration-300 hover:shadow-md"
-                data-categories="{{ $categoriesString }}" data-name="{{ strtolower($name) }}"
+                data-categories="{{ $categoriesString }}"
+                data-name="{{ strtolower($name) }}"
+                data-price="{{ $price }}"
                 data-order="{{ $index }}">
 
                 @if ($badge)
