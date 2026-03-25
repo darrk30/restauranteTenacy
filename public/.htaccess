@@ -1,5 +1,7 @@
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
+        SetEnv DD_SERVICE "resttenancy"
+        SetEnv DD_ENV "local"
         Options -MultiViews -Indexes
     </IfModule>
 

@@ -28,6 +28,12 @@ return new class extends Migration
             $table->string('carta_activa_admin')->default('activo');
             $table->string('logo')->nullable();
             $table->string('slug')->nullable();
+            $table->boolean('production')->default(false);
+            $table->string('sol_user')->nullable();
+            $table->string('sol_pass')->nullable();
+            $table->string('cert_path')->nullable();
+            $table->string('client_id')->nullable();
+            $table->string('client_secret')->nullable();
             $table->timestamps();
         });
     }

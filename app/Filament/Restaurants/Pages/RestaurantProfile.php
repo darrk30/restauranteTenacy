@@ -8,6 +8,7 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Grid;
+use Filament\Forms\Components\Toggle;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -33,7 +34,7 @@ class RestaurantProfile extends Page
         }
     }
 
-        public static function canAccess(): bool
+    public static function canAccess(): bool
     {
         return auth()->user()->canAny([
             'editar_mi_restaurante_rest',
@@ -64,6 +65,47 @@ class RestaurantProfile extends Page
                                     ->numeric()
                                     ->length(11)
                                     ->required(),
+                            ]),
+                        ]),
+
+                    // --- NUEVA SECCIÓN: CONFIGURACIÓN SUNAT ---
+                    Section::make('Configuración de Facturación Electrónica (SUNAT)')
+                        ->description('Credenciales necesarias para emitir comprobantes legales.')
+                        ->collapsible() // Para que no ocupe tanto espacio si no se edita
+                        ->schema([
+                            Grid::make(2)->schema([
+                                Toggle::make('production')
+                                    ->label('Modo Producción')
+                                    ->helperText('Activar solo si ya vas a emitir boletas/facturas reales.')
+                                    ->onColor('success')
+                                    ->offColor('danger'),
+
+                                FileUpload::make('cert_path')
+                                    ->label('Certificado Digital (PEM / TXT)')
+                                    ->helperText('Sube el archivo .pem o .txt que contiene tu certificado.')
+                                    ->disk('public')
+                                    ->directory('tenants/' . $this->restaurant->slug . '/certificates')
+                                    ->maxSize(1024)
+                                    ->preserveFilenames(),
+                                TextInput::make('sol_user')
+                                    ->label('Usuario SOL')
+                                    ->placeholder('Ej: MODDATOS')
+                                    ->requiredWith('production'),
+
+                                TextInput::make('sol_pass')
+                                    ->label('Clave SOL')
+                                    ->password() // Por seguridad
+                                    ->revealable()
+                                    ->requiredWith('production'),
+
+                                TextInput::make('client_id')
+                                    ->label('Client ID (Opcional)')
+                                    ->helperText('Solo si usas la nueva API de SUNAT'),
+
+                                TextInput::make('client_secret')
+                                    ->label('Client Secret (Opcional)')
+                                    ->password()
+                                    ->revealable(),
                             ]),
                         ]),
 
@@ -100,12 +142,10 @@ class RestaurantProfile extends Page
                                 ->disk('public')
                                 ->directory('tenants/' . $this->restaurant->slug . '/restaurante')
                                 ->optimize('webp', 90)
-                                ->maxImageWidth(1200)
-                                ->preserveFilenames(false)
-                                ->imageEditor()
                         ]),
                 ])
                 ->action(function (array $data) {
+                    // Actualizamos los datos del restaurante
                     $this->restaurant->update($data);
 
                     Cache::forget("restaurant_data_user_" . Auth::id());
@@ -119,3 +159,4 @@ class RestaurantProfile extends Page
         ];
     }
 }
+

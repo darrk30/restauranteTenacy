@@ -27,6 +27,12 @@ class Restaurant extends Model
         'slug',
         'carta_activa_cliente',
         'carta_activa_admin',
+        'production',
+        'sol_user',
+        'sol_pass',
+        'cert_path',
+        'client_id',
+        'client_secret',
     ];
 
     public function getRouteKeyName()
