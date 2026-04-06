@@ -88,14 +88,6 @@ class OrdenService
         return $producto;
     }
 
-
-
-
-
-
-
-
-
     public static function crearPedido(array $datosOrden, array $carrito, int $userId = null)
     {
         // 1. Validaciones según canal
@@ -132,13 +124,14 @@ class OrdenService
                     $promocion = Promotion::find($item['promotion_id'] ?? null);
                     if (!$promocion) throw new \Exception("Una promoción seleccionada ya no existe.");
 
-                    $precioUnitarioReal = $promocion->price;
+                    $precioUnitarioReal = floatval($promocion->price);
                     $nombreReal = $promocion->name;
                 } else {
-                    $producto = Product::find($item['product_id'] ?? null);
+                    // 🟢 CAMBIO 1: Cargamos los atributos junto con el producto
+                    $producto = Product::with('attributes')->find($item['product_id'] ?? null);
                     if (!$producto) throw new \Exception("Un producto seleccionado ya no existe.");
 
-                    $precioUnitarioReal = $producto->price;
+                    $precioUnitarioReal = floatval($producto->price);
                     $nombreReal = $producto->name;
 
                     // Si tiene variante, sumamos los extras (si los hay) al precio base
@@ -146,12 +139,19 @@ class OrdenService
                         $variante = Variant::with('values')->find($item['variant_id']);
                         if ($variante) {
                             $extras = 0;
-                            foreach ($variante->values as $opcion) {
-                                $extras += (float) ($opcion->extra ?? 0);
+                            $variantValueIds = $variante->values->pluck('id')->toArray();
+                            foreach ($producto->attributes as $attr) {
+                                $rawValues = $attr->pivot->values ?? [];
+                                $opciones = is_string($rawValues) ? json_decode($rawValues, true) : json_decode(json_encode($rawValues), true);
+                                if (is_array($opciones)) {
+                                    foreach ($opciones as $opcion) {
+                                        if (in_array($opcion['id'], $variantValueIds)) {
+                                            $extras += floatval($opcion['extra'] ?? 0);
+                                        }
+                                    }
+                                }
                             }
                             $precioUnitarioReal += $extras;
-
-                            // Formateamos el nombre con las opciones
                             $nombreVariante = $variante->values->pluck('name')->join(' / ');
                             $nombreReal .= " ($nombreVariante)";
                         }
@@ -282,7 +282,6 @@ class OrdenService
         }
     }
 
-    // 🟢 AQUÍ ESTÁ LA CORRECCIÓN: Ahora son "public static function"
     public static function obtenerDatosArea($productId = null, $promotionId = null)
     {
         // Si es promoción

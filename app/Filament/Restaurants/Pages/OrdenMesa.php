@@ -195,7 +195,7 @@ class OrdenMesa extends Page implements HasActions
             $resultado = OrdenService::crearPedido($datosOrden, $this->carrito, Auth::id());
 
             $order = $resultado['order'];
-            $diffParaCocina = $resultado['diffParaCocina']; 
+            $diffParaCocina = $resultado['diffParaCocina'];
 
             // 3. Imprimir Comanda
             $config = Filament::getTenant()->cached_config; // 🟢 Leer config
@@ -501,7 +501,7 @@ class OrdenMesa extends Page implements HasActions
             }
             $config = Filament::getTenant()->cached_config;
             if (!empty($diffParaCocina['cancelados'])) {
-               if ($config->mostrar_modal_impresion_comanda) {
+                if ($config->mostrar_modal_impresion_comanda) {
                     $jobId = 'print_anul_' . $pedidoId . '_' . time();
                     Cache::put($jobId, $diffParaCocina, now()->addMinutes(5));
                     session()->flash('print_job_id', $jobId);
@@ -743,7 +743,7 @@ class OrdenMesa extends Page implements HasActions
         $this->notaPedido = '';
         $this->selectedAttributes = [];
         $this->variantSeleccionadaId = null;
-        $this->precioCalculado = $producto->price;
+        $this->precioCalculado = floatval($producto->price);
         $this->stockActualVariante = 0;
         $this->stockReservaVariante = 0;
 
@@ -757,12 +757,16 @@ class OrdenMesa extends Page implements HasActions
         } else {
             foreach ($producto->attributes as $attr) {
                 $rawValues = $attr->pivot->values ?? [];
-                $values = is_string($rawValues) ? json_decode($rawValues, true) : $rawValues;
+
+                // TRUCO INFALIBLE: Forzamos a que sea un array asociativo sin importar cómo venga
+                $values = is_string($rawValues) ? json_decode($rawValues, true) : json_decode(json_encode($rawValues), true);
+
                 if (is_array($values) && count($values) > 0) {
-                    $primerValorId = $values[0]['id'];
-                    $this->selectedAttributes[$attr->id] = $primerValorId;
+                    // Ahora estamos 100% seguros de que ['id'] funcionará
+                    $this->selectedAttributes[$attr->id] = $values[0]['id'] ?? null;
                 }
             }
+            // Esto calculará el precio correcto desde el segundo 1 en que se abre el modal
             $this->buscarVarianteCoincidente();
         }
     }
@@ -775,28 +779,30 @@ class OrdenMesa extends Page implements HasActions
 
     public function buscarVarianteCoincidente()
     {
-        $precioBase = $this->productoSeleccionado->price;
+        if (!$this->productoSeleccionado) return;
+        $precioBase = floatval($this->productoSeleccionado->price);
         $extrasAcumulados = 0;
         foreach ($this->selectedAttributes as $attrId => $valIdSeleccionado) {
-            $atributo = $this->productoSeleccionado->attributes->find($attrId);
-            if ($atributo) {
-                $opciones = is_string($atributo->pivot->values) ? json_decode($atributo->pivot->values, true) : $atributo->pivot->values;
+            $atributo = $this->productoSeleccionado->attributes->firstWhere('id', $attrId);
+            if ($atributo && $valIdSeleccionado) {
+                $rawValues = $atributo->pivot->values ?? [];
+                $opciones = is_string($rawValues) ? json_decode($rawValues, true) : json_decode(json_encode($rawValues), true);
                 $opcion = collect($opciones)->firstWhere('id', $valIdSeleccionado);
                 if ($opcion) {
-                    $extrasAcumulados += ($opcion['extra'] ?? 0);
+                    $extrasAcumulados += floatval($opcion['extra'] ?? 0);
                 }
             }
         }
 
         $this->precioCalculado = $precioBase + $extrasAcumulados;
 
-        if (!$this->productoSeleccionado || $this->productoSeleccionado->variants->isEmpty()) {
+        if ($this->productoSeleccionado->variants->isEmpty()) {
             return;
         }
         $matchVariant = null;
         foreach ($this->productoSeleccionado->variants as $variant) {
             $variantValueIds = $variant->values->pluck('id')->toArray();
-            $seleccionados = array_values($this->selectedAttributes);
+            $seleccionados = array_filter(array_values($this->selectedAttributes));
             $coincidencias = array_intersect($seleccionados, $variantValueIds);
             if (count($coincidencias) === count($this->productoSeleccionado->attributes)) {
                 $matchVariant = $variant;

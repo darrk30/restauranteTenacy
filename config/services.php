@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'greenter_api' => [
+        'url' => env('GREENTER_API_URL'),
+    ],
+
 ];

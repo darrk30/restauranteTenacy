@@ -106,6 +106,9 @@ class RestaurantProfile extends Page
                                     ->label('Client Secret (Opcional)')
                                     ->password()
                                     ->revealable(),
+                                TextInput::make('api_token')
+                                    ->label('API Token')
+                                    ->placeholder('Ej: abc123def456...'),
                             ]),
                         ]),
 

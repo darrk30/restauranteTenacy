@@ -6,45 +6,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ $sale->tipo_comprobante }} - {{ $sale->serie }}-{{ $sale->correlativo }}</title>
     <style>
-        /* CONFIGURACIÓN PARA PANTALLA (WEB) */
+        /* RESET BÁSICO PARA QUITAR ESPACIOS MUERTOS */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* CONFIGURACIÓN GENERAL DEL TICKET */
         body {
             background-color: #f3f4f6;
-            margin: 0;
-            padding: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
             font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            /* Letra pequeña para ahorrar espacio */
+            line-height: 1.2;
+            /* Interlineado compacto */
+            color: #000;
+            padding: 20px;
         }
 
         .ticket-container {
             background-color: #fff;
-            width: 72mm;
-            padding: 15px;
+            width: 80mm;
+            /* Ancho estándar de ticketera */
+            padding: 10px 15px;
+            /* Padding interno reducido */
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-            border-radius: 4px;
             position: relative;
         }
 
-        /* BOTONES DE ACCIÓN (SOLO PANTALLA) */
+        /* BOTONES DE PANTALLA */
         .actions {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             display: flex;
             gap: 10px;
         }
 
         .btn {
-            padding: 10px 20px;
+            padding: 8px 15px;
             border: none;
-            border-radius: 8px;
+            border-radius: 6px;
             cursor: pointer;
             font-family: sans-serif;
             font-weight: bold;
             text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 14px;
+            font-size: 13px;
         }
 
         .btn-print {
@@ -57,9 +66,13 @@
             color: #374151;
         }
 
-        /* ESTILOS DEL TICKET */
+        /* UTILIDADES DE TEXTO */
         .text-center {
             text-align: center;
+        }
+
+        .text-left {
+            text-align: left;
         }
 
         .text-right {
@@ -70,49 +83,92 @@
             font-weight: bold;
         }
 
+        p {
+            margin-bottom: 2px;
+        }
+
+        /* SEPARADORES */
         .divider {
+            border-top: 1px solid #000;
+            margin: 6px 0;
+        }
+
+        .divider-dashed {
             border-top: 1px dashed #000;
-            margin: 10px 0;
+            margin: 6px 0;
         }
 
-        .header-info h1 {
-            font-size: 20px;
-            margin: 5px 0;
-            text-transform: uppercase;
-        }
-
+        /* LOGO */
         .logo-container img {
-            max-width: 50mm;
+            max-width: 45mm;
             height: auto;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             filter: grayscale(1);
         }
 
+        /* TÍTULO DEL COMPROBANTE (FACTURA/BOLETA) */
+        .doc-title {
+            font-size: 15px;
+            font-family: sans-serif;
+            /* Resalta más con sans-serif */
+            font-weight: bold;
+            text-align: center;
+            text-transform: uppercase;
+            margin: 8px 0;
+        }
+
+        /* CUADRICULA DE INFORMACIÓN DEL CLIENTE */
+        .info-grid {
+            display: grid;
+            grid-template-columns: 85px 1fr;
+            gap: 1px 5px;
+            margin-bottom: 5px;
+        }
+
+        /* TABLA DE PRODUCTOS */
         table {
             width: 100%;
             border-collapse: collapse;
-            margin: 8px 0;
-            font-size: 13px;
+            margin: 5px 0;
         }
 
         th {
+            border-top: 1px solid #000;
             border-bottom: 1px solid #000;
-            padding: 5px 0;
+            padding: 4px 0;
             text-align: left;
+            font-size: 10px;
         }
 
         td {
-            padding: 5px 0;
+            padding: 3px 0;
             vertical-align: top;
+            font-size: 11px;
         }
 
-        .total-row {
-            font-size: 16px;
+        /* SECCIÓN DE TOTALES */
+        .table-totals {
+            width: 100%;
+            margin-left: auto;
         }
 
-        .payment-info {
-            font-size: 12px;
-            margin-top: 5px;
+        /* SECCIÓN QR Y PAGOS (ESTILO IDE SOLUTION) */
+        .qr-section {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .qr-code img {
+            width: 25mm;
+            height: 25mm;
+        }
+
+        .qr-text {
+            flex: 1;
+            font-size: 10px;
+            word-break: break-all;
         }
 
         @if (request()->query('hide_actions') == 1)
@@ -127,16 +183,20 @@
             }
         @endif
 
-        /* CONFIGURACIÓN PARA IMPRESIÓN */
+        /* IMPRESIÓN */
+        /* IMPRESIÓN */
         @media print {
             body {
                 background-color: #fff;
                 padding: 0;
+                align-items: flex-start;
             }
 
             .ticket-container {
                 box-shadow: none;
-                width: 72mm;
+                /* 🟢 Al agregar márgenes a la página, cambiamos el ancho a 100% para que no se desborde del papel de 80mm */
+                width: 100%;
+                max-width: 80mm;
                 padding: 0;
                 margin: 0;
             }
@@ -145,8 +205,10 @@
                 display: none;
             }
 
+            /* 🟢 AQUÍ DEFINIMOS LOS MÁRGENES PEQUEÑOS DE LA IMPRESORA */
             @page {
-                margin: 0;
+                /* 3mm arriba y abajo, 4mm a la izquierda y derecha */
+                margin: 3mm 4mm;
             }
         }
     </style>
@@ -155,117 +217,166 @@
 <body>
 
     @php
-        // 🟢 Detectamos si debemos ocultar los botones (útil para el iframe del modal)
         $hideActions = request()->query('hide_actions') == 1;
+        $esNotaVenta = str_contains(strtolower($sale->tipo_comprobante), 'nota');
+
+        // Formatear el nombre del comprobante según el tipo
+        $nombreComprobante = strtoupper($sale->tipo_comprobante);
+        if ($sale->tipo_comprobante === 'Factura') {
+            $nombreComprobante = 'FACTURA ELECTRÓNICA';
+        }
+        if ($sale->tipo_comprobante === 'Boleta') {
+            $nombreComprobante = 'BOLETA DE VENTA ELECTRÓNICA';
+        }
     @endphp
 
     @if (!$hideActions)
         <div class="actions">
-            <button onclick="window.print()" class="btn btn-print">
-                🖨️ Imprimir Ticket
-            </button>
-            <a href="javascript:window.close();" class="btn btn-close">
-                Cerrar
-            </a>
+            <button onclick="window.print()" class="btn btn-print">🖨️ Imprimir Ticket</button>
+            <a href="javascript:window.close();" class="btn btn-close">Cerrar</a>
         </div>
     @endif
 
     <div class="ticket-container">
-        <div class="header-info text-center">
+        <div class="text-center">
             @if ($tenant->logo)
                 <div class="logo-container">
                     <img src="{{ asset('storage/' . $tenant->logo) }}" alt="Logo">
                 </div>
             @endif
 
-            <h1>{{ $tenant->name ?? 'RESTAURANTE' }}</h1>
-            <p class="bold">RUC: {{ $tenant->ruc ?? '00000000000' }}</p>
+            <p class="bold" style="font-size: 14px;">{{ $tenant->name ?? 'RESTAURANTE' }}</p>
+            <p>RUC {{ $tenant->ruc ?? '00000000000' }}</p>
             <p>{{ $tenant->address ?? 'DIRECCIÓN NO REGISTRADA' }}</p>
 
-            @if ($tenant->phone || $tenant->city)
+            @if ($tenant->city || $tenant->phone)
                 <p>
+                    {{ $tenant->city ?? '' }}
                     @if ($tenant->phone)
-                        Telf: {{ $tenant->phone }}
-                    @endif
-                    @if ($tenant->city)
-                        | {{ $tenant->city }}
+                        - Telf: {{ $tenant->phone }}
                     @endif
                 </p>
             @endif
-
-            <div class="divider"></div>
-            <p class="bold" style="font-size: 15px;">{{ $sale->tipo_comprobante }}</p>
-            <p class="bold" style="font-size: 16px;">{{ $sale->serie }}-{{ $sale->correlativo }}</p>
         </div>
 
-        <div class="info-sec" style="font-size: 12px;">
-            <p><strong>Fecha:</strong> {{ \Carbon\Carbon::parse($sale->fecha_emision)->format('d/m/Y H:i') }}</p>
-            <p><strong>Cajero:</strong> {{ $sale->user->name }}</p>
-            <div class="divider"></div>
-            <p><strong>Cliente:</strong> {{ $sale->nombre_cliente ?? 'PÚBLICO EN GENERAL' }}</p>
-            @if ($sale->numero_documento)
-                <p><strong>{{ strlen($sale->numero_documento) == 11 ? 'RUC' : 'DNI' }}:</strong>
-                    {{ $sale->numero_documento }}</p>
-            @endif
+        <div class="divider"></div>
+
+        <div class="doc-title">
+            {{ $nombreComprobante }}<br>
+            {{ $sale->serie }}-{{ $sale->correlativo }}
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="info-grid">
+            <span class="bold">F. Emisión:</span>
+            <span>{{ \Carbon\Carbon::parse($sale->fecha_emision)->format('Y-m-d') }}</span>
+
+            <span class="bold">H. Emisión:</span>
+            <span>{{ \Carbon\Carbon::parse($sale->fecha_emision)->format('H:i:s') }}</span>
+
+            <span class="bold">Cliente:</span>
+            <span>{{ $sale->nombre_cliente ?? 'Clientes - Varios' }}</span>
+
+            <span class="bold">{{ strlen($sale->numero_documento) == 11 ? 'RUC:' : 'DNI/Doc:' }}</span>
+            <span>{{ $sale->numero_documento ?? '99999999' }}</span>
+
+            <span class="bold">Dirección:</span>
+            <span>{{ $sale->client->direccion ?? ($sale->client->address ?? '-') }}</span>
         </div>
 
         <table>
             <thead>
                 <tr>
-                    <th style="width: 15%;">CANT</th>
-                    <th style="width: 60%;">DESCRIPCIÓN</th>
-                    <th style="width: 25%; text-align: right;">TOTAL</th>
+                    <th style="width: 15%;">CANT.</th>
+                    <th style="width: 45%;">DESCRIPCIÓN</th>
+                    <th style="width: 20%; text-align: right;">P.UNIT</th>
+                    <th style="width: 20%; text-align: right;">TOTAL</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach ($sale->details as $item)
                     <tr>
-                        <td>{{ (int) $item->cantidad }}</td>
+                        <td style="white-space: nowrap;">{{ (int) $item->cantidad }} {{ $item->unidad ?? 'NIU' }}</td>
                         <td>
                             {{ $item->product_name }}
                             @if ($item->item_type === 'Promocion')
-                                <br><small style="color: #666;">(PROMOCIÓN)</small>
+                                <br><small>(PROMOCIÓN)</small>
                             @endif
                         </td>
+                        <td class="text-right">{{ number_format($item->precio_unitario ?? ($item->subtotal / max($item->cantidad, 1)), 2) }}</td>
                         <td class="text-right">{{ number_format($item->subtotal, 2) }}</td>
                     </tr>
                 @endforeach
             </tbody>
         </table>
 
-        <div class="divider"></div>
+        <div class="divider-dashed"></div>
 
-        <table style="margin-top: 0;">
-            @php
-                $esNotaVenta = str_contains(strtolower($sale->tipo_comprobante), 'nota');
-            @endphp
-
+        <table class="table-totals">
             @if (!$esNotaVenta)
                 <tr>
-                    <td class="text-right">OP. GRAVADA:</td>
-                    <td class="text-right" style="width: 35%;">S/ {{ number_format((float) $sale->op_gravada, 2) }}
-                    </td>
+                    <td class="bold">OP. GRAVADAS:</td>
+                    <td class="text-right">S/ {{ number_format((float) $sale->op_gravada, 2) }}</td>
                 </tr>
                 <tr>
-                    <td class="text-right">IGV (18%):</td>
+                    <td class="bold">IGV (18%):</td>
                     <td class="text-right">S/ {{ number_format((float) $sale->monto_igv, 2) }}</td>
                 </tr>
             @endif
 
-            {{-- 🟢 CAMPO DE DESCUENTO --}}
-            <tr>
-                <td class="text-right">DESCUENTO:</td>
-                <td class="text-right">S/ {{ number_format((float) ($sale->monto_descuento ?? 0), 2) }}</td>
-            </tr>
+            @if (($sale->monto_descuento ?? 0) > 0)
+                <tr>
+                    <td class="bold">DESCUENTO:</td>
+                    <td class="text-right">S/ {{ number_format((float) $sale->monto_descuento, 2) }}</td>
+                </tr>
+            @endif
 
-            <tr class="total-row bold">
-                <td class="text-right">TOTAL:</td>
-                <td class="text-right">S/ {{ number_format((float) $sale->total, 2) }}</td>
+            <tr>
+                <td class="bold" style="font-size: 13px;">TOTAL A PAGAR:</td>
+                <td class="bold text-right" style="font-size: 13px;">S/ {{ number_format((float) $sale->total, 2) }}
+                </td>
             </tr>
         </table>
 
-        <div class="payment-info">
-            <p class="bold" style="margin-bottom: 5px;">MÉTODO DE PAGO:</p>
+        <p style="margin-top: 10px;">
+            <span class="bold">Son:</span> {{ ucfirst(strtolower($sale->total_letras ?? 'Cero con 00/100 Soles')) }}
+        </p>
+
+        @if (!$esNotaVenta)
+            <div class="qr-section">
+                @if ($sale->qr_data)
+                    <div class="qr-code">
+                        <img src="data:image/svg+xml;base64,{{ base64_encode(SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->margin(0)->size(120)->generate($sale->qr_data)) }}"
+                            alt="QR">
+                    </div>
+                @endif
+
+                <div class="qr-text">
+                    @if ($sale->hash)
+                        <p class="bold">CÓDIGO HASH:</p>
+                        <p style="margin-bottom: 5px;">{{ $sale->hash }}</p>
+                    @endif
+
+                    <p class="bold">CONDICIÓN DE PAGO: Contado</p>
+
+                    <p class="bold">PAGOS:</p>
+                    @php
+                        $pagos = \App\Models\CashRegisterMovement::where('referencia_id', $sale->id)
+                            ->where('referencia_type', get_class($sale))
+                            ->where('tipo', 'Ingreso')
+                            ->with('paymentMethod')
+                            ->get();
+                    @endphp
+                    @foreach ($pagos as $pago)
+                        <p>• {{ $pago->paymentMethod->name ?? 'Efectivo' }} - S/ {{ number_format($pago->monto, 2) }}
+                        </p>
+                    @endforeach
+                </div>
+            </div>
+        @else
+            <div class="divider-dashed"></div>
+            <p class="bold text-center">PAGOS:</p>
             @php
                 $pagos = \App\Models\CashRegisterMovement::where('referencia_id', $sale->id)
                     ->where('referencia_type', get_class($sale))
@@ -273,29 +384,29 @@
                     ->with('paymentMethod')
                     ->get();
             @endphp
+            @foreach ($pagos as $pago)
+                <p class="text-center">{{ $pago->paymentMethod->name ?? 'Efectivo' }} - S/
+                    {{ number_format($pago->monto, 2) }}</p>
+            @endforeach
+        @endif
 
-            @forelse ($pagos as $pago)
-                <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-                    <span>- {{ $pago->paymentMethod->name ?? 'MÉTODO DESCONOCIDO' }}</span>
-                    <span class="bold">S/ {{ number_format($pago->monto, 2) }}</span>
-                </div>
-            @empty
-                <p>Pago procesado.</p>
-            @endforelse
-        </div>
+        <div class="divider"></div>
 
-        <div class="footer text-center">
-            <div class="divider"></div>
-            @if ($esNotaVenta)
-                <p class="bold" style="font-size: 10px;">ESTE DOCUMENTO NO ES UN COMPROBANTE DE PAGO</p>
+        <p><span class="bold">Vendedor:</span><br>{{ $sale->user->name }}</p>
+
+        <br>
+
+        <div class="text-center" style="font-size: 10px; color: #333;">
+            @if (!$esNotaVenta)
+                <p>Para consultar el comprobante ingresar a<br>
+                    <span class="bold">https://tu-dominio.com/buscar</span>
+                </p>
+                <p>Representación impresa de la {{ $nombreComprobante }}</p>
             @else
-                <p>Representación impresa del comprobante electrónico.</p>
+                <p class="bold" style="font-size: 11px;">ESTE DOCUMENTO NO ES UN COMPROBANTE DE PAGO FISCAL</p>
             @endif
-            <p class="bold">¡GRACIAS POR SU COMPRA!</p>
-            <p style="font-size: 10px; margin-top: 10px; color: #666;">
-                {{ \Carbon\Carbon::now()->format('d/m/Y H:i:s') }}
-            </p>
         </div>
+
     </div>
 
 </body>

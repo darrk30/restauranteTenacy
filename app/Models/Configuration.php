@@ -35,6 +35,8 @@ class Configuration extends Model
         // Facturación
         'precios_incluyen_impuesto',
         'porcentaje_impuesto',
+        'envio_boletas',
+        'envio_facturas',
     ];
 
     protected $casts = [

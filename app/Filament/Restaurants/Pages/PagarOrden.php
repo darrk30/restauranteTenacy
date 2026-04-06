@@ -23,9 +23,12 @@ use App\Models\SessionCashRegister;
 use App\Models\Table;
 use App\Models\WarehouseStock;
 use App\Services\InventoryService;
+use App\Services\SunatGreenterApiService;
 use App\Traits\ManjoStockProductos;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use ZipArchive;
 
 class PagarOrden extends Page implements HasForms, HasActions
 {
@@ -280,8 +283,12 @@ class PagarOrden extends Page implements HasForms, HasActions
         // 1. VALIDACIONES PREVIAS
         $this->calculateTotalServer();
         $totalPagado = collect($this->pagos_agregados)->sum('amount');
-        $tenantId = Filament::getTenant()->id;
+        $tenant = Filament::getTenant();
+        $tenantId = $tenant->id;
         $userId = Auth::id();
+
+        // Obtenemos la configuración
+        $config = $tenant->cached_config ?? $tenant;
 
         $sesionCaja = SessionCashRegister::where('restaurant_id', $tenantId)
             ->where('user_id', $userId)
@@ -300,19 +307,28 @@ class PagarOrden extends Page implements HasForms, HasActions
 
         DB::beginTransaction();
         try {
-            // 2. BLOQUEOS Y CABECERA DE VENTA
             $order = Order::where('id', $this->order->id)->lockForUpdate()->first();
-            if ($order->status === 'pagado') throw new \Exception("Orden ya procesada.");
+
+            if ($order->status === 'pagado') {
+                throw new \Exception("Orden ya procesada.");
+            }
 
             $serieConfig = DocumentSerie::where('id', $this->serie_id)->lockForUpdate()->first();
-            if (!$serieConfig) throw new \Exception("Serie no válida.");
 
-            // Aquí es donde garantizas el 100% de seguridad porque le pasas la serie bloqueada
+            if (!$serieConfig) {
+                throw new \Exception("Serie no válida.");
+            }
+
             $correlativo = $this->obtenerCorrelativoFinal($serieConfig);
+            $serie = $serieConfig->serie;
+
             $nombreFinalCliente = $this->cliente_seleccionado
                 ? ($this->cliente_seleccionado->razon_social ?? ($this->cliente_seleccionado->nombres . ' ' . $this->cliente_seleccionado->apellidos))
                 : 'CLIENTES VARIOS';
 
+            // =========================
+            // 💾 1. GUARDAR VENTA PRIMERO EN BD
+            // =========================
             $sale = Sale::create([
                 'restaurant_id'    => $tenantId,
                 'order_id'         => $order->id,
@@ -323,56 +339,47 @@ class PagarOrden extends Page implements HasForms, HasActions
                 'tipo_documento'   => $this->cliente_seleccionado?->tipo_documento ?? 'DNI',
                 'numero_documento' => $this->cliente_seleccionado?->numero ?? '99999999',
                 'tipo_comprobante' => $this->tipo_comprobante,
-                'serie'            => $serieConfig->serie,
+                'serie'            => $serie,
                 'correlativo'      => $correlativo,
                 'monto_descuento'  => $this->monto_descuento,
                 'op_gravada'       => $this->op_gravada,
                 'monto_igv'        => $this->monto_igv,
                 'total'            => $this->total_final,
-                'costo_total'      => 0, // 🟢 NUEVO: Inicializamos en 0
+                'costo_total'      => 0, // Se actualiza más abajo
                 'status'           => 'completado',
                 'canal'            => $order->canal,
                 'delivery_id'      => $order->delivery_id,
                 'nombre_delivery'  => $order->nombre_delivery,
                 'fecha_emision'    => now(),
+                // 🔥 Nace siempre como registrado si es comprobante electrónico
+                'status_sunat'     => in_array($this->tipo_comprobante, ['Boleta', 'Factura']) ? 'registrado' : 'no_aplica',
             ]);
 
             $detallesParaKardex = collect();
-            $costoTotalVenta = 0; // 🟢 NUEVO: Acumulador para la suma de todos los costos
+            $costoTotalVenta = 0;
 
-            // 3. PROCESAMIENTO DE ITEMS CON PRECISIÓN 100% (LÓGICA TOP-DOWN)
+            // =========================
+            // 📦 2. PROCESAMIENTO DE ITEMS
+            // =========================
             foreach ($this->items as $item) {
                 if ($item->status === \App\Enums\StatusPedido::Cancelado) {
                     continue;
                 }
                 $esPromocion = ($item->item_type === 'Promocion');
 
-                // --- LÓGICA DE VENTA ---
                 $cantidad = $item->cantidad;
-                $precioUnitario = (float) $item->price; // Precio final con IGV (ej: 2.00)
+                $precioUnitario = (float) $item->price;
+                $subtotal = round($precioUnitario * $cantidad, 2);
+                $valorTotal = round($subtotal / 1.18, 2);
+                $valorUnitario = ($cantidad > 0) ? ($valorTotal / $cantidad) : 0;
 
-                // 1. Subtotal de la línea (Lo que el cliente paga)
-                // Se calcula primero el total para evitar que "baile" el céntimo.
-                $subtotal = round($precioUnitario * $cantidad, 2); // ej: 6.00
-
-                // 2. Valor Total de la línea (Base Imponible para SUNAT)
-                // Obtenemos la base imponible total de la línea y redondeamos a 2 decimales.
-                $valorTotal = round($subtotal / 1.18, 2); // ej: 5.08
-
-                // 3. Valor Unitario Base con 6 decimales
-                // Dividimos la base imponible total entre la cantidad para máxima precisión.
-                $valorUnitario = ($cantidad > 0) ? ($valorTotal / $cantidad) : 0; // ej: 1.693333
-
-                // --- LÓGICA DE COSTOS (PROMEDIO PONDERADO) ---
                 $costoUnitario = 0;
                 if (!$esPromocion && $item->variant) {
                     $costoUnitario = (float) ($item->variant->costo ?? 0);
                 }
                 $costoTotal = round($costoUnitario * $cantidad, 2);
+                $costoTotalVenta += $costoTotal;
 
-                $costoTotalVenta += $costoTotal; // 🟢 NUEVO: Sumamos el costo de esta línea al acumulador general
-
-                // --- GUARDADO EN BASE DE DATOS ---
                 $saleDetail = new \App\Models\SaleDetail([
                     'sale_id'         => $sale->id,
                     'product_id'      => $esPromocion ? null : $item->product_id,
@@ -380,21 +387,16 @@ class PagarOrden extends Page implements HasForms, HasActions
                     'promotion_id'    => $esPromocion ? $item->promotion_id : null,
                     'product_name'    => $item->product_name ?? 'Producto',
                     'cantidad'        => $cantidad,
-
-                    // FINANZAS DE VENTA
-                    'precio_unitario' => $precioUnitario, // 2.000000
-                    'valor_unitario'  => $valorUnitario,  // 1.693333 (Base Imponible Unit)
-                    'subtotal'        => $subtotal,       // 6.00 (Total con IGV)
-                    'valor_total'     => $valorTotal,     // 5.08 (Base Imponible Total)
-
-                    // FINANZAS DE COSTO
+                    'precio_unitario' => $precioUnitario,
+                    'valor_unitario'  => $valorUnitario,
+                    'subtotal'        => $subtotal,
+                    'valor_total'     => $valorTotal,
                     'costo_unitario'  => $costoUnitario,
                     'costo_total'     => $costoTotal,
                 ]);
 
                 $saleDetail->save();
 
-                // D. Relaciones para el Kardex
                 if (!$esPromocion) {
                     $saleDetail->load(['product', 'variant', 'product.unit']);
                 } else {
@@ -404,10 +406,11 @@ class PagarOrden extends Page implements HasForms, HasActions
                 $detallesParaKardex->push($saleDetail);
             }
 
-            // 🟢 NUEVO: Actualizamos la tabla Sale con la sumatoria final de todos los costos
             $sale->update(['costo_total' => $costoTotalVenta]);
 
-            // 4. MOVIMIENTO DE STOCK (Kardex)
+            // =========================
+            // 📊 3. MOVIMIENTO DE STOCK (Kardex)
+            // =========================
             if ($detallesParaKardex->isNotEmpty()) {
                 $this->applyVentaMasiva(
                     $detallesParaKardex,
@@ -417,7 +420,9 @@ class PagarOrden extends Page implements HasForms, HasActions
                 );
             }
 
-            // 5. REGISTRO CAJA
+            // =========================
+            // 💵 4. REGISTRO CAJA
+            // =========================
             $movimientosCaja = collect($this->pagos_agregados)->map(function ($pago) use ($sale, $userId) {
                 $referenciaStr = !empty($this->referencia_pago) ? " | Ref: " . $this->referencia_pago : "";
                 return [
@@ -436,7 +441,9 @@ class PagarOrden extends Page implements HasForms, HasActions
             $sesionCaja->cashRegisterMovements()->createMany($movimientosCaja);
             $this->referencia_pago = '';
 
-            // 6. ACTUALIZACIÓN ESTADOS
+            // =========================
+            // 🍽️ 5. ACTUALIZACIÓN ESTADOS MESA/ORDEN
+            // =========================
             $order->update(['status' => 'pagado']);
 
             if ($order->table_id) {
@@ -447,20 +454,135 @@ class PagarOrden extends Page implements HasForms, HasActions
                 ]);
             }
 
-            DB::commit();
+            DB::commit(); // 🔥 VENTA ASEGURADA AL 100% AQUÍ. Ya no hay marcha atrás con la base de datos.
 
-            $config = \Filament\Facades\Filament::getTenant()->cached_config;
-
-            // Validamos si tiene permiso de ver el modal de impresión o impresión directa
-            $this->puedeImprimirComprobante = $config->mostrar_modal_impresion_comprobante;
-
-            Notification::make()->title('Venta exitosa')->success()->send();
-            $this->ventaExitosaId = $sale->id;
-            $this->mostrarPantallaExito = true;
         } catch (\Exception $e) {
             DB::rollBack();
-            Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
+            Notification::make()->title('Error interno')->body($e->getMessage())->danger()->send();
+            return;
         }
+
+        // ==========================================
+        // 🚀 6. COMUNICACIÓN CON SUNAT (POST-GUARDADO)
+        // ==========================================
+        $statusSunatMensaje = $sale->status_sunat;
+
+        if (in_array($this->tipo_comprobante, ['Boleta', 'Factura'])) {
+            $apiKey = $tenant->api_token;
+
+            if (empty($apiKey)) {
+                $sale->update(['status_sunat' => 'error_api', 'message' => "El restaurante no tiene API Key configurada."]);
+                $statusSunatMensaje = 'error_api';
+            } else {
+                try {
+                    // 🟢 USAMOS EL SERVICIO (El mismo que usas en Filament)
+                    $payloadBuilder = app(\App\Services\InvoicePayloadService::class);
+                    $payload = $payloadBuilder->buildFromSale($sale, $tenant);
+
+                    $sunatService = app(\App\Services\SunatGreenterApiService::class);
+                    $respuesta = $sunatService->sendInvoice($payload, $apiKey);
+
+                    if (!$respuesta['success']) {
+                        // Falló la conexión con la API
+                        $sale->update([
+                            'status_sunat' => 'error_api',
+                            'message'      => $respuesta['error_data']['error'] ?? $respuesta['message'] ?? 'Error de conexión con la API interna.'
+                        ]);
+                        $statusSunatMensaje = 'error_api';
+                    } else {
+                        $data = $respuesta['data'];
+                        $apiSuccess = $data['sunatResponse']['success'] ?? false;
+
+                        // Guardar XML si existe
+                        $xmlBase64 = $data['xml'] ?? null;
+                        $pathXml = null;
+                        if ($xmlBase64) {
+                            $slug  = $tenant->slug ?? 'default';
+                            $fecha = now()->format('Y-m-d');
+                            $folder = "tenants/{$slug}/comprobantes/xml/{$fecha}";
+                            $nombreBase = "{$sale->serie}-{$sale->correlativo}";
+                            $pathXml = "{$folder}/{$nombreBase}.xml";
+                            Storage::disk('public')->put($pathXml, base64_decode($xmlBase64));
+                        }
+
+                        if ($apiSuccess) {
+                            // Guardar CDR ZIP
+                            $cdrBase64 = $data['sunatResponse']['cdrZip'] ?? null;
+                            $pathCdrZip = null;
+                            if ($cdrBase64) {
+                                $slug  = $tenant->slug ?? 'default';
+                                $fecha = now()->format('Y-m-d');
+                                $folder = "tenants/{$slug}/comprobantes/cdr/{$fecha}";
+                                $nombreBase = "{$sale->serie}-{$sale->correlativo}";
+                                $pathCdrZip = "{$folder}/R-{$nombreBase}.zip";
+                                Storage::disk('public')->put($pathCdrZip, base64_decode($cdrBase64));
+                            }
+
+                            // Actualizar la venta como ACEPTADA
+                            $sale->update([
+                                'status_sunat' => 'aceptado',
+                                'hash'         => $data['hash'] ?? null,
+                                'path_xml'     => $pathXml,
+                                'path_cdrZip'  => $pathCdrZip,
+                                'success'      => true,
+                                'code'         => $data['sunatResponse']['cdrResponse']['code'] ?? null,
+                                'description'  => $data['sunatResponse']['cdrResponse']['description'] ?? null,
+                                'notes'        => json_encode($data['sunatResponse']['cdrResponse']['notes'] ?? []),
+                                'qr_data'      => $data['qr_data'] ?? null,
+                                'total_letras' => $data['total_letras'] ?? null,
+                            ]);
+                            $statusSunatMensaje = 'aceptado';
+                        } else {
+                            // SUNAT procesó el XML pero encontró errores (ej. RUC inválido)
+                            $sale->update([
+                                'status_sunat' => 'rechazado',
+                                'hash'         => $data['hash'] ?? null,
+                                'path_xml'     => $pathXml, // Si hubo error validando en SUNAT, Greenter sí genera un XML
+                                'success'      => false,
+                                'code'         => $data['sunatResponse']['error']['code'] ?? null,
+                                'message'      => $data['sunatResponse']['error']['message'] ?? null,
+                                'description'  => "Error SUNAT: " . ($data['sunatResponse']['error']['message'] ?? ''),
+                                'qr_data'      => $data['qr_data'] ?? null,
+                                'total_letras' => $data['total_letras'] ?? null,
+                            ]);
+                            $statusSunatMensaje = 'rechazado';
+                        }
+                    }
+                } catch (\Exception $apiEx) {
+                    // Si ocurre un error fatal en tu API central (ej 500 server error), 
+                    // atrapamos el error para no asustar al cajero, la venta ya está en BD.
+                    $sale->update([
+                        'status_sunat' => 'error_api',
+                        'message'      => $apiEx->getMessage()
+                    ]);
+                    $statusSunatMensaje = 'error_api';
+                }
+            }
+        }
+
+        // ==========================================
+        // 🖨️ 7. GENERACIÓN DE PDF Y NOTIFICACIONES
+        // ==========================================
+        try {
+            // El modelo sale ya está actualizado (sale->fresh() asegura tener los paths actualizados)
+            $pdfService = app(\App\Services\TicketPdfService::class);
+            $pdfService->generateAndSave($sale->fresh(), $tenant);
+        } catch (\Exception $e) {
+            \Log::error("Error generando PDF de la venta {$sale->id}: " . $e->getMessage());
+        }
+
+        $this->puedeImprimirComprobante = $config->mostrar_modal_impresion_comprobante ?? true;
+
+        if ($statusSunatMensaje === 'aceptado') {
+            Notification::make()->title('Venta y SUNAT exitosos')->success()->send();
+        } elseif (in_array($statusSunatMensaje, ['rechazado', 'error_api'])) {
+            Notification::make()->title('Venta guardada (Error SUNAT)')->body('Revisa el estado de la factura')->warning()->send();
+        } else {
+            Notification::make()->title('Venta exitosa')->success()->send();
+        }
+
+        $this->ventaExitosaId = $sale->id;
+        $this->mostrarPantallaExito = true;
     }
 
     public function terminarProcesoVenta()

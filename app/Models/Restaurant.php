@@ -25,6 +25,7 @@ class Restaurant extends Model
         'status',
         'logo',
         'slug',
+        'api_token',
         'carta_activa_cliente',
         'carta_activa_admin',
         'production',
@@ -232,5 +233,10 @@ class Restaurant extends Model
     public function permissions()
     {
         return $this->hasMany(Permission::class);
+    }
+
+    public function dailySummaries()
+    {
+        return $this->hasMany(DailySummary::class);
     }
 }
