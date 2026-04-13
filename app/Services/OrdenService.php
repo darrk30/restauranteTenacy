@@ -190,7 +190,12 @@ class OrdenService
             }
 
             // 🟢 4. CALCULAR IMPUESTOS REALES
-            $subtotalSeguro = $totalSeguroCalculado / 1.18; // Asumiendo IGV 18% incluido
+            $configuracion = \App\Models\Configuration::where('restaurant_id', $restaurantId)->first();
+            $porcentajeImpuesto = $configuracion ? floatval($configuracion->porcentaje_impuesto) : 18.00;
+            
+            $divisor = 1 + ($porcentajeImpuesto / 100);
+
+            $subtotalSeguro = $totalSeguroCalculado / $divisor; 
             $igvSeguro = $totalSeguroCalculado - $subtotalSeguro;
 
             // 5. Generar Código Único

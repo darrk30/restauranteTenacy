@@ -21,9 +21,11 @@ use Filament\Forms\Components\Placeholder;
 use Illuminate\Support\HtmlString;
 use Filament\Notifications\Notification;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Grid;
 use Illuminate\Support\Facades\Storage;
 use Filament\Forms\Set;
 use Filament\Forms\Get;
+use Illuminate\Support\Facades\Auth;
 
 class ResumenesDiarios extends Page implements HasTable
 {
@@ -31,10 +33,29 @@ class ResumenesDiarios extends Page implements HasTable
 
     protected static ?string $navigationIcon = 'heroicon-o-document-duplicate';
     protected static ?string $navigationGroup = 'Facturación';
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 145;
     protected static ?string $title = 'Bandeja de Resúmenes y Bajas';
-
     protected static string $view = 'filament.facturacion.resumenes-diarios';
+
+        
+    public static function canAccess(): bool
+    {
+        if (! Filament::getTenant()) {
+            return false;
+        }
+
+        $user = Auth::user();
+
+        if ($user->hasRole('Super Admin')) {
+            return false;
+        }
+
+        try {
+            return $user->hasPermissionTo('ver_resumenes_diarios_rest');
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
 
     // ==========================================
     // 🚀 BOTÓN SUPERIOR: GENERAR RESUMEN (MODAL)
@@ -46,12 +67,14 @@ class ResumenesDiarios extends Page implements HasTable
                 ->label('Generar Resumen de Boletas')
                 ->icon('heroicon-o-plus-circle')
                 ->color('primary')
+                ->visible(fn() => Auth::user()->can('generar_resumen_diario_rest'))
                 ->modalHeading('Revisión de Resumen Diario')
-                ->modalDescription('Verifica los comprobantes que se enviarán. Puedes eliminar de esta lista los que no desees incluir hoy.')
+                ->modalDescription('Verifica los comprobantes que se enviarán. La fecha de envío será la de hoy.')
                 ->modalSubmitActionLabel('Confirmar y Enviar a SUNAT')
                 ->form([
-                    DatePicker::make('fecha_resumen')
-                        ->label('Fecha de Emisión de las Boletas')
+                    // 🔍 Fecha para BUSCAR las boletas en la BD
+                    DatePicker::make('fecha_comprobantes')
+                        ->label('Buscar boletas de la fecha:')
                         ->required()
                         ->maxDate(now())
                         ->default(now()->format('Y-m-d'))
@@ -70,6 +93,7 @@ class ResumenesDiarios extends Page implements HasTable
                         ->content(new HtmlString('<div class="p-4 rounded-lg bg-warning-50 text-warning-700 font-bold border border-warning-200">No se encontraron comprobantes pendientes para la fecha filtrada.</div>'))
                         ->visible(fn(Get $get) => empty($get('comprobantes'))),
 
+                    // 📝 REPEATER ORIGINAL
                     Repeater::make('comprobantes')
                         ->label('Comprobantes Seleccionados')
                         ->default(fn() => $this->obtenerBoletasParaRepeater(Filament::getTenant()->id, now()->format('Y-m-d')))
@@ -88,17 +112,19 @@ class ResumenesDiarios extends Page implements HasTable
                         ->addable(false)
                         ->deletable(true)
                         ->reorderable(false)
+                        ->visible(fn(Get $get) => !empty($get('comprobantes')))
                 ])
                 ->action(function (array $data) {
                     $comprobantesForm = $data['comprobantes'] ?? [];
 
                     if (empty($comprobantesForm)) {
-                        Notification::make()->title('Sin comprobantes')->body('No hay datos válidos para enviar.')->warning()->send();
+                        Notification::make()->title('Sin comprobantes')->warning()->send();
                         return;
                     }
 
                     $tenant = Filament::getTenant();
-                    $fechaResumen = $data['fecha_resumen'];
+                    $fechaBoletas = $data['fecha_comprobantes']; // Fecha de referencia de las boletas
+                    $fechaGeneracion = now()->format('Y-m-d');  // 🟢 HOY: Esto soluciona el error 2671
 
                     $saleIds = [];
                     $details = [];
@@ -107,70 +133,78 @@ class ResumenesDiarios extends Page implements HasTable
                         $saleIds[] = $item['sale_id'];
                         $details[] = [
                             "tipoDoc"         => "03",
-                            "serieNro"        => $item['serieNro'],
-                            "estado"          => $item['estado'],
+                            "serieNro"         => $item['serieNro'],
+                            "estado"           => $item['estado'],
                             "clienteTipo"     => $item['clienteTipo'],
-                            "clienteNro"      => $item['clienteNro'],
+                            "clienteNro"       => $item['clienteNro'],
                             "total"           => (float) $item['total'],
                             "mtoOperGravadas" => (float) $item['mtoOperGravadas'],
-                            "mtoIGV"          => (float) $item['mtoIGV'],
+                            "mtoIGV"           => (float) $item['mtoIGV'],
                         ];
                     }
 
+                    // Calculamos correlativo basado en la fecha de hoy
                     $ultimo = DailySummary::where('restaurant_id', $tenant->id)
-                        ->where('tipo_documento', 'Summary')
-                        ->where('fecha_resumen', $fechaResumen)
+                        ->where('fecha_generacion', $fechaGeneracion)
                         ->max('correlativo');
 
                     $nuevoCorrelativo = str_pad(($ultimo ? (int)$ultimo + 1 : 1), 3, '0', STR_PAD_LEFT);
-                    $identificador = "RC-" . str_replace('-', '', $fechaResumen) . "-" . $nuevoCorrelativo;
+                    $identificador = "RC-" . str_replace('-', '', $fechaGeneracion) . "-" . $nuevoCorrelativo;
 
                     $payload = [
                         "company"         => ["ruc" => $tenant->ruc],
-                        "fechaGeneracion" => now()->format('Y-m-d'),
-                        "fechaResumen"    => $fechaResumen,
+                        "fechaGeneracion" => $fechaBoletas, // cbc:IssueDate (Debe ser Hoy)
+                        "fechaResumen"    => $fechaGeneracion,    // cbc:ReferenceDate (Día de las boletas)
                         "correlativo"     => $nuevoCorrelativo,
                         "details"         => $details
                     ];
 
-                    // 🟢 USAMOS EL SERVICIO
                     $sunatService = app(SunatGreenterApiService::class);
                     $response = $sunatService->sendSummary($payload, $tenant->api_token);
 
-                    // 1. Validamos que la API central respondió con éxito
+                    // 🔴 MANEJO DE ERROR DE API (PERSISTENTE)
                     if (!$response['success']) {
-                        Notification::make()->title('Error API')->body($response['message'])->danger()->send();
+                        Notification::make()
+                            ->title('Error de Comunicación')
+                            ->body($response['message'] ?? 'Error desconocido')
+                            ->danger()
+                            ->persistent()
+                            ->send();
                         return;
                     }
 
-                    // 2. Extraemos el cuerpo de la respuesta de tu API
                     $apiData = $response['data'];
 
-                    // 3. Validamos que SUNAT haya aceptado la trama
-                    if (empty($apiData['success'])) {
-                        Notification::make()->title('Error en SUNAT')->body('La API rechazó el envío.')->danger()->send();
+                    // 🔴 MANEJO DE ERROR SUNAT (PERSISTENTE)
+                    if (isset($apiData['success']) && $apiData['success'] === false) {
+                        $errCode = $apiData['error']['code'] ?? '---';
+                        $errMsg = $apiData['error']['message'] ?? 'Error desconocido';
+
+                        Notification::make()
+                            ->title("Error SUNAT [{$errCode}]")
+                            ->body($errMsg)
+                            ->danger()
+                            ->persistent()
+                            ->send();
                         return;
                     }
 
-                    // 4. Guardamos todo, incluyendo el XML y el Hash
+                    // 🟢 GUARDADO EXITOSO
                     $xmlBase64 = $apiData['xml'] ?? null;
                     $pathXml = null;
 
-                    // Si hay XML, lo guardamos físicamente en el disco
                     if ($xmlBase64) {
                         $slug = $tenant->slug ?? 'default';
-                        $fechaCarpeta = now()->format('Y-m-d');
-                        $pathXml = "tenants/{$slug}/resumenes/xml/{$fechaCarpeta}/{$identificador}.xml";
+                        $pathXml = "tenants/{$slug}/resumenes/xml/{$fechaGeneracion}/{$identificador}.xml";
                         Storage::disk('public')->put($pathXml, base64_decode($xmlBase64));
                     }
 
-                    // 🚀 Creamos el Summary con toda la info
                     $summary = DailySummary::create([
                         'restaurant_id'    => $tenant->id,
                         'user_id'          => auth()->id(),
                         'tipo_documento'   => 'Summary_Envio',
-                        'fecha_generacion' => now(),
-                        'fecha_resumen'    => $fechaResumen,
+                        'fecha_generacion' => $fechaGeneracion,
+                        'fecha_resumen'    => $fechaBoletas,
                         'correlativo'      => $nuevoCorrelativo,
                         'identificador'    => $identificador,
                         'details'          => $details,
@@ -185,7 +219,11 @@ class ResumenesDiarios extends Page implements HasTable
                         'status_sunat'     => 'procesando'
                     ]);
 
-                    Notification::make()->title('Resumen Enviado Exitosamente')->body("N° de Ticket: {$summary->ticket}.")->success()->send();
+                    Notification::make()
+                        ->title('Resumen Enviado')
+                        ->body("Ticket: {$summary->ticket}")
+                        ->success()
+                        ->send();
                 })
         ];
     }
@@ -285,7 +323,7 @@ class ResumenesDiarios extends Page implements HasTable
                         ->label('Verificar en SUNAT')
                         ->icon('heroicon-o-arrow-path')
                         ->color('info')
-                        ->visible(fn(DailySummary $record) => $record->ticket && $record->status_sunat === 'procesando')
+                        ->visible(fn(DailySummary $record) => Auth::user()->can('consultar_tiket_resumen_diario_rest') && $record->ticket && $record->status_sunat === 'procesando')
                         ->action(function (DailySummary $record) {
                             $tenant = Filament::getTenant();
                             $payload = [
@@ -371,7 +409,7 @@ class ResumenesDiarios extends Page implements HasTable
                         ->label('Descargar XML')
                         ->icon('heroicon-o-code-bracket-square')
                         ->color('success')
-                        ->visible(fn(DailySummary $record) => !empty($record->path_xml))
+                        ->visible(fn(DailySummary $record) => Auth::user()->can('descargar_resumenes_xml_cdr_rest') && !empty($record->path_xml))
                         ->action(fn(DailySummary $record) => Storage::disk('public')->download($record->path_xml)),
 
                     // 🟢 ACCIÓN: DESCARGAR CDR
@@ -379,7 +417,7 @@ class ResumenesDiarios extends Page implements HasTable
                         ->label('Descargar CDR (ZIP)')
                         ->icon('heroicon-o-archive-box-arrow-down')
                         ->color('success')
-                        ->visible(fn(DailySummary $record) => !empty($record->path_cdrZip))
+                        ->visible(fn(DailySummary $record) => Auth::user()->can('descargar_resumenes_xml_cdr_rest') && !empty($record->path_cdrZip))
                         ->action(fn(DailySummary $record) => Storage::disk('public')->download($record->path_cdrZip)),
 
                     // 🟢 ACCIÓN: ANULAR RESUMEN INTERNAMENTE

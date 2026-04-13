@@ -31,9 +31,7 @@ class Restaurant extends Model
         'production',
         'sol_user',
         'sol_pass',
-        'cert_path',
-        'client_id',
-        'client_secret',
+        // 'cert_path',
     ];
 
     public function getRouteKeyName()
@@ -238,5 +236,10 @@ class Restaurant extends Model
     public function dailySummaries()
     {
         return $this->hasMany(DailySummary::class);
+    }
+
+    public function creditDebitNotes()
+    {
+        return $this->hasMany(CreditDebitNote::class);
     }
 }

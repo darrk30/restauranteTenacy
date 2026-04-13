@@ -86,6 +86,11 @@ class Sale extends Model
         return $this->belongsTo(DailySummary::class);
     }
 
+    public function creditDebitNotes()
+    {
+        return $this->hasMany(CreditDebitNote::class);
+    }
+
     public function getMontoFiltradoAttribute()
     {
         // Obtenemos el filtro directamente de la URL o del estado de Livewire

@@ -583,4 +583,23 @@
         background-color: #1f2937;
         border-color: #374151;
     }
+    /* === AJUSTES PARA EL BOTÓN SELECCIONADO EN MODO OSCURO === */
+    :is(.dark .variant-option-btn.selected) {
+        border: 2px solid var(--primary-color, #fbbf24); /* Borde dorado/naranja claro */
+        background-color: rgba(217, 119, 6, 0.15); /* Fondo oscuro con un tinte naranja muy suave */
+        color: #fbbf24; /* Texto más claro para resaltar en la oscuridad */
+    }
+
+    /* Ajuste para el badge de precio dentro del botón seleccionado en modo oscuro */
+    :is(.dark .variant-option-btn.selected .badge-price) {
+        background-color: #111827; /* Fondo oscuro profundo */
+        color: #fbbf24; /* Texto dorado */
+        border-color: var(--primary-color, #d97706);
+    }
+
+    /* Hover en modo oscuro para los botones normales */
+    :is(.dark .variant-option-btn:hover:not(.selected)) {
+        background-color: #374151; /* Gris un poco más claro al pasar el mouse */
+        border-color: #4b5563;
+    }
 </style>

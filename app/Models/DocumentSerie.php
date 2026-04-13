@@ -12,6 +12,7 @@ class DocumentSerie extends Model
 
     protected $casts = [
         'type_documento' => DocumentSeriesType::class,
+        'is_active' => 'boolean', // Es buena práctica castear el booleano
     ];
 
     public function restaurant()
@@ -22,7 +23,7 @@ class DocumentSerie extends Model
     protected static function booted(): void
     {
         static::addGlobalScope('restaurant', function (Builder $query) {
-            if (filament()->getTenant()) {
+            if (auth()->check() && filament()->getTenant()) {
                 $query->where('restaurant_id', filament()->getTenant()->id);
             }
         });
@@ -33,16 +34,6 @@ class DocumentSerie extends Model
             }
             if (filament()->getTenant()) {
                 $documentSerie->restaurant_id = filament()->getTenant()->id;
-            }
-        });
-
-        static::saving(function (DocumentSerie $documentSerie) {
-            if ($documentSerie->is_active) {
-                static::where('restaurant_id', $documentSerie->restaurant_id) //
-                    ->where('type_documento', $documentSerie->type_documento)
-                    ->where('id', '!=', $documentSerie->id)
-                    ->where('is_active', true)
-                    ->update(['is_active' => false]);
             }
         });
     }

@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\Sale;
-use App\Models\Restaurant; // Asegúrate de usar tu modelo de Tenant correcto
+use App\Models\Restaurant;
 
 class InvoicePayloadService
 {
@@ -13,7 +13,7 @@ class InvoicePayloadService
     public function buildFromSale(Sale $sale, Restaurant $tenant): array
     {
         $tipoDoc = $sale->tipo_comprobante === 'Factura' ? '01' : '03';
-        
+
         $clienteTipoDoc = '1'; // DNI
         if ($sale->tipo_comprobante === 'Factura' || strlen($sale->numero_documento) === 11) {
             $clienteTipoDoc = '6'; // RUC
@@ -21,74 +21,99 @@ class InvoicePayloadService
             $clienteTipoDoc = '-'; // Varios
         }
 
+        // 1. OBTENER VALORES DINÁMICOS DEL HELPER
+        $porcentajeIgv = get_tax_percentage($tenant->id);
+        $divisor = get_tax_divisor($tenant->id);
+
+        // 🟢 Obtenemos la configuración cacheada del tenant
+        $config = $tenant->cached_config;
+
+        // 🟢 Evaluamos si se debe enviar a SUNAT según el tipo de documento
+        $enviarSunat = $sale->tipo_comprobante === 'Factura'
+            ? (bool) ($config->envio_facturas ?? true)
+            : (bool) ($config->envio_boletas ?? true);
+
         $details = [];
-        
-        // Iteramos sobre los detalles de la venta YA GUARDADA en la base de datos
+        $totalOpGravada = 0;
+        $totalIgv = 0;
+
         foreach ($sale->details as $item) {
             $cantidad = (float) $item->cantidad;
-            $precioUnitario = (float) $item->precio_unitario; // CON IGV
-            
-            // Calculamos bases imponibles tal como lo hace tu POS
-            $subtotal = round($precioUnitario * $cantidad, 2);
-            $valorTotal = round($subtotal / 1.18, 2); // SIN IGV
-            $igv = round($subtotal - $valorTotal, 2);
+            $precioUnitario = (float) $item->precio_unitario;
+            $codigoInterno = 'P000';
+            if ($item->variant_id && $item->variant) {
+                $codigoInterno = $item->variant->internal_code;
+            } elseif ($item->promotion_id) {
+                $codigoInterno = $item->promotion->code ?? 'PROMO';
+            }
+
+            $subtotalLlamado = round($precioUnitario * $cantidad, 2);
+            $valorVentaLínea = round($subtotalLlamado / $divisor, 2);
+            $igvLínea = round($subtotalLlamado - $valorVentaLínea, 2);
+
+            $totalOpGravada += $valorVentaLínea;
+            $totalIgv += $igvLínea;
 
             $details[] = [
-                "tipAfeIgv" => 10, // 10 = Gravado
-                "codProducto" => $item->product_id ?? 'P000',
-                "unidad" => "NIU",
-                "descripcion" => $item->product_name ?? 'Producto',
-                "cantidad" => $cantidad,
-                "mtoValorUnitario" => $cantidad > 0 ? round($valorTotal / $cantidad, 5) : 0,
-                "mtoValorVenta" => $valorTotal,
-                "mtoBaseIgv" => $valorTotal,
-                "porcentajeIgv" => 18,
-                "igv" => $igv,
-                "totalImpuestos" => $igv,
+                "tipAfeIgv"      => 10,
+                "codProducto"    => $codigoInterno, // 🟢 Ahora usa el código interno de la variante
+                "unidad"         => "NIU",
+                "descripcion"    => $item->product_name ?? 'Producto',
+                "cantidad"       => $cantidad,
+                "mtoValorUnitario" => $cantidad > 0 ? round($valorVentaLínea / $cantidad, 5) : 0,
+                "mtoValorVenta"    => $valorVentaLínea,
+                "mtoBaseIgv"       => $valorVentaLínea,
+                "porcentajeIgv"    => $porcentajeIgv,
+                "igv"              => $igvLínea,
+                "totalImpuestos"   => $igvLínea,
                 "mtoPrecioUnitario" => $precioUnitario
             ];
         }
 
+        // 3. RETORNO DEL PAYLOAD
         return [
-            // Como lo estamos reenviando, forzamos que intente comunicarse con SUNAT
-            "enviar_sunat"  => true, 
-            "ublVersion" => "2.1",
+            "enviar_sunat"  => $enviarSunat,
+            "ublVersion"   => "2.1",
             "tipoOperacion" => "0101",
-            "tipoDoc" => $tipoDoc,
-            "serie" => $sale->serie,
-            "correlativo" => (string) (int) $sale->correlativo, 
+            "tipoDoc"      => $tipoDoc,
+            "serie"        => $sale->serie,
+            "correlativo"  => (string) (int) $sale->correlativo,
             "fechaEmision" => \Carbon\Carbon::parse($sale->fecha_emision)->format('c'),
-            "formaPago" => [
+            "formaPago"    => [
                 "moneda" => "PEN",
-                "tipo" => "Contado"
+                "tipo"   => "Contado"
             ],
-            "tipoMoneda" => "PEN",
-            "company" => [
-                "ruc" => $tenant->ruc ?? '20000000001',
-                "razonSocial" => $tenant->name ?? $tenant->razon_social ?? 'EMPRESA DEMO',
-                "nombreComercial" => $tenant->name_comercial ?? 'EMPRESA',
-                "address" => [
-                    "ubigeo" => $tenant->ubigeo ?? '150101',
-                    "departamento" => $tenant->department ?? 'LIMA',
-                    "provincia" => $tenant->province ?? 'LIMA',
-                    "distrito" => $tenant->district ?? 'LIMA',
-                    "urbanizacion" => $tenant->urbanizacion ?? '',
-                    "direccion" => $tenant->address ?? $tenant->direccion ?? 'SIN DIRECCION',
-                    "codLocal" => "0000"
+            "tipoMoneda"   => "PEN",
+            "company"      => [
+                "ruc"             => $tenant->ruc,
+                "razonSocial"     => $tenant->name,
+                "nombreComercial" => $tenant->name_comercial ?? $tenant->name,
+                "email" => $tenant->email ?? '',
+                "telefono" => $tenant->phone ?? '',
+                "address"         => [
+                    "ubigeo"       => $tenant->ubigeo ?? '',
+                    "departamento" => $tenant->department ?? '',
+                    "provincia"    => $tenant->province ?? '',
+                    "distrito"     => $tenant->district ?? '',
+                    "direccion"    => $tenant->address ?? '',
+                    "codLocal"     => $tenant->cod_local ?? '0000'
                 ]
             ],
-            "client" => [
-                "tipoDoc" => $clienteTipoDoc,
-                "numDoc" => $sale->numero_documento ?? '99999999',
-                "rznSocial" => $sale->nombre_cliente ?? 'CLIENTES VARIOS'
+            "client"       => [
+                "tipoDoc"   => $clienteTipoDoc,
+                "numDoc"    => $sale->numero_documento ?? '99999999',
+                "razonSocial" => $sale->nombre_cliente ?? 'CLIENTES VARIOS',
+                "email" => $sale->client->email ?? '',
+                "telefono" => $sale->client->telefono ?? '',
+                "address" => [
+                    "ubigeo" => "",
+                    "departamento" => "",
+                    "provincia" => "",
+                    "distrito" => "",
+                    "direccion" => $sale->client->direccion ?? ''
+                ]
             ],
-            "mtoOperGravadas" => (float) $sale->op_gravada,
-            "mtoIGV" => (float) $sale->monto_igv,
-            "totalImpuestos" => (float) $sale->monto_igv,
-            "valorVenta" => (float) $sale->op_gravada,
-            "subTotal" => (float) $sale->total,
-            "mtoImpVenta" => (float) $sale->total,
-            "details" => $details
+            "details"         => $details
         ];
     }
 }

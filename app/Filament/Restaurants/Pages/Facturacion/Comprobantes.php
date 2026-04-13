@@ -2,7 +2,10 @@
 
 namespace App\Filament\Restaurants\Pages\Facturacion;
 
+use App\Enums\MotivoNotaCredito;
+use App\Models\CreditDebitNote;
 use App\Models\Sale;
+use App\Services\NotePayloadService;
 use Filament\Pages\Page;
 use Filament\Tables\Table;
 use Filament\Tables\Contracts\HasTable;
@@ -17,20 +20,39 @@ use Filament\Tables\Actions\ActionGroup;
 use Illuminate\Support\Facades\Storage;
 use Filament\Notifications\Notification;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Illuminate\Support\Facades\Auth;
 
 class Comprobantes extends Page implements HasTable
 {
     use InteractsWithTable;
 
-    // 🟢 CONFIGURACIÓN DEL MENÚ
     protected static ?string $navigationIcon = 'heroicon-o-receipt-percent';
     protected static ?string $navigationGroup = 'Facturación';
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 140;
     protected static ?string $title = 'Comprobantes Emitidos';
     protected static ?string $navigationLabel = 'Comprobantes';
-
-    // 🟢 RUTA DE LA VISTA BLADE
     protected static string $view = 'filament.facturacion.comprobantes';
+
+    public static function canAccess(): bool
+    {
+        if (! Filament::getTenant()) {
+            return false;
+        }
+
+        $user = auth()->user();
+
+        if ($user->hasRole('Super Admin')) {
+            return false;
+        }
+
+        try {
+            return $user->hasPermissionTo('ver_comprobantes_rest');
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
 
     // 🟢 CONFIGURACIÓN DE LA TABLA
     public function table(Table $table): Table
@@ -53,17 +75,38 @@ class Comprobantes extends Page implements HasTable
                         'Factura' => 'warning',
                         'Boleta'  => 'info',
                         default   => 'gray',
-                    }),
+                    })
+                    ->toggleable(isToggledHiddenByDefault: false),
+
+                TextColumn::make('nombre_cliente')
+                    ->label('Cliente')
+                    ->searchable(['nombre_cliente', 'numero_documento'])
+                    ->description(fn(Sale $record): string => $record->numero_documento ?? 'Sin documento'),
 
                 TextColumn::make('comprobante')
                     ->label('Documento')
                     ->state(fn(Sale $record): string => "{$record->serie}-{$record->correlativo}")
                     ->searchable(['serie', 'correlativo']),
 
-                TextColumn::make('nombre_cliente')
-                    ->label('Cliente')
-                    ->searchable(['nombre_cliente', 'numero_documento'])
-                    ->description(fn(Sale $record): string => $record->numero_documento ?? 'Sin documento'),
+                TextColumn::make('notas_asociadas')
+                    ->label('Notas Asociadas')
+                    ->state(function (Sale $record) {
+                        // Usamos tu relación directa
+                        if ($record->creditDebitNotes->isEmpty()) {
+                            return null;
+                        }
+                        return $record->creditDebitNotes->map(function ($nota) {
+                            $tipo = $nota->tipo_nota === '07' ? 'NC' : 'ND';
+                            return "{$tipo}: {$nota->serie} - {$nota->correlativo}";
+                        })->toArray();
+                    })
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->searchable(query: function (Builder $query, string $search) {
+                        $query->whereHas('creditDebitNotes', function (Builder $q) use ($search) {
+                            $q->where('serie', 'like', "%{$search}%")
+                                ->orWhere('correlativo', 'like', "%{$search}%");
+                        });
+                    }),
 
                 TextColumn::make('total')
                     ->label('Total')
@@ -114,15 +157,14 @@ class Comprobantes extends Page implements HasTable
                         ->label('Descargar XML')
                         ->icon('heroicon-o-code-bracket-square')
                         ->color('success')
-                        ->visible(fn(Sale $record) => !empty($record->path_xml))
+                        ->visible(fn(Sale $record) => Auth::user()->can('descargar_comprobantes_xml_cdr_pdf_rest') && !empty($record->path_xml))
                         ->action(fn(Sale $record) => Storage::disk('public')->download($record->path_xml)),
-
                     // 🟢 BOTÓN: DESCARGAR CDR (ZIP)
                     Action::make('descargar_cdr')
                         ->label('Descargar CDR (ZIP)')
                         ->icon('heroicon-o-archive-box-arrow-down')
                         ->color('success')
-                        ->visible(fn(Sale $record) => !empty($record->path_cdrZip))
+                        ->visible(fn(Sale $record) => Auth::user()->can('descargar_comprobantes_xml_cdr_pdf_rest') && !empty($record->path_cdrZip))
                         ->action(fn(Sale $record) => Storage::disk('public')->download($record->path_cdrZip)),
 
                     // 🟢 BOTÓN: DESCARGAR PDF
@@ -130,17 +172,16 @@ class Comprobantes extends Page implements HasTable
                         ->label('Descargar PDF')
                         ->icon('heroicon-o-document')
                         ->color('info')
-                        ->visible(fn(Sale $record) => !empty($record->path_pdf))
+                        ->visible(fn(Sale $record) => Auth::user()->can('descargar_comprobantes_xml_cdr_pdf_rest') && !empty($record->path_pdf))
                         ->action(fn(Sale $record) => Storage::disk('public')->download($record->path_pdf)),
 
-                    // 🚀 BOTÓN INTELIGENTE: ENVIAR / REENVIAR A SUNAT
                     // 🚀 BOTÓN INTELIGENTE: ENVIAR / REENVIAR A SUNAT
                     Action::make('enviar_sunat')
                         ->label(fn(Sale $record) => $record->status_sunat === 'error_api' ? 'Reenviar a SUNAT' : 'Enviar a SUNAT')
                         ->icon(fn(Sale $record) => $record->status_sunat === 'error_api' ? 'heroicon-o-arrow-path' : 'heroicon-o-cloud-arrow-up')
                         ->color(fn(Sale $record) => $record->status_sunat === 'error_api' ? 'warning' : 'primary')
                         // Se muestra si es la primera vez (registrado) o si hubo error de conexión/validación (error_api)
-                        ->visible(fn(Sale $record) => in_array($record->status_sunat, ['registrado', 'error_api']))
+                        ->visible(fn(Sale $record) => Auth::user()->can('enviar_comprobante_sunat_rest') && in_array($record->status_sunat, ['registrado', 'error_api']))
                         ->requiresConfirmation()
                         ->modalHeading(fn(Sale $record) => $record->status_sunat === 'error_api' ? 'Reintentar envío a SUNAT' : 'Enviar Comprobante a SUNAT')
                         ->modalDescription('El sistema detectará si debe enviar el XML existente o generar uno nuevo.')
@@ -227,7 +268,7 @@ class Comprobantes extends Page implements HasTable
                                     $fecha = \Carbon\Carbon::parse($record->fecha_emision)->format('Y-m-d');
                                     $folder = "tenants/{$slug}/comprobantes/cdr/{$fecha}";
                                     $correlativoInt = (int) $record->correlativo;
-                                    $nombreBase = "{$record->serie}-{$correlativoInt}";
+                                    $nombreBase = "{$tenant->ruc}-{$record->serie}-{$correlativoInt}";
                                     $pathCdrZip = "{$folder}/R-{$nombreBase}.zip";
 
                                     Storage::disk('public')->put($pathCdrZip, base64_decode($cdrBase64));
@@ -264,12 +305,20 @@ class Comprobantes extends Page implements HasTable
                             }
                         }),
 
+                    // 🟢 BOTÓN: GENERAR NOTA DE CRÉDITO / DÉBITO
+                    Action::make('generar_nota')
+                        ->label('Generar Nota C/D')
+                        ->icon('heroicon-o-document-minus')
+                        ->color('warning')
+                        ->visible(fn(Sale $record) => Auth::user()->can('emitir_nota_rest') && $record->status_sunat === 'aceptado')
+                        ->url(fn(Sale $record) => EmitirNota::getUrl(['record' => $record->id])),
+
                     // 🟢 BOTÓN: ANULAR COMPROBANTE (Baja o Resumen de anulación)
                     Action::make('anular_comprobante')
                         ->label('Anular Comprobante')
                         ->icon('heroicon-o-x-circle')
                         ->color('danger')
-                        ->visible(fn(Sale $record) => $record->status_sunat === 'aceptado' && $record->status !== 'anulado')
+                        ->visible(fn(Sale $record) => Auth::user()->can('generar_comunicacion_baja_rest') && $record->status_sunat === 'aceptado' && $record->status !== 'anulado')
                         ->form([
                             \Filament\Forms\Components\Textarea::make('motivo')
                                 ->label('Motivo de Anulación')

@@ -19,19 +19,12 @@ use Illuminate\Support\Facades\Hash;
 class UserResource extends Resource
 {
     protected static ?string $model = User::class;
-
     protected static ?string $navigationIcon = 'heroicon-o-users';
-
     protected static ?string $navigationGroup = 'Gestión de Empleados';
-
-    protected static ?int $navigationSort = 120;
-
+    protected static ?int $navigationSort = 165;
     protected static ?string $navigationLabel = 'Personal / Usuarios';
-
     protected static ?string $pluralModelLabel = 'Personal del Restaurante';
-
     protected static ?string $tenantOwnershipRelationshipName = 'restaurants';
-
     protected static ?string $recordTitleAttribute = 'name';
 
     public static function form(Form $form): Form

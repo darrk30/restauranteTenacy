@@ -32,9 +32,7 @@ return new class extends Migration
             $table->boolean('production')->default(false);
             $table->string('sol_user')->nullable();
             $table->string('sol_pass')->nullable();
-            $table->string('cert_path')->nullable();
-            $table->string('client_id')->nullable();
-            $table->string('client_secret')->nullable();
+            // $table->string('cert_path')->nullable();
             $table->string('cod_local')->default('0000');
             $table->string('country_code')->default('PE');
             $table->timestamps();

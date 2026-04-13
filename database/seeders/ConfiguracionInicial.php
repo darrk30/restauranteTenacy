@@ -212,6 +212,14 @@ class ConfiguracionInicial extends Seeder
                 'type_documento' => DocumentSeriesType::NOTA_CREDITO,
                 'serie' => 'BC01',
             ],
+            [
+                'type_documento' => DocumentSeriesType::NOTA_DEBITO,
+                'serie' => 'FD01',
+            ],
+            [
+                'type_documento' => DocumentSeriesType::NOTA_DEBITO,
+                'serie' => 'BD01',
+            ],
         ];
 
         foreach ($seriesIniciales as $data) {
@@ -231,12 +239,12 @@ class ConfiguracionInicial extends Seeder
                 // Impresión Directa
                 'impresion_directa_precuenta' => false,
                 'impresion_directa_comprobante' => false,
-                'impresion_directa_comanda' => true, // Por defecto imprimen comanda
+                'impresion_directa_comanda' => false, // Por defecto imprimen comanda
 
                 // Modal
-                'mostrar_modal_impresion_comanda' => false,
-                'mostrar_modal_impresion_precuenta' => false,
-                'mostrar_modal_impresion_comprobante' => false,
+                'mostrar_modal_impresion_comanda' => true,
+                'mostrar_modal_impresion_precuenta' => true,
+                'mostrar_modal_impresion_comprobante' => true,
 
                 // KDS
                 'mostrar_pantalla_cocina' => false,

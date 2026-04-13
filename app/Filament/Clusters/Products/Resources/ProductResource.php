@@ -37,6 +37,7 @@ use Filament\Forms\Components\Tabs;
 use Filament\Forms\Components\Tabs\Tab;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
+use Illuminate\Database\Eloquent\Builder;
 
 class ProductResource extends Resource
 {
@@ -424,75 +425,95 @@ class ProductResource extends Resource
             ])
             ->addActionLabel('Agregar atributo');
     }
+    // Asegúrate de importar esto arriba
 
     public static function table(Table $table): Table
     {
-        return $table->columns([
-            Tables\Columns\TextColumn::make('name')
-                ->label('Nombre')
-                ->searchable()
-                ->sortable(),
+        return $table
+            // 1. FORZAR LOS ARCHIVADOS AL FINAL
+            ->modifyQueryUsing(function (Builder $query) {
+                $query->orderByRaw("CASE WHEN status = 'archivado' THEN 1 ELSE 0 END ASC")
+                    ->latest(); // Opcional: luego ordena los demás por el más reciente
+            })
+            ->columns([
+                Tables\Columns\TextColumn::make('name')
+                    ->label('Nombre')
+                    ->searchable()
+                    ->sortable(),
 
-            Tables\Columns\TextColumn::make('brand.name')
-                ->label('Marca')
-                ->sortable()
-                ->searchable()
-                ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('brand.name')
+                    ->label('Marca')
+                    ->sortable()
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
-            Tables\Columns\TextColumn::make('categories.name')
-                ->label('Categorías')
-                ->badge()
-                ->separator(', ')
-                ->searchable()
-                ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('categories.name')
+                    ->label('Categorías')
+                    ->badge()
+                    ->separator(', ')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
-            Tables\Columns\TextColumn::make('production.name')
-                ->label('Área de producción')
-                ->searchable()
-                ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('production.name')
+                    ->label('Área de producción')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
-            Tables\Columns\TextColumn::make('type')
-                ->label('Tipo')
-                ->sortable(),
+                Tables\Columns\TextColumn::make('type')
+                    ->label('Tipo')
+                    ->sortable(),
 
-            Tables\Columns\TextColumn::make('price')
-                ->label('Precio')
-                ->money('PEN', true)
-                ->sortable(),
+                Tables\Columns\TextColumn::make('price')
+                    ->label('Precio')
+                    ->money('PEN', true)
+                    ->sortable(),
 
-            Tables\Columns\IconColumn::make('cortesia')
-                ->label('Cortesía')
-                ->boolean()
-                ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\IconColumn::make('cortesia')
+                    ->label('Cortesía')
+                    ->boolean()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
-            Tables\Columns\IconColumn::make('visible')
-                ->label('Visible')
-                ->boolean()
-                ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\IconColumn::make('visible')
+                    ->label('Visible')
+                    ->boolean()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
-            Tables\Columns\TextColumn::make('order')
-                ->label('Orden')
-                ->sortable()
-                ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('order')
+                    ->label('Orden')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
-            Tables\Columns\TextColumn::make('status')
-                ->label('Estado')
-                ->sortable(),
+                // 2. CAMBIAR A SELECT COLUMN
+                Tables\Columns\SelectColumn::make('status')
+                    ->label('Estado')
+                    ->options(StatusProducto::class)
+                    ->selectablePlaceholder(false)  
+                    ->sortable()
+                    ->width('140px'),
 
-            Tables\Columns\TextColumn::make('created_at')
-                ->label('Creado')
-                ->dateTime('d/m/Y H:i')
-                ->sortable()
-                ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->label('Creado')
+                    ->dateTime('d/m/Y H:i')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                Tables\Filters\TernaryFilter::make('control_stock')
+                    ->label('Control de stock'),
 
-        ])
+                Tables\Filters\TernaryFilter::make('venta_sin_stock')
+                    ->label('Venta sin stock'),
+
+                Tables\Filters\TernaryFilter::make('cortesia')
+                    ->label('Cortesía'),
+            ])
             ->actions([
                 Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
+                // Tables\Actions\BulkActionGroup::make([
+                //     Tables\Actions\DeleteBulkAction::make(),
+                // ]),
             ]);
     }
 

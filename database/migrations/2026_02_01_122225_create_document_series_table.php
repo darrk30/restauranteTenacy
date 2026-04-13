@@ -13,12 +13,13 @@ return new class extends Migration
     {
         Schema::create('document_series', function (Blueprint $table) {
             $table->id();
-            $table->string('type_documento'); // Ejemplo: 'Factura'
-            $table->string('serie'); // Ejemplo: 'F001'
-            $table->integer('current_number')->default(0); // Para llevar el conteo correlativo
+            $table->string('type_documento'); 
+            $table->string('serie'); 
+            $table->integer('current_number')->default(0); 
             $table->boolean('is_active')->default(true);
             $table->foreignId('restaurant_id')->constrained('restaurants')->cascadeOnDelete();
-            $table->unique(['serie', 'restaurant_id']);
+            $table->unique(['serie', 'restaurant_id', 'type_documento'], 'unique_serie_res_type');
+            
             $table->timestamps();
         });
     }

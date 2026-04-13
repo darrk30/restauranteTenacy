@@ -1014,7 +1014,8 @@ class OrdenMesa extends Page implements HasActions
             $acumulado += $item['total'];
         }
         $this->total = $acumulado;
-        $this->subtotal = $this->total / 1.18;
+        $divisor = get_tax_divisor();
+        $this->subtotal = $this->total / $divisor;
         $this->igv = $this->total - $this->subtotal;
     }
 

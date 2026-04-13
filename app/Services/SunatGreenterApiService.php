@@ -31,7 +31,6 @@ class SunatGreenterApiService
                     'success'     => false,
                     'http_status' => $response->status(),
                     'error_data'  => $data,
-                    // 🟢 Captura el error específico del sistema
                     'message'     => $data['error'] ?? $data['message'] ?? 'Error de validación en la API.',
                 ];
             }
@@ -208,6 +207,43 @@ class SunatGreenterApiService
             return [
                 'success' => false,
                 'message' => 'Error de conexión al consultar ticket.',
+                'error'   => $e->getMessage()
+            ];
+        }
+    }
+
+    // ==========================================
+    // 🚀 MÉTODOS PARA NOTAS DE CRÉDITO / DÉBITO
+    // ==========================================
+
+    /**
+     * Envía una Nota de Crédito o Débito a la API central.
+     */
+    public function sendNote(array $payload, string $apiToken)
+    {
+        try {
+            $response = Http::withToken($apiToken)
+                ->acceptJson()
+                ->post("{$this->apiUrl}/api/notes/send", $payload);
+
+            if ($response->failed()) {
+                $data = $response->json();
+                return [
+                    'success'     => false,
+                    'http_status' => $response->status(),
+                    'error_data'  => $data,
+                    'message'     => $data['error'] ?? $data['message'] ?? 'Error al comunicarse con la API para enviar la nota.',
+                ];
+            }
+
+            return [
+                'success' => true,
+                'data'    => $response->json(),
+            ];
+        } catch (Exception $e) {
+            return [
+                'success' => false,
+                'message' => 'Excepción de conexión al enviar la nota.',
                 'error'   => $e->getMessage()
             ];
         }

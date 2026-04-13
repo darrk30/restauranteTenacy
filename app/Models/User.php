@@ -87,6 +87,11 @@ class User extends Authenticatable implements HasTenants, HasName, FilamentUser,
     {
         return $this->hasMany(DailySummary::class);
     }
+
+    public function creditDebitNotes()
+    {
+        return $this->hasMany(CreditDebitNote::class);
+    }
     // ==========================================
     // INTERFAZ DE FILAMENT (TEXTOS E IMÁGENES)
     // ==========================================

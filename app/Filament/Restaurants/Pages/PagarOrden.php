@@ -4,7 +4,6 @@ namespace App\Filament\Restaurants\Pages;
 
 use App\Models\Order;
 use App\Models\Client;
-use App\Models\Payment;
 use App\Models\DocumentSerie;
 use App\Models\PaymentMethod;
 use Filament\Pages\Page;
@@ -17,18 +16,14 @@ use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Illuminate\Support\Facades\DB;
 use App\Filament\Restaurants\Resources\ClientResource;
-use App\Models\CashRegisterMovement;
 use App\Models\Sale;
+use App\Models\SaleDetail;
 use App\Models\SessionCashRegister;
 use App\Models\Table;
-use App\Models\WarehouseStock;
-use App\Services\InventoryService;
-use App\Services\SunatGreenterApiService;
 use App\Traits\ManjoStockProductos;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
-use ZipArchive;
 
 class PagarOrden extends Page implements HasForms, HasActions
 {
@@ -46,7 +41,7 @@ class PagarOrden extends Page implements HasForms, HasActions
     public $items = [];
 
     // UI & Pagos
-    public $metodos_pago = [];
+    public $metodos_pago;
     public $pagos_agregados = [];
 
     // Variables Sincronizadas
@@ -75,6 +70,11 @@ class PagarOrden extends Page implements HasForms, HasActions
     public $puedeImprimirComprobante = false;
     public $canal_orden;
 
+    // Propiedades para el formulario de pago
+    public $metodo_pago_seleccionado_id;
+    public $monto_a_pagar = 0;
+    public $requiere_referencia = false;
+
     public function mount($record)
     {
         $this->tenantSlug = Filament::getTenant()->slug;
@@ -92,13 +92,91 @@ class PagarOrden extends Page implements HasForms, HasActions
 
         $this->cargarSeries();
         $this->serie_id = $this->series->firstWhere('type_documento', $this->tipo_comprobante)?->id;
-        $this->metodos_pago = PaymentMethod::where('status', true)
-            ->get(['id', 'name', 'image_path', 'requiere_referencia']);
+        $this->metodos_pago = PaymentMethod::where('status', true)->get();
 
+        // 1. Seleccionar Efectivo por defecto
+        $efectivo = $this->metodos_pago->firstWhere('name', 'Efectivo') ?? $this->metodos_pago->first();
+
+        if ($efectivo) {
+            $this->metodo_pago_seleccionado_id = $efectivo->id;
+            $this->requiere_referencia = $efectivo->requiere_referencia;
+        }
+        $this->subtotal_base = $this->items->sum('subTotal');
         $this->order->client_id ? $this->seleccionarCliente($this->order->client_id) : $this->setClienteVarios();
 
         $this->subtotal_base = $this->items->sum('subTotal');
         $this->calculateTotalServer();
+        $this->sugerirMontoFaltante();
+    }
+
+    // Inicializar el primer método por defecto en el mount o cuando cargues los métodos
+    public function updatedMetodosPago($value)
+    {
+        if (!empty($this->metodos_pago) && !$this->metodo_pago_seleccionado_id) {
+            $this->seleccionarMetodo($this->metodos_pago[0]->id);
+        }
+    }
+
+    public function seleccionarMetodo($id)
+    {
+        // Usamos collect() para asegurar que no falle si por alguna razón se convierte en array
+        $metodo = collect($this->metodos_pago)->firstWhere('id', $id);
+
+        if ($metodo) {
+            $this->metodo_pago_seleccionado_id = $id;
+            $this->requiere_referencia = $metodo->requiere_referencia;
+            $this->referencia_pago = ''; // Resetear nro operación
+            $this->sugerirMontoFaltante();
+        }
+    }
+
+    public function sugerirMontoFaltante()
+    {
+        $totalPagado = collect($this->pagos_agregados)->sum('amount');
+        $faltante = $this->total_final - $totalPagado;
+        // Forzamos 2 decimales para el input
+        $this->monto_a_pagar = $faltante > 0 ? number_format($faltante, 2, '.', '') : '0.00';
+    }
+
+    public function agregarPago()
+    {
+        if ($this->monto_a_pagar <= 0) return;
+
+        $metodo = collect($this->metodos_pago)->firstWhere('id', $this->metodo_pago_seleccionado_id);
+        $ref = trim($this->referencia_pago);
+
+        // Buscar si ya existe el mismo método y referencia para sumar montos
+        $index = collect($this->pagos_agregados)->search(function ($item) use ($ref) {
+            return $item['id'] == $this->metodo_pago_seleccionado_id && $item['referencia'] == $ref;
+        });
+
+        if ($index !== false) {
+            $this->pagos_agregados[$index]['amount'] = round($this->pagos_agregados[$index]['amount'] + (float)$this->monto_a_pagar, 2);
+        } else {
+            $this->pagos_agregados[] = [
+                'id' => $metodo->id,
+                'name' => $metodo->name,
+                'amount' => round((float)$this->monto_a_pagar, 2),
+                'referencia' => $ref,
+            ];
+        }
+
+        $this->referencia_pago = '';
+        $this->sugerirMontoFaltante();
+    }
+
+    public function quitarPago($index)
+    {
+        unset($this->pagos_agregados[$index]);
+        $this->pagos_agregados = array_values($this->pagos_agregados); // Reindexar
+        $this->sugerirMontoFaltante();
+    }
+
+    // Actualizar montos cuando cambie el descuento
+    public function updatedMontoDescuento()
+    {
+        $this->calculateTotalServer();
+        $this->sugerirMontoFaltante();
     }
 
     public static function canAccess(): bool
@@ -154,7 +232,8 @@ class PagarOrden extends Page implements HasForms, HasActions
     public function calculateTotalServer()
     {
         $this->total_final = max(0, $this->subtotal_base - $this->monto_descuento);
-        $this->op_gravada = round($this->total_final / 1.18, 2);
+        $divisor = get_tax_divisor();
+        $this->op_gravada = round($this->total_final / $divisor, 2);
         $this->monto_igv = round($this->total_final - $this->op_gravada, 2);
     }
 
@@ -273,9 +352,8 @@ class PagarOrden extends Page implements HasForms, HasActions
         $serieConfig->update([
             'current_number' => $nuevoNumero
         ]);
-
-        // 3. Retornamos formateado a 8 dígitos (ej: 00000015)
-        return str_pad($nuevoNumero, 8, '0', STR_PAD_LEFT);
+        
+        return $nuevoNumero;
     }
 
     public function procesarPagoFinal()
@@ -351,7 +429,6 @@ class PagarOrden extends Page implements HasForms, HasActions
                 'delivery_id'      => $order->delivery_id,
                 'nombre_delivery'  => $order->nombre_delivery,
                 'fecha_emision'    => now(),
-                // 🔥 Nace siempre como registrado si es comprobante electrónico
                 'status_sunat'     => in_array($this->tipo_comprobante, ['Boleta', 'Factura']) ? 'registrado' : 'no_aplica',
             ]);
 
@@ -370,7 +447,8 @@ class PagarOrden extends Page implements HasForms, HasActions
                 $cantidad = $item->cantidad;
                 $precioUnitario = (float) $item->price;
                 $subtotal = round($precioUnitario * $cantidad, 2);
-                $valorTotal = round($subtotal / 1.18, 2);
+                $divisor = get_tax_divisor($tenantId);
+                $valorTotal = round($subtotal / $divisor, 2);
                 $valorUnitario = ($cantidad > 0) ? ($valorTotal / $cantidad) : 0;
 
                 $costoUnitario = 0;
@@ -380,7 +458,7 @@ class PagarOrden extends Page implements HasForms, HasActions
                 $costoTotal = round($costoUnitario * $cantidad, 2);
                 $costoTotalVenta += $costoTotal;
 
-                $saleDetail = new \App\Models\SaleDetail([
+                $saleDetail = new SaleDetail([
                     'sale_id'         => $sale->id,
                     'product_id'      => $esPromocion ? null : $item->product_id,
                     'variant_id'      => $esPromocion ? null : $item->variant_id,
@@ -475,7 +553,6 @@ class PagarOrden extends Page implements HasForms, HasActions
                 $statusSunatMensaje = 'error_api';
             } else {
                 try {
-                    // 🟢 USAMOS EL SERVICIO (El mismo que usas en Filament)
                     $payloadBuilder = app(\App\Services\InvoicePayloadService::class);
                     $payload = $payloadBuilder->buildFromSale($sale, $tenant);
 
@@ -483,74 +560,76 @@ class PagarOrden extends Page implements HasForms, HasActions
                     $respuesta = $sunatService->sendInvoice($payload, $apiKey);
 
                     if (!$respuesta['success']) {
-                        // Falló la conexión con la API
+                        // Falló la conexión o hubo un error fatal en la API interna (Greenter no respondió)
                         $sale->update([
                             'status_sunat' => 'error_api',
-                            'message'      => $respuesta['error_data']['error'] ?? $respuesta['message'] ?? 'Error de conexión con la API interna.'
+                            'message'      => $respuesta['error_data']['error'] ?? $respuesta['message'] ?? 'Error de conexión.'
                         ]);
                         $statusSunatMensaje = 'error_api';
                     } else {
+                        // Greenter respondió correctamente (con éxito o error de SUNAT)
                         $data = $respuesta['data'];
                         $apiSuccess = $data['sunatResponse']['success'] ?? false;
 
-                        // Guardar XML si existe
-                        $xmlBase64 = $data['xml'] ?? null;
+                        // 1. Guardar Archivos (XML y CDR) si existen
+                        $slug  = $tenant->slug ?? 'default';
+                        $fecha = now()->format('Y-m-d');
+                        $folderXml = "tenants/{$slug}/comprobantes/xml/{$fecha}";
+                        $folderCdr = "tenants/{$slug}/comprobantes/cdr/{$fecha}";
+                        $nombreBase = "{$tenant->ruc}-{$sale->serie}-{$sale->correlativo}";
+
                         $pathXml = null;
-                        if ($xmlBase64) {
-                            $slug  = $tenant->slug ?? 'default';
-                            $fecha = now()->format('Y-m-d');
-                            $folder = "tenants/{$slug}/comprobantes/xml/{$fecha}";
-                            $nombreBase = "{$sale->serie}-{$sale->correlativo}";
-                            $pathXml = "{$folder}/{$nombreBase}.xml";
-                            Storage::disk('public')->put($pathXml, base64_decode($xmlBase64));
+                        if (!empty($data['xml'])) {
+                            $pathXml = "{$folderXml}/{$nombreBase}.xml";
+                            Storage::disk('public')->put($pathXml, base64_decode($data['xml']));
                         }
 
+                        $pathCdrZip = null;
+                        if (!empty($data['sunatResponse']['cdrZip'])) {
+                            $pathCdrZip = "{$folderCdr}/R-{$nombreBase}.zip";
+                            Storage::disk('public')->put($pathCdrZip, base64_decode($data['sunatResponse']['cdrZip']));
+                        }
+
+                        // 🟢 2. CREAMOS EL ARRAY BASE (Datos que siempre se actualizan)
+                        $updateData = [
+                            'hash'         => $data['hash'] ?? null,
+                            'path_xml'     => $pathXml,
+                            'qr_data'      => $data['qr_data'] ?? null,
+                            'total_letras' => $data['total_letras'] ?? null,
+                        ];
+
+                        // 🟢 3. AÑADIMOS DATOS ESPECÍFICOS SEGÚN EL ESTADO
                         if ($apiSuccess) {
-                            // Guardar CDR ZIP
-                            $cdrBase64 = $data['sunatResponse']['cdrZip'] ?? null;
-                            $pathCdrZip = null;
-                            if ($cdrBase64) {
-                                $slug  = $tenant->slug ?? 'default';
-                                $fecha = now()->format('Y-m-d');
-                                $folder = "tenants/{$slug}/comprobantes/cdr/{$fecha}";
-                                $nombreBase = "{$sale->serie}-{$sale->correlativo}";
-                                $pathCdrZip = "{$folder}/R-{$nombreBase}.zip";
-                                Storage::disk('public')->put($pathCdrZip, base64_decode($cdrBase64));
-                            }
+                            $updateData['success'] = true;
 
-                            // Actualizar la venta como ACEPTADA
-                            $sale->update([
-                                'status_sunat' => 'aceptado',
-                                'hash'         => $data['hash'] ?? null,
-                                'path_xml'     => $pathXml,
-                                'path_cdrZip'  => $pathCdrZip,
-                                'success'      => true,
-                                'code'         => $data['sunatResponse']['cdrResponse']['code'] ?? null,
-                                'description'  => $data['sunatResponse']['cdrResponse']['description'] ?? null,
-                                'notes'        => json_encode($data['sunatResponse']['cdrResponse']['notes'] ?? []),
-                                'qr_data'      => $data['qr_data'] ?? null,
-                                'total_letras' => $data['total_letras'] ?? null,
-                            ]);
-                            $statusSunatMensaje = 'aceptado';
+                            if ($payload['enviar_sunat'] ?? false) {
+                                // A. Enviado a SUNAT y Aceptado
+                                $updateData['status_sunat'] = 'aceptado';
+                                $updateData['path_cdrZip']  = $pathCdrZip;
+                                $updateData['code']         = $data['sunatResponse']['cdrResponse']['code'] ?? null;
+                                $updateData['description']  = $data['sunatResponse']['cdrResponse']['description'] ?? null;
+                                $updateData['notes']        = json_encode($data['sunatResponse']['cdrResponse']['notes'] ?? []);
+                                $statusSunatMensaje         = 'aceptado';
+                            } else {
+                                // B. Solo Firmado Localmente (No enviado a SUNAT)
+                                $updateData['status_sunat'] = 'registrado';
+                                $updateData['description']  = 'XML generado y firmado localmente. Pendiente de envío a SUNAT.';
+                                $statusSunatMensaje         = 'registrado';
+                            }
                         } else {
-                            // SUNAT procesó el XML pero encontró errores (ej. RUC inválido)
-                            $sale->update([
-                                'status_sunat' => 'rechazado',
-                                'hash'         => $data['hash'] ?? null,
-                                'path_xml'     => $pathXml, // Si hubo error validando en SUNAT, Greenter sí genera un XML
-                                'success'      => false,
-                                'code'         => $data['sunatResponse']['error']['code'] ?? null,
-                                'message'      => $data['sunatResponse']['error']['message'] ?? null,
-                                'description'  => "Error SUNAT: " . ($data['sunatResponse']['error']['message'] ?? ''),
-                                'qr_data'      => $data['qr_data'] ?? null,
-                                'total_letras' => $data['total_letras'] ?? null,
-                            ]);
-                            $statusSunatMensaje = 'rechazado';
+                            // C. Enviado a SUNAT pero Rechazado (Ej. RUC inválido)
+                            $updateData['success']      = false;
+                            $updateData['status_sunat'] = 'rechazado';
+                            $updateData['code']         = $data['sunatResponse']['error']['code'] ?? null;
+                            $updateData['message']      = $data['sunatResponse']['error']['message'] ?? null;
+                            $updateData['description']  = "Error SUNAT: " . ($data['sunatResponse']['error']['message'] ?? '');
+                            $statusSunatMensaje         = 'rechazado';
                         }
+
+                        // 🟢 4. EJECUTAMOS EL UPDATE UNA SOLA VEZ
+                        $sale->update($updateData);
                     }
                 } catch (\Exception $apiEx) {
-                    // Si ocurre un error fatal en tu API central (ej 500 server error), 
-                    // atrapamos el error para no asustar al cajero, la venta ya está en BD.
                     $sale->update([
                         'status_sunat' => 'error_api',
                         'message'      => $apiEx->getMessage()
@@ -560,9 +639,6 @@ class PagarOrden extends Page implements HasForms, HasActions
             }
         }
 
-        // ==========================================
-        // 🖨️ 7. GENERACIÓN DE PDF Y NOTIFICACIONES
-        // ==========================================
         try {
             // El modelo sale ya está actualizado (sale->fresh() asegura tener los paths actualizados)
             $pdfService = app(\App\Services\TicketPdfService::class);

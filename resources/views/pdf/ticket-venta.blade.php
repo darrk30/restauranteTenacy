@@ -228,6 +228,7 @@
         if ($sale->tipo_comprobante === 'Boleta') {
             $nombreComprobante = 'BOLETA DE VENTA ELECTRÓNICA';
         }
+        $porcentajeIgv = get_tax_percentage($tenant->id);
     @endphp
 
     @if (!$hideActions)
@@ -320,7 +321,7 @@
                     <td class="text-right">S/ {{ number_format((float) $sale->op_gravada, 2) }}</td>
                 </tr>
                 <tr>
-                    <td class="bold">IGV (18%):</td>
+                    <td class="bold">IGV ({{ $porcentajeIgv }}%):</td>
                     <td class="text-right">S/ {{ number_format((float) $sale->monto_igv, 2) }}</td>
                 </tr>
             @endif

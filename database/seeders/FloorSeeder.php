@@ -33,7 +33,7 @@ class FloorSeeder extends Seeder
                 ['floor_id' => $floor->id, 'name' => "Mesa {$i}"],
                 [
                     'status' => true,
-                    'asientos' => 1,
+                    'asientos' => 0,
                     'restaurant_id' => $restaurant->id,
                     'estado_mesa' => $estado,
                     'ocupada_desde' => null,
