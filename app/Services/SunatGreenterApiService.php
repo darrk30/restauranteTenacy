@@ -20,6 +20,7 @@ class SunatGreenterApiService
      */
     public function sendInvoice(array $invoiceData, string $apiToken)
     {
+        //dd($invoiceData); // Debug: Verifica la estructura del payload antes de enviarlo
         try {
             $response = Http::withToken($apiToken)
                 ->acceptJson()

@@ -189,7 +189,7 @@ class Promotion extends Model
                 $minimoPosible = $alcanzaPara;
             }
         }
-
+        dd($minimoPosible);
         return ($minimoPosible === 999999) ? 9999 : $minimoPosible;
     }
 

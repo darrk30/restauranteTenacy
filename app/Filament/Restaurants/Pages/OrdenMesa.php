@@ -614,7 +614,12 @@ class OrdenMesa extends Page implements HasActions
                         $impactoNeto = 0;
 
                         if ($detalle->variant_id && $detalle->variant) {
-                            $stockTotalBD = $detalle->variant->stock->sum('stock_reserva');
+                            $stockObj = $detalle->variant->stock;
+                            if ($stockObj) {
+                                $stockTotalBD = $stockObj->stock_reserva;
+                            } else {
+                                $stockTotalBD = 0;
+                            }
                             $impactoNeto = $consumoVariantes[$detalle->variant_id] ?? 0;
                         } elseif ($producto) {
                             $stockTotalBD = $producto->stock ?? 0;

@@ -352,7 +352,7 @@ class PagarOrden extends Page implements HasForms, HasActions
         $serieConfig->update([
             'current_number' => $nuevoNumero
         ]);
-        
+
         return $nuevoNumero;
     }
 
@@ -630,9 +630,12 @@ class PagarOrden extends Page implements HasForms, HasActions
                         $sale->update($updateData);
                     }
                 } catch (\Exception $apiEx) {
+                    // 🟢 Esto evita que el error "Data too long" detenga el sistema
+                    $mensajeRecortado = substr($apiEx->getMessage(), 0, 250);
+
                     $sale->update([
                         'status_sunat' => 'error_api',
-                        'message'      => $apiEx->getMessage()
+                        'message'      => $mensajeRecortado
                     ]);
                     $statusSunatMensaje = 'error_api';
                 }

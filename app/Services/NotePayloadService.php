@@ -123,8 +123,6 @@ class NotePayloadService
                     "direccion" => $sale->client->direccion ?? ''
                 ]
             ],
-            
-            // 🟢 SUNAT y Greenter también requieren los totales en la raíz de las Notas de Crédito
             "mtoOperGravadas" => (float) round($totalOpGravada, 2),
             "mtoIGV"          => (float) round($totalIgv, 2),
             "totalImpuestos"  => (float) round($totalIgv, 2),
