@@ -46,11 +46,27 @@ return new class extends Migration
             $table->decimal('costo_total', 12, 2);
 
             // Estado
-            $table->string('status')->default('conpletado');
+            $table->string('status')->default('completado');
             $table->text('notas')->nullable();
             $table->string('canal')->nullable();
             $table->dateTime('fecha_emision')->nullable();
 
+            // SUNAT
+            $table->string('status_sunat')->default('registrado');
+            $table->string('hash')->nullable();
+            $table->string('path_xml')->nullable();
+            $table->string('path_pdf')->nullable();
+            $table->string('path_cdrZip')->nullable();
+            $table->string('description')->nullable();
+            $table->string('message')->nullable();
+            $table->string('success')->nullable();
+            $table->string('code')->nullable();
+            $table->json('notes')->nullable(); 
+            $table->string('total_letras')->nullable();
+            $table->string('qr_data')->nullable();
+            $table->foreignId('daily_summary_id')->nullable()->constrained('daily_summaries')->nullOnDelete();
+            
+            $table->unique(['restaurant_id', 'serie', 'correlativo']);
 
             $table->timestamps();
         });

@@ -8,6 +8,7 @@ use App\Models\Sale;
 use App\Models\SessionCashRegister;
 use Filament\Forms;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -82,7 +83,7 @@ class SaleResource extends Resource
                     ->summarize(Tables\Columns\Summarizers\Sum::make()->label('Total')),
 
                 TextColumn::make('status')
-                    ->label('Estado')
+                    ->label('Estado Local')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
                         'completado' => 'success',
@@ -112,7 +113,6 @@ class SaleResource extends Resource
                     })
                     ->indicateUsing(function (array $data): array {
                         $indicators = [];
-                        // Mostramos formato amigable incluyendo la hora
                         if ($data['fecha_desde'] ?? null) {
                             $indicators[] = 'Desde: ' . \Carbon\Carbon::parse($data['fecha_desde'])->format('d/m/Y h:i A');
                         }
@@ -136,6 +136,7 @@ class SaleResource extends Resource
                         ->color('info')
                         ->visible(fn() => Auth::user()->can('reimprimir_ticket_rest'))
                         ->url(fn(Sale $record) => route('sale.ticket.print', $record), shouldOpenInNewTab: true),
+
                     Tables\Actions\Action::make('anular')
                         ->label('Anular')
                         ->icon('heroicon-o-x-circle')
@@ -157,7 +158,6 @@ class SaleResource extends Resource
                                 'promotion.promotionproducts.variant'
                             ])->get();
 
-                            // Verificamos si hay algo que controle stock para mostrar el toggle
                             $hayStockParaRestablecer = $detalles->contains(function ($detalle) {
                                 if ($detalle->promotion_id && $detalle->promotion) {
                                     return $detalle->promotion->promotionproducts->contains(function ($hijo) {
@@ -170,7 +170,7 @@ class SaleResource extends Resource
                             });
 
                             return $hayStockParaRestablecer ? [
-                                Forms\Components\Toggle::make('restablecer_stock')
+                                Toggle::make('restablecer_stock')
                                     ->label('¿Desea restablecer el stock?')
                                     ->helperText('Se devolverán los productos al inventario.')
                                     ->default(false)
@@ -184,32 +184,23 @@ class SaleResource extends Resource
                                 $record->update(['status' => 'anulado', 'user_actualiza_id' => Auth::id()]);
 
                                 if ($data['restablecer_stock'] ?? false) {
-
-                                    // --- CLASE ANÓNIMA CON EL TRAIT ACTUALIZADO ---
                                     $stockManager = new class {
                                         use \App\Traits\ManjoStockProductos;
 
                                         public function restaurarStock($item, $comprobante, $movimiento)
                                         {
-                                            // 'entrada' para sumar stock devuelto
                                             $this->processItem($item, 'entrada', $comprobante, $movimiento);
                                         }
 
-                                        // Helper para conversión de unidades si está en el trait
                                         public function convertirCantidad(\App\Models\Unit $u1, \App\Models\Unit $u2, $qty): float
                                         {
-                                            return $qty; // Simplificación si usan misma unidad base, o usa la lógica del trait real
+                                            return $qty;
                                         }
                                     };
-                                    // ------------------------------------------------
 
                                     $referencia = "{$record->serie}-{$record->correlativo}";
 
-                                    // ❌ ELIMINADO: Búsqueda de $almacenDefault
-
                                     foreach ($record->details as $detalle) {
-
-                                        // --- CASO 1: ES UNA PROMOCIÓN ---
                                         if ($detalle->promotion_id) {
                                             $promo = \App\Models\Promotion::with('promotionproducts.product', 'promotionproducts.variant')
                                                 ->find($detalle->promotion_id);
@@ -219,18 +210,15 @@ class SaleResource extends Resource
                                                     $productoHijo = $hijo->product;
 
                                                     if ($productoHijo && $productoHijo->control_stock) {
-
                                                         $cantidadTotal = $detalle->cantidad * $hijo->quantity;
 
-                                                        // Objeto virtual para pasar al Trait
                                                         $itemVirtual = new \App\Models\SaleDetail([
                                                             'product_id' => $hijo->product_id,
                                                             'variant_id' => $hijo->variant_id,
                                                             'cantidad'   => $cantidadTotal,
-                                                            'id'         => $detalle->id, // ID referencia para logs
+                                                            'id'         => $detalle->id,
                                                         ]);
 
-                                                        // Relaciones necesarias
                                                         $itemVirtual->setRelation('product', $productoHijo);
                                                         $itemVirtual->setRelation('variant', $hijo->variant);
                                                         $itemVirtual->setRelation('unit', $productoHijo->unit);
@@ -243,9 +231,7 @@ class SaleResource extends Resource
                                                     }
                                                 }
                                             }
-                                        }
-                                        // --- CASO 2: ES UN PRODUCTO NORMAL ---
-                                        elseif ($detalle->product_id && $detalle->product && $detalle->product->control_stock) {
+                                        } elseif ($detalle->product_id && $detalle->product && $detalle->product->control_stock) {
                                             if (!$detalle->relationLoaded('unit')) {
                                                 $detalle->setRelation('unit', $detalle->product->unit);
                                             }
@@ -259,7 +245,6 @@ class SaleResource extends Resource
                                     }
                                 }
 
-                                // Anulación de Movimientos de Caja
                                 $movimientosCaja = CashRegisterMovement::where('referencia_type', Sale::class)
                                     ->where('referencia_id', $record->id)
                                     ->where('status', 'aprobado')
@@ -292,7 +277,9 @@ class SaleResource extends Resource
                             TextEntry::make('serie'),
                             TextEntry::make('correlativo'),
                             TextEntry::make('fecha_emision')->dateTime(),
-                            TextEntry::make('status')->badge()
+                            TextEntry::make('status')
+                                ->label('Estado Local')
+                                ->badge()
                                 ->color(fn($state) => match ($state) {
                                     'completado' => 'success',
                                     'anulado' => 'danger',

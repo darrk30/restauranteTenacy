@@ -195,7 +195,7 @@ class OrdenMesa extends Page implements HasActions
             $resultado = OrdenService::crearPedido($datosOrden, $this->carrito, Auth::id());
 
             $order = $resultado['order'];
-            $diffParaCocina = $resultado['diffParaCocina']; 
+            $diffParaCocina = $resultado['diffParaCocina'];
 
             // 3. Imprimir Comanda
             $config = Filament::getTenant()->cached_config; // 🟢 Leer config
@@ -229,11 +229,41 @@ class OrdenMesa extends Page implements HasActions
                 'cancelados' => []
             ];
 
+            DB::beginTransaction();
+
+            $order = Order::find($this->pedido);
+
+            // 🟢 PASO 1: MAPEAR PROMOCIONES EXISTENTES EN LA BD ANTES DE CUALQUIER CAMBIO
+            // Esto asegura que si una promo es eliminada totalmente del carrito, sepamos que existía.
+            $promosEnBaseDeDatos = OrderDetail::where('order_id', $order->id)
+                ->whereNotNull('promotion_id')
+                ->where('status', '!=', \App\Enums\StatusPedido::Cancelado)
+                ->get();
+
+            $cantidadesTotalesPorPromo = [];
+            foreach ($promosEnBaseDeDatos as $det) {
+                // Inicializamos en 0. Si el producto sigue en el carrito, se sumará en el Paso 2.
+                // Si el usuario lo eliminó, se quedará en 0.
+                if (!isset($cantidadesTotalesPorPromo[$det->promotion_id])) {
+                    $cantidadesTotalesPorPromo[$det->promotion_id] = 0;
+                }
+            }
+
+            // 🟢 PASO 2: PROCESAR EL CARRITO ACTUAL (Nuevos y Actualizados)
             foreach ($this->carrito as $item) {
-                // USAMOS EL SERVICE
-                $areaData = OrdenService::obtenerDatosArea($item['product_id'], $item['promotion_id'] ?? null);
+                $esPromocion = isset($item['type']) && $item['type'] === \App\Enums\TipoProducto::Promocion->value;
+                $areaData = \App\Services\OrdenService::obtenerDatosArea($item['product_id'], $item['promotion_id'] ?? null);
+
+                // Acumular la cantidad actual que está viva en el carrito para las promociones
+                if (isset($item['promotion_id'])) {
+                    if (!isset($cantidadesTotalesPorPromo[$item['promotion_id']])) {
+                        $cantidadesTotalesPorPromo[$item['promotion_id']] = 0;
+                    }
+                    $cantidadesTotalesPorPromo[$item['promotion_id']] += $item['quantity'];
+                }
 
                 if (!isset($item['guardado']) || !$item['guardado']) {
+                    // --- ES UN NUEVO ITEM ---
                     $diffParaCocina['nuevos'][] = [
                         'cant' => $item['quantity'],
                         'nombre' => $item['name'],
@@ -241,51 +271,7 @@ class OrdenMesa extends Page implements HasActions
                         'area_id' => $areaData['id'],
                         'area_nombre' => $areaData['name']
                     ];
-                } else {
-                    $idDetalle = $item['item_id'];
-                    $cantidadOriginal = $this->cantidadesOriginales[$idDetalle] ?? 0;
-                    $cantidadActual = $item['quantity'];
 
-                    $notaOriginal = $this->notasOriginales[$idDetalle] ?? '';
-                    $notaActual = $item['notes'];
-                    $notaParaImprimir = ($notaActual !== $notaOriginal) ? $notaActual : '';
-
-                    if ($cantidadActual > $cantidadOriginal) {
-                        $diferencia = $cantidadActual - $cantidadOriginal;
-                        $diffParaCocina['nuevos'][] = [
-                            'cant' => $diferencia,
-                            'nombre' => $item['name'],
-                            'nota' => $notaParaImprimir,
-                            'area_id' => $areaData['id'],
-                            'area_nombre' => $areaData['name']
-                        ];
-                    } elseif ($cantidadActual < $cantidadOriginal) {
-                        $diferencia = $cantidadOriginal - $cantidadActual;
-                        $diffParaCocina['cancelados'][] = [
-                            'cant' => $diferencia,
-                            'nombre' => $item['name'],
-                            'nota' => 'ANULACIÓN PARCIAL: ' . Auth::user()->name,
-                            'area_id' => $areaData['id'],
-                            'area_nombre' => $areaData['name']
-                        ];
-                    }
-                }
-            }
-
-            DB::beginTransaction();
-
-            $order = Order::find($this->pedido);
-            $order->update([
-                'subtotal' => $this->subtotal,
-                'igv'      => $this->igv,
-                'total'    => $this->total,
-                'user_actualiza_id' => Auth::id(),
-            ]);
-
-            foreach ($this->carrito as $item) {
-                $esPromocion = isset($item['type']) && $item['type'] === TipoProducto::Promocion->value;
-
-                if (!isset($item['guardado']) || !$item['guardado']) {
                     OrderDetail::create([
                         'restaurant_id'      => Filament::getTenant()->id,
                         'order_id'           => $order->id,
@@ -293,12 +279,12 @@ class OrdenMesa extends Page implements HasActions
                         'promotion_id'       => $esPromocion ? $item['promotion_id'] : null,
                         'variant_id'         => $item['variant_id'],
                         'product_name'       => $item['name'],
-                        'item_type'          => $esPromocion ? TipoProducto::Promocion->value : TipoProducto::Producto->value,
+                        'item_type'          => $esPromocion ? \App\Enums\TipoProducto::Promocion->value : \App\Enums\TipoProducto::Producto->value,
                         'price'              => $item['price'],
                         'cantidad'           => $item['quantity'],
                         'subTotal'           => $item['total'],
                         'cortesia'           => $item['is_cortesia'] ? 1 : 0,
-                        'status'             => StatusPedido::Pendiente,
+                        'status'             => \App\Enums\StatusPedido::Pendiente,
                         'notes'              => $item['notes'],
                         'fecha_envio_cocina' => now(),
                         'user_id'            => Auth::id(),
@@ -306,55 +292,70 @@ class OrdenMesa extends Page implements HasActions
                     ]);
 
                     if (!$esPromocion) {
-                        OrdenService::gestionarStock($item['variant_id'], $item['quantity'], 'restar');
+                        \App\Services\OrdenService::gestionarStock($item['variant_id'], $item['quantity'], 'restar');
                     } else {
-                        OrdenService::gestionarStockPromocion($item['promotion_id'], $item['quantity'], 'restar');
+                        \App\Services\OrdenService::gestionarStockPromocion($item['promotion_id'], $item['quantity'], 'restar');
                     }
                 } else {
+                    // --- ES UN ITEM EXISTENTE (Actualización de cantidad o nota) ---
                     $detalle = OrderDetail::find($item['item_id']);
                     if ($detalle) {
                         $cantidadAnterior = $this->cantidadesOriginales[$item['item_id']] ?? $detalle->cantidad;
                         $cantidadNueva = $item['quantity'];
 
+                        $notaOriginal = $this->notasOriginales[$item['item_id']] ?? '';
+                        $notaActual = $item['notes'];
+                        $notaParaImprimir = ($notaActual !== $notaOriginal) ? $notaActual : '';
+
                         if ($cantidadNueva != $cantidadAnterior) {
-                            if ($cantidadNueva < $cantidadAnterior) {
-                                $cantidadAnulada = $cantidadAnterior - $cantidadNueva;
+                            // Cambio de cantidad
+                            if ($cantidadNueva > $cantidadAnterior) {
+                                $diferencia = $cantidadNueva - $cantidadAnterior;
+                                $diffParaCocina['nuevos'][] = [
+                                    'cant' => $diferencia,
+                                    'nombre' => $item['name'],
+                                    'nota' => $notaParaImprimir,
+                                    'area_id' => $areaData['id'],
+                                    'area_nombre' => $areaData['name']
+                                ];
+                            } elseif ($cantidadNueva < $cantidadAnterior) {
+                                $diferencia = $cantidadAnterior - $cantidadNueva;
+                                $diffParaCocina['cancelados'][] = [
+                                    'cant' => $diferencia,
+                                    'nombre' => $item['name'],
+                                    'nota' => 'ANULACIÓN PARCIAL: ' . Auth::user()->name,
+                                    'area_id' => $areaData['id'],
+                                    'area_nombre' => $areaData['name']
+                                ];
+
+                                // Crear registro del anulado
                                 $detalleAnulado = $detalle->replicate();
-                                $detalleAnulado->cantidad = $cantidadAnulada;
-                                $detalleAnulado->subTotal = $cantidadAnulada * $detalle->price;
-                                $detalleAnulado->status = StatusPedido::Cancelado;
+                                $detalleAnulado->cantidad = $diferencia;
+                                $detalleAnulado->subTotal = $diferencia * $detalle->price;
+                                $detalleAnulado->status = \App\Enums\StatusPedido::Cancelado;
                                 $detalleAnulado->user_actualiza_id = Auth::id();
                                 $detalleAnulado->notes = "Anulación parcial de " . Auth::user()->name;
                                 $detalleAnulado->save();
+                            }
 
-                                $detalle->update([
-                                    'cantidad' => $cantidadNueva,
-                                    'subTotal' => $item['total'],
-                                    'notes'    => $item['notes'],
-                                    'user_actualiza_id' => Auth::id(),
-                                ]);
+                            $detalle->update([
+                                'cantidad' => $cantidadNueva,
+                                'subTotal' => $item['total'],
+                                'notes'    => $item['notes'],
+                                'user_actualiza_id' => Auth::id(),
+                            ]);
 
-                                if (!$esPromocion) {
-                                    OrdenService::gestionarStock($item['variant_id'], $cantidadAnulada, 'sumar');
-                                } else {
-                                    OrdenService::gestionarStockPromocion($item['promotion_id'], $cantidadAnulada, 'sumar');
-                                }
+                            // Ajuste físico de stock
+                            $diffFisico = $cantidadNueva - $cantidadAnterior;
+                            if (!$esPromocion) {
+                                if ($diffFisico > 0) \App\Services\OrdenService::gestionarStock($item['variant_id'], $diffFisico, 'restar');
+                                else \App\Services\OrdenService::gestionarStock($item['variant_id'], abs($diffFisico), 'sumar');
                             } else {
-                                $diff = $cantidadNueva - $cantidadAnterior;
-                                $detalle->update([
-                                    'cantidad' => $cantidadNueva,
-                                    'subTotal' => $item['total'],
-                                    'notes'    => $item['notes'],
-                                    'user_actualiza_id' => Auth::id(),
-                                ]);
-
-                                if (!$esPromocion) {
-                                    OrdenService::gestionarStock($item['variant_id'], $diff, 'restar');
-                                } else {
-                                    OrdenService::gestionarStockPromocion($item['promotion_id'], $diff, 'restar');
-                                }
+                                if ($diffFisico > 0) \App\Services\OrdenService::gestionarStockPromocion($item['promotion_id'], $diffFisico, 'restar');
+                                else \App\Services\OrdenService::gestionarStockPromocion($item['promotion_id'], abs($diffFisico), 'sumar');
                             }
                         } else {
+                            // Solo cambió la nota
                             $detalle->update([
                                 'notes' => $item['notes'],
                                 'user_actualiza_id' => Auth::id()
@@ -364,17 +365,15 @@ class OrdenMesa extends Page implements HasActions
                 }
             }
 
+            // 🟢 PASO 3: PROCESAR ITEMS ELIMINADOS TOTALMENTE
             if (!empty($this->itemsEliminados)) {
                 $detallesABorrar = OrderDetail::whereIn('id', $this->itemsEliminados)->get();
                 foreach ($detallesABorrar as $borrado) {
+                    if ($borrado->status === \App\Enums\StatusPedido::Cancelado) continue;
 
-                    // 🟢 BUG CORREGIDO: Evitamos reprocesar si ya estaba cancelado
-                    if ($borrado->status === StatusPedido::Cancelado) continue;
+                    $eraPromo = $borrado->item_type === \App\Enums\TipoProducto::Promocion->value || $borrado->promotion_id;
+                    $areaData = \App\Services\OrdenService::obtenerDatosArea($borrado->product_id, $borrado->promotion_id ?? null);
 
-                    $eraPromo = $borrado->item_type === TipoProducto::Promocion->value || $borrado->promotion_id;
-                    $areaData = OrdenService::obtenerDatosArea($borrado->product_id, $borrado->promotion_id ?? null);
-
-                    // 🟢 BUG CORREGIDO: Agregamos el ítem completamente borrado a la comanda de anulación
                     $diffParaCocina['cancelados'][] = [
                         'cant'        => $borrado->cantidad,
                         'nombre'      => $borrado->product_name,
@@ -384,20 +383,52 @@ class OrdenMesa extends Page implements HasActions
                     ];
 
                     if (!$eraPromo) {
-                        OrdenService::gestionarStock($borrado->variant_id, $borrado->cantidad, 'sumar');
+                        \App\Services\OrdenService::gestionarStock($borrado->variant_id, $borrado->cantidad, 'sumar');
                     } else {
-                        OrdenService::gestionarStockPromocion($borrado->promotion_id, $borrado->cantidad, 'sumar');
+                        \App\Services\OrdenService::gestionarStockPromocion($borrado->promotion_id, $borrado->cantidad, 'sumar');
                     }
 
                     $borrado->update([
-                        'status' => StatusPedido::Cancelado,
+                        'status' => \App\Enums\StatusPedido::Cancelado,
                         'user_actualiza_id' => Auth::id(),
                         'notes' => $borrado->notes . " (Eliminado por " . Auth::user()->name . ")",
                     ]);
                 }
             }
 
+            // 🟢 PASO 4: AJUSTAR EL LÍMITE DE LAS PROMOCIONES
+            foreach ($cantidadesTotalesPorPromo as $promoId => $cantidadTotalEnCarrito) {
+                $promo = \App\Models\Promotion::find($promoId);
+                if (!$promo) continue;
+
+                if (
+                    method_exists($promo, 'tieneLimiteDiario') && $promo->tieneLimiteDiario() &&
+                    $promo->fecha_ultima_venta && $promo->fecha_ultima_venta->isSameDay(now())
+                ) {
+                    // ¿Cuántas unidades de esta promoción aportaba ESTA ORDEN ANTES de actualizar?
+                    $sumaAnteriorDeEstaOrden = $promosEnBaseDeDatos->where('promotion_id', $promoId)->sum('cantidad');
+
+                    // La diferencia real: (Lo que hay en el carrito HOY) - (Lo que había en la BD)
+                    $diferencia = $cantidadTotalEnCarrito - $sumaAnteriorDeEstaOrden;
+
+                    if ($diferencia != 0) {
+                        $nuevoContadorGlobal = max(0, $promo->ventas_diarias_actuales + $diferencia);
+                        $promo->update(['ventas_diarias_actuales' => $nuevoContadorGlobal]);
+                    }
+                }
+            }
+
+            // 🟢 PASO 5: ACTUALIZAR TOTALES DE LA ORDEN
+            $order->update([
+                'subtotal' => $this->subtotal,
+                'igv'      => $this->igv,
+                'total'    => $this->total,
+                'user_actualiza_id' => Auth::id(),
+            ]);
+
             DB::commit();
+
+            // 🟢 PASO 6: IMPRESIÓN Y NOTIFICACIONES
             $config = Filament::getTenant()->cached_config;
             if (!empty($diffParaCocina['nuevos']) || !empty($diffParaCocina['cancelados'])) {
                 if ($config->mostrar_modal_impresion_comanda) {
@@ -411,10 +442,8 @@ class OrdenMesa extends Page implements HasActions
             if ($config->mostrar_modal_impresion_comanda) {
                 $this->mostrarModalComanda = true;
             }
-
             Notification::make()->title('Orden actualizada')->success()->send();
-            $this->cargarDatosPedido(); // Recargar el estado limpio
-
+            $this->cargarDatosPedido();
         } catch (\Exception $e) {
             DB::rollBack();
             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
@@ -501,7 +530,7 @@ class OrdenMesa extends Page implements HasActions
             }
             $config = Filament::getTenant()->cached_config;
             if (!empty($diffParaCocina['cancelados'])) {
-               if ($config->mostrar_modal_impresion_comanda) {
+                if ($config->mostrar_modal_impresion_comanda) {
                     $jobId = 'print_anul_' . $pedidoId . '_' . time();
                     Cache::put($jobId, $diffParaCocina, now()->addMinutes(5));
                     session()->flash('print_job_id', $jobId);
@@ -614,7 +643,12 @@ class OrdenMesa extends Page implements HasActions
                         $impactoNeto = 0;
 
                         if ($detalle->variant_id && $detalle->variant) {
-                            $stockTotalBD = $detalle->variant->stock->sum('stock_reserva');
+                            $stockObj = $detalle->variant->stock;
+                            if ($stockObj) {
+                                $stockTotalBD = $stockObj->stock_reserva;
+                            } else {
+                                $stockTotalBD = 0;
+                            }
                             $impactoNeto = $consumoVariantes[$detalle->variant_id] ?? 0;
                         } elseif ($producto) {
                             $stockTotalBD = $producto->stock ?? 0;
@@ -743,7 +777,7 @@ class OrdenMesa extends Page implements HasActions
         $this->notaPedido = '';
         $this->selectedAttributes = [];
         $this->variantSeleccionadaId = null;
-        $this->precioCalculado = $producto->price;
+        $this->precioCalculado = floatval($producto->price);
         $this->stockActualVariante = 0;
         $this->stockReservaVariante = 0;
 
@@ -757,12 +791,16 @@ class OrdenMesa extends Page implements HasActions
         } else {
             foreach ($producto->attributes as $attr) {
                 $rawValues = $attr->pivot->values ?? [];
-                $values = is_string($rawValues) ? json_decode($rawValues, true) : $rawValues;
+
+                // TRUCO INFALIBLE: Forzamos a que sea un array asociativo sin importar cómo venga
+                $values = is_string($rawValues) ? json_decode($rawValues, true) : json_decode(json_encode($rawValues), true);
+
                 if (is_array($values) && count($values) > 0) {
-                    $primerValorId = $values[0]['id'];
-                    $this->selectedAttributes[$attr->id] = $primerValorId;
+                    // Ahora estamos 100% seguros de que ['id'] funcionará
+                    $this->selectedAttributes[$attr->id] = $values[0]['id'] ?? null;
                 }
             }
+            // Esto calculará el precio correcto desde el segundo 1 en que se abre el modal
             $this->buscarVarianteCoincidente();
         }
     }
@@ -775,28 +813,30 @@ class OrdenMesa extends Page implements HasActions
 
     public function buscarVarianteCoincidente()
     {
-        $precioBase = $this->productoSeleccionado->price;
+        if (!$this->productoSeleccionado) return;
+        $precioBase = floatval($this->productoSeleccionado->price);
         $extrasAcumulados = 0;
         foreach ($this->selectedAttributes as $attrId => $valIdSeleccionado) {
-            $atributo = $this->productoSeleccionado->attributes->find($attrId);
-            if ($atributo) {
-                $opciones = is_string($atributo->pivot->values) ? json_decode($atributo->pivot->values, true) : $atributo->pivot->values;
+            $atributo = $this->productoSeleccionado->attributes->firstWhere('id', $attrId);
+            if ($atributo && $valIdSeleccionado) {
+                $rawValues = $atributo->pivot->values ?? [];
+                $opciones = is_string($rawValues) ? json_decode($rawValues, true) : json_decode(json_encode($rawValues), true);
                 $opcion = collect($opciones)->firstWhere('id', $valIdSeleccionado);
                 if ($opcion) {
-                    $extrasAcumulados += ($opcion['extra'] ?? 0);
+                    $extrasAcumulados += floatval($opcion['extra'] ?? 0);
                 }
             }
         }
 
         $this->precioCalculado = $precioBase + $extrasAcumulados;
 
-        if (!$this->productoSeleccionado || $this->productoSeleccionado->variants->isEmpty()) {
+        if ($this->productoSeleccionado->variants->isEmpty()) {
             return;
         }
         $matchVariant = null;
         foreach ($this->productoSeleccionado->variants as $variant) {
             $variantValueIds = $variant->values->pluck('id')->toArray();
-            $seleccionados = array_values($this->selectedAttributes);
+            $seleccionados = array_filter(array_values($this->selectedAttributes));
             $coincidencias = array_intersect($seleccionados, $variantValueIds);
             if (count($coincidencias) === count($this->productoSeleccionado->attributes)) {
                 $matchVariant = $variant;
@@ -1008,7 +1048,8 @@ class OrdenMesa extends Page implements HasActions
             $acumulado += $item['total'];
         }
         $this->total = $acumulado;
-        $this->subtotal = $this->total / 1.18;
+        $divisor = get_tax_divisor();
+        $this->subtotal = $this->total / $divisor;
         $this->igv = $this->total - $this->subtotal;
     }
 

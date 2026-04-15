@@ -74,106 +74,57 @@ class OrderDetail extends Model
     | Lógica de Eventos (Booted) - FINAL
     |--------------------------------------------------------------------------
     */
+    // ============================================
+    // CAMBIO EN OrderDetail booted(): DESACTIVAR UPDATE
+    // ============================================
+
     protected static function booted(): void
     {
         // 1. EVENTO CREATED (Sumar al crear)
-        static::created(function ($detail) {
-            if ($detail->promotion_id) {
-                $promo = \App\Models\Promotion::find($detail->promotion_id);
+        // static::created(function ($detail) {
+        //     if ($detail->promotion_id) {
+        //         $promo = \App\Models\Promotion::find($detail->promotion_id);
 
-                // Verificamos si existe y si tiene límite configurado
-                // (Usamos el método que creamos en Promotion.php que usa ->exists() en la BD)
-                if ($promo && method_exists($promo, 'tieneLimiteDiario') && $promo->tieneLimiteDiario()) {
+        //         if ($promo && method_exists($promo, 'tieneLimiteDiario') && $promo->tieneLimiteDiario()) {
+        //             $ahora = now();
+        //             $esMismoDia = $promo->fecha_ultima_venta && $promo->fecha_ultima_venta->isSameDay($ahora);
 
-                    $ahora = now();
-                    // Comparamos fecha segura ignorando hora
-                    $esMismoDia = $promo->fecha_ultima_venta && $promo->fecha_ultima_venta->isSameDay($ahora);
+        //             if (!$esMismoDia) {
+        //                 $promo->update([
+        //                     'ventas_diarias_actuales' => $detail->cantidad,
+        //                     'fecha_ultima_venta' => $ahora
+        //                 ]);
+        //             } else {
+        //                 $promo->increment('ventas_diarias_actuales', $detail->cantidad);
+        //             }
+        //         }
+        //     }
+        // });
 
-                    if (!$esMismoDia) {
-                        // Nuevo día: Reseteamos
-                        $promo->update([
-                            'ventas_diarias_actuales' => $detail->cantidad,
-                            'fecha_ultima_venta' => $ahora
-                        ]);
-                    } else {
-                        // Mismo día: Sumamos
-                        $promo->increment('ventas_diarias_actuales', $detail->cantidad);
-                    }
-                }
-            }
-        });
-
-        // 2. EVENTO UPDATED (Detectar cambio a "Cancelado" y Cambios de Cantidad)
-        static::updated(function ($detail) {
-            if (!$detail->promotion_id) return;
-
-            $promo = \App\Models\Promotion::find($detail->promotion_id);
-
-            // Condiciones para abortar: No hay promo, no tiene límite, o la venta no es de HOY.
-            if (
-                !$promo ||
-                (method_exists($promo, 'tieneLimiteDiario') && !$promo->tieneLimiteDiario()) ||
-                !($promo->fecha_ultima_venta && $promo->fecha_ultima_venta->isSameDay(now()))
-            ) {
-                return;
-            }
-
-            // --- PREPARAR VALORES NORMALIZADOS PARA COMPARAR ---
-            $enumCancelado = \App\Enums\StatusPedido::Cancelado;
-            $valorCancelado = $enumCancelado instanceof \BackedEnum ? $enumCancelado->value : $enumCancelado;
-
-            // Normalizamos el estado ACTUAL del modelo (puede ser Enum o Scalar)
-            $statusActual = $detail->status instanceof \BackedEnum ? $detail->status->value : $detail->status;
-
-            // --- LÓGICA A: CAMBIO DE ESTADO A CANCELADO ---
-            if ($detail->isDirty('status') && $statusActual == $valorCancelado) {
-
-                // Normalizamos el estado ANTERIOR
-                $rawAnterior = $detail->getOriginal('status');
-                $statusAnterior = $rawAnterior instanceof \BackedEnum ? $rawAnterior->value : $rawAnterior;
-
-                // Solo restamos si antes NO estaba cancelado
-                if ($statusAnterior != $valorCancelado) {
-                    $nuevoTotal = max(0, $promo->ventas_diarias_actuales - $detail->cantidad);
-                    $promo->update(['ventas_diarias_actuales' => $nuevoTotal]);
-                }
-            }
-
-            // --- LÓGICA B: CAMBIO DE CANTIDAD (Solo si NO está cancelado actualmente) ---
-            elseif ($detail->isDirty('cantidad') && $statusActual != $valorCancelado) {
-                $diferencia = $detail->cantidad - $detail->getOriginal('cantidad');
-
-                if ($diferencia > 0) {
-                    $promo->increment('ventas_diarias_actuales', $diferencia);
-                } elseif ($diferencia < 0) {
-                    $nuevoTotal = max(0, $promo->ventas_diarias_actuales + $diferencia); // $diferencia es negativa
-                    $promo->update(['ventas_diarias_actuales' => $nuevoTotal]);
-                }
-            }
-        });
+        // 2. EVENTO UPDATED - DESACTIVADO AQUÍ
+        // 🔴 NO HACEMOS NADA: actualizarOrden() controla todo sincrónico
+        // Si necesitas este evento para OTROS contextos (API, edición rápida, etc),
+        // agrégalo SOLO en esos contextos de forma explícita.
 
         // 3. EVENTO DELETED (Restar al Eliminar registro)
-        static::deleted(function ($detail) {
-            $enumCancelado = \App\Enums\StatusPedido::Cancelado;
-            $valorCancelado = $enumCancelado instanceof \BackedEnum ? $enumCancelado->value : $enumCancelado;
+        // static::deleted(function ($detail) {
+        //     $enumCancelado = \App\Enums\StatusPedido::Cancelado;
+        //     $valorCancelado = $enumCancelado instanceof \BackedEnum ? $enumCancelado->value : $enumCancelado;
+        //     $statusFinal = $detail->status instanceof \BackedEnum ? $detail->status->value : $detail->status;
 
-            // Normalizamos el status que tenía el registro antes de morir
-            $statusFinal = $detail->status instanceof \BackedEnum ? $detail->status->value : $detail->status;
+        //     if ($statusFinal != $valorCancelado && $detail->promotion_id) {
+        //         $promo = \App\Models\Promotion::find($detail->promotion_id);
 
-            // Si se borra y NO estaba cancelado, devolvemos el cupo
-            if ($statusFinal != $valorCancelado && $detail->promotion_id) {
-                $promo = \App\Models\Promotion::find($detail->promotion_id);
-
-                if (
-                    $promo &&
-                    (method_exists($promo, 'tieneLimiteDiario') && $promo->tieneLimiteDiario()) &&
-                    ($promo->fecha_ultima_venta && $promo->fecha_ultima_venta->isSameDay(now()))
-                ) {
-                    $nuevoTotal = max(0, $promo->ventas_diarias_actuales - $detail->cantidad);
-                    $promo->update(['ventas_diarias_actuales' => $nuevoTotal]);
-                }
-            }
-        });
+        //         if (
+        //             $promo &&
+        //             (method_exists($promo, 'tieneLimiteDiario') && $promo->tieneLimiteDiario()) &&
+        //             ($promo->fecha_ultima_venta && $promo->fecha_ultima_venta->isSameDay(now()))
+        //         ) {
+        //             $nuevoTotal = max(0, $promo->ventas_diarias_actuales - $detail->cantidad);
+        //             $promo->update(['ventas_diarias_actuales' => $nuevoTotal]);
+        //         }
+        //     }
+        // });
 
         // Scopes globales...
         static::addGlobalScope('restaurant', function (Builder $query) {

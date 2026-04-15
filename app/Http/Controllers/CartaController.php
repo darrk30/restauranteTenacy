@@ -90,7 +90,7 @@ class CartaController extends Controller
         try {
             $totalRealServidor = 0;
 
-            // 🟢 Lógica Segura de Recálculo
+            // Lógica Segura de Recálculo
             $carritoService = collect($request->items)->map(function ($item) use (&$totalRealServidor) {
                 $isPromo = str_starts_with($item['id'], 'promo_');
                 $realId = str_replace('promo_', '', $item['id']);
@@ -133,6 +133,9 @@ class CartaController extends Controller
                 ];
             })->toArray();
 
+            $divisor = get_tax_divisor($tenant->id);
+            $subtotalCalculado = $totalRealServidor / $divisor;
+
             $datosOrden = [
                 'restaurant_id'     => $tenant->id,
                 'canal'             => $request->mesa_id ? 'salon' : $request->tipo_pedido,
@@ -140,8 +143,8 @@ class CartaController extends Controller
                 'nombre_cliente'    => strip_tags($request->cliente_nombre ?? 'Cliente Digital'),
                 'direccion'         => strip_tags($request->cliente_direccion),
                 'telefono'          => strip_tags($request->cliente_telefono),
-                'subtotal'          => $totalRealServidor / 1.18,
-                'igv'               => $totalRealServidor - ($totalRealServidor / 1.18),
+                'subtotal'          => $subtotalCalculado,
+                'igv'               => $totalRealServidor - $subtotalCalculado,
                 'total'             => $totalRealServidor,
                 'web'               => true,
                 'payment_method_id' => $request->metodo_pago,

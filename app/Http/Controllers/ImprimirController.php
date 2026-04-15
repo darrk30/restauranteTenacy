@@ -8,6 +8,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 
 class ImprimirController extends Controller
 {
@@ -103,18 +104,15 @@ class ImprimirController extends Controller
 
     public function printTicket(Sale $sale)
     {
-        // 1. Cargamos todas las relaciones necesarias de un solo golpe
-        // Cargamos 'restaurant' para obtener los datos del local y el logo
+        // 1. Cargamos todas las relaciones necesarias
         $sale->load(['details', 'user', 'restaurant']);
-
-        // 2. Definimos el tenant desde la relación de la venta
         $tenant = $sale->restaurant;
 
-        // 3. Validación de seguridad: Si no hay restaurante, lanzamos error 404
         if (!$tenant) {
             abort(404, 'Información del restaurante no encontrada.');
         }
 
+        // 2. Mostramos la pantalla normal para que el cajero pueda imprimirlo
         return view('pdf.ticket-venta', compact('sale', 'tenant'));
     }
 }

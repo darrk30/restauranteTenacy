@@ -148,7 +148,6 @@ class RestaurantsPanelProvider extends PanelProvider
             ->discoverResources(in: app_path('Filament/Restaurants/Resources'), for: 'App\\Filament\\Restaurants\\Resources')
             ->discoverPages(in: app_path('Filament/Restaurants/Pages'), for: 'App\\Filament\\Restaurants\\Pages')
             ->pages([
-                // Pages\Dashboard::class,
                 Dashboard::class
             ])
             ->discoverWidgets(in: app_path('Filament/Restaurants/Widgets'), for: 'App\\Filament\\Restaurants\\Widgets')

@@ -60,7 +60,7 @@ class ManageConfiguration extends Page implements HasForms
                         Tabs\Tab::make('Impresión y Cocina')
                             ->icon('heroicon-o-printer')
                             // 🟢 2. Muestra esta pestaña solo si tiene este permiso específico
-                            ->visible(fn () => auth()->user()->can('guardar_configuracion_impresion_cocina_rest'))
+                            ->visible(fn() => auth()->user()->can('guardar_configuracion_impresion_cocina_rest'))
                             ->schema([
 
                                 Section::make('Impresión Automática / Directa')
@@ -83,20 +83,20 @@ class ManageConfiguration extends Page implements HasForms
                                         ]),
                                     ]),
 
-                                Section::make('Pantalla KDS (Cocina)')
-                                    ->schema([
-                                        Toggle::make('mostrar_pantalla_cocina')
-                                            ->label('Activar visualización de pedidos en pantalla de cocina')
-                                            ->helperText('Ideal si no usas tiquetera física de comandas.')
-                                            ->onColor('primary'),
-                                    ]),
+                                // Section::make('Pantalla KDS (Cocina)')
+                                //     ->schema([
+                                //         Toggle::make('mostrar_pantalla_cocina')
+                                //             ->label('Activar visualización de pedidos en pantalla de cocina')
+                                //             ->helperText('Ideal si no usas tiquetera física de comandas.')
+                                //             ->onColor('primary'),
+                                //     ]),
                             ]),
 
                         // 📱 PESTAÑA: CARTA DIGITAL Y WEB
                         Tabs\Tab::make('Carta Web')
                             ->icon('heroicon-o-globe-alt')
                             // 🟢 3. Muestra esta pestaña solo si tiene este permiso específico
-                            ->visible(fn () => auth()->user()->can('guardar_configuracion_carta_web_rest'))
+                            ->visible(fn() => auth()->user()->can('guardar_configuracion_carta_web_rest'))
                             ->schema([
                                 Grid::make(2)->schema([
                                     Toggle::make('guardar_pedidos_web')
@@ -119,13 +119,13 @@ class ManageConfiguration extends Page implements HasForms
                         Tabs\Tab::make('Facturación')
                             ->icon('heroicon-o-receipt-percent')
                             // 🟢 4. Muestra esta pestaña solo si tiene este permiso específico
-                            ->visible(fn () => auth()->user()->can('guardar_configuracion_facturacion_rest'))
+                            ->visible(fn() => auth()->user()->can('guardar_configuracion_facturacion_rest'))
                             ->schema([
-                                Grid::make(2)->schema([
-                                    Toggle::make('precios_incluyen_impuesto')
-                                        ->label('Los precios ya incluyen impuestos')
-                                        ->helperText('Actívalo si tus precios en carta ya tienen el IGV sumado.')
-                                        ->onColor('success'),
+                                Grid::make(3)->schema([
+                                    // Toggle::make('precios_incluyen_impuesto')
+                                    //     ->label('Los precios ya incluyen impuestos')
+                                    //     ->helperText('Actívalo si tus precios en carta ya tienen el IGV sumado.')
+                                    //     ->onColor('success'),
 
                                     TextInput::make('porcentaje_impuesto')
                                         ->label('Porcentaje de Impuesto (%)')
@@ -134,6 +134,16 @@ class ManageConfiguration extends Page implements HasForms
                                         ->required()
                                         ->minValue(0)
                                         ->maxValue(100),
+                                    
+                                    Toggle::make('envio_boletas')
+                                        ->label('Envio de boletas automatico')
+                                        ->inline(false)
+                                        ->onColor('success'),
+    
+                                    Toggle::make('envio_facturas')
+                                        ->label('Envio de facturas automatico')
+                                        ->inline(false)
+                                        ->onColor('success'),
                                 ]),
                             ]),
 

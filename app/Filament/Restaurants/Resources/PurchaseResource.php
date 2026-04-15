@@ -361,10 +361,12 @@ class PurchaseResource extends Resource
 
     private static function recalculateTotals(Get $get, Set $set, bool $goUpTwoLevels = false): void
     {
-        // subir niveles según de dónde venga
+        // Subir niveles según de dónde venga el trigger
         $path = $goUpTwoLevels ? '../../' : '';
 
         $details = collect($get($path . 'details') ?? []);
+
+        // 1. Calcular el subtotal bruto (Suma de lo que el usuario ve en pantalla)
         $subtotalBruto = $details->sum(fn($item) => (float) ($item['subtotal'] ?? 0));
 
         if ($subtotalBruto <= 0) {
@@ -374,21 +376,24 @@ class PurchaseResource extends Resource
             return;
         }
 
-        // BASE + IGV
-        $base = $subtotalBruto / 1.18;
+        // 2. USAR EL HELPER DINÁMICO
+        $divisor = get_tax_divisor();
+
+        // BASE + IGV iniciales
+        $base = $subtotalBruto / $divisor;
         $igv = $subtotalBruto - $base;
 
-        // DESCUENTO
+        // 3. MANEJO DE DESCUENTO
         $descuento = (float) ($get($path . 'descuento') ?? 0);
 
         if ($descuento > 0 && $descuento < $subtotalBruto) {
+            // Calculamos cuánto representa el descuento proporcionalmente
             $factor = 1 - ($descuento / $subtotalBruto);
             $base *= $factor;
             $igv *= $factor;
         }
 
         $total = $base + $igv;
-
         $set($path . 'subtotal', round($base, 2));
         $set($path . 'igv', round($igv, 2));
         $set($path . 'total', round($total, 2));
