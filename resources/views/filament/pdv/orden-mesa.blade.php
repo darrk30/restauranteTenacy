@@ -182,14 +182,15 @@
 
                                 {{-- 3. EL TOOLTIP INFORMATIVO OVERLAY (Se abre al completar el Hold) --}}
                                 @if ($tipoProducto === 'Producto' || $tipoProducto === 'Promocion')
-                                    <div x-show="tooltipOpen" x-transition:enter="transition ease-out duration-200" class="tooltip-overlay"
+                                    <div x-show="tooltipOpen" x-transition:enter="transition ease-out duration-200"
+                                        class="tooltip-overlay"
                                         x-transition:enter-start="opacity-0 transform scale-95"
                                         x-transition:enter-end="opacity-100 transform scale-100"
                                         x-transition:leave="transition ease-in duration-150"
                                         x-transition:leave-start="opacity-100 transform scale-100"
                                         x-transition:leave-end="opacity-0 transform scale-95"
-                                        @click.stop="tooltipOpen = false" {{-- Un clic en el overlay lo cierra --}} {{-- SE AGREGÓ: -webkit-backdrop-filter y backdrop-filter, y se ajustó la opacidad del background a 0.85 --}}
-                                    >
+                                        @click.stop="tooltipOpen = false" {{-- Un clic en el overlay lo cierra --}}
+                                        {{-- SE AGREGÓ: -webkit-backdrop-filter y backdrop-filter, y se ajustó la opacidad del background a 0.85 --}}>
                                         <h4
                                             class="text-xs font-bold text-gray-300 uppercase mb-3 border-b border-gray-600 pb-2 flex justify-between items-center">
                                             {{ $tipoProducto === 'Promocion' ? 'Descripción' : 'Detalles' }}
@@ -222,7 +223,8 @@
                                                     @endif
                                                 @endforeach
                                             @else
-                                                <span class="text-xs italic" style="color: white">Sin detalles adicionales</span>
+                                                <span class="text-xs italic" style="color: white">Sin detalles
+                                                    adicionales</span>
                                             @endif
                                         @elseif($tipoProducto === 'Promocion')
                                             <div class="text-xs text-gray-200 leading-relaxed">
@@ -798,4 +800,13 @@
         @endpush
         <x-filament-actions::modals />
     </div>
+    {{-- <script>
+        document.addEventListener('livewire:init', () => {
+            // En Livewire 3, Echo ya está disponible aquí
+            Echo.channel('inventario')
+                .listen('.StockActualizado', (e) => {
+                    console.log('¡FUNCIONANDO REVERB!');
+                });
+        });
+    </script> --}}
 </x-filament-panels::page>

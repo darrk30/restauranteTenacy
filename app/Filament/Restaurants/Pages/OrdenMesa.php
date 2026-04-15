@@ -4,6 +4,7 @@ namespace App\Filament\Restaurants\Pages;
 
 use App\Enums\StatusPedido;
 use App\Enums\TipoProducto;
+use App\Events\StockActualizado;
 use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\Product;
@@ -21,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\On;
 
 class OrdenMesa extends Page implements HasActions
 {
@@ -195,6 +197,7 @@ class OrdenMesa extends Page implements HasActions
             $resultado = OrdenService::crearPedido($datosOrden, $this->carrito, Auth::id());
 
             $order = $resultado['order'];
+            StockActualizado::dispatch(); // Notificar a otros clientes que el stock ha cambiado
             $diffParaCocina = $resultado['diffParaCocina'];
 
             // 3. Imprimir Comanda
@@ -292,9 +295,9 @@ class OrdenMesa extends Page implements HasActions
                     ]);
 
                     if (!$esPromocion) {
-                        \App\Services\OrdenService::gestionarStock($item['variant_id'], $item['quantity'], 'restar');
+                        OrdenService::gestionarStock($item['variant_id'], $item['quantity'], 'restar');
                     } else {
-                        \App\Services\OrdenService::gestionarStockPromocion($item['promotion_id'], $item['quantity'], 'restar');
+                        OrdenService::gestionarStockPromocion($item['promotion_id'], $item['quantity'], 'restar');
                     }
                 } else {
                     // --- ES UN ITEM EXISTENTE (Actualización de cantidad o nota) ---
@@ -348,11 +351,11 @@ class OrdenMesa extends Page implements HasActions
                             // Ajuste físico de stock
                             $diffFisico = $cantidadNueva - $cantidadAnterior;
                             if (!$esPromocion) {
-                                if ($diffFisico > 0) \App\Services\OrdenService::gestionarStock($item['variant_id'], $diffFisico, 'restar');
-                                else \App\Services\OrdenService::gestionarStock($item['variant_id'], abs($diffFisico), 'sumar');
+                                if ($diffFisico > 0) OrdenService::gestionarStock($item['variant_id'], $diffFisico, 'restar');
+                                else OrdenService::gestionarStock($item['variant_id'], abs($diffFisico), 'sumar');
                             } else {
-                                if ($diffFisico > 0) \App\Services\OrdenService::gestionarStockPromocion($item['promotion_id'], $diffFisico, 'restar');
-                                else \App\Services\OrdenService::gestionarStockPromocion($item['promotion_id'], abs($diffFisico), 'sumar');
+                                if ($diffFisico > 0) OrdenService::gestionarStockPromocion($item['promotion_id'], $diffFisico, 'restar');
+                                else OrdenService::gestionarStockPromocion($item['promotion_id'], abs($diffFisico), 'sumar');
                             }
                         } else {
                             // Solo cambió la nota
@@ -427,7 +430,8 @@ class OrdenMesa extends Page implements HasActions
             ]);
 
             DB::commit();
-
+            // broadcast(new StockActualizado())->toOthers();
+            StockActualizado::dispatch();
             // 🟢 PASO 6: IMPRESIÓN Y NOTIFICACIONES
             $config = Filament::getTenant()->cached_config;
             if (!empty($diffParaCocina['nuevos']) || !empty($diffParaCocina['cancelados'])) {
@@ -546,6 +550,21 @@ class OrdenMesa extends Page implements HasActions
             DB::rollBack();
             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
         }
+    }
+    
+    #[On('echo:inventario,StockActualizado')]
+    public function onStockUpdated()
+    {
+        // 1. Al entrar aquí, Livewire ya sabe que debe re-renderizar.
+        // 2. Opcional: Notificar al usuario (puedes comentarlo si prefieres que sea invisible)
+        Notification::make()
+            ->title('Inventario actualizado')
+            ->body('El stock de los productos ha sido actualizado por otra venta.')
+            ->info()
+            ->send();
+
+        // 3. Forzamos el refresco de los datos (esto llamará a getViewData automáticamente)
+        $this->dispatch('$refresh'); 
     }
 
     public function getViewData(): array
