@@ -48,14 +48,50 @@ class User extends Authenticatable implements HasTenants, HasName, FilamentUser,
         return $this->belongsToMany(Restaurant::class);
     }
 
-    public function orders() { return $this->hasMany(Order::class); }
-    public function stockAdjustments() { return $this->hasMany(StockAdjustment::class); }
-    public function cashRegisters() { return $this->belongsToMany(CashRegister::class); }
-    public function sesionCashRegisters() { return $this->hasMany(SessionCashRegister::class); }
-    public function cashRegisterMovements() { return $this->hasMany(CashRegisterMovement::class); }
-    public function conceptoCajas() { return $this->hasMany(ConceptoCaja::class); }
-    public function orderDetails() { return $this->hasMany(OrderDetail::class); }
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
 
+    public function stockAdjustments()
+    {
+        return $this->hasMany(StockAdjustment::class);
+    }
+
+    public function cashRegisters()
+    {
+        return $this->belongsToMany(CashRegister::class);
+    }
+
+    public function sesionCashRegisters()
+    {
+        return $this->hasMany(SessionCashRegister::class);
+    }
+
+    public function cashRegisterMovements()
+    {
+        return $this->hasMany(CashRegisterMovement::class);
+    }
+
+    public function conceptoCajas()
+    {
+        return $this->hasMany(ConceptoCaja::class);
+    }
+
+    public function orderDetails()
+    {
+        return $this->hasMany(OrderDetail::class);
+    }
+    
+    public function dailySummaries()
+    {
+        return $this->hasMany(DailySummary::class);
+    }
+
+    public function creditDebitNotes()
+    {
+        return $this->hasMany(CreditDebitNote::class);
+    }
     // ==========================================
     // INTERFAZ DE FILAMENT (TEXTOS E IMÁGENES)
     // ==========================================

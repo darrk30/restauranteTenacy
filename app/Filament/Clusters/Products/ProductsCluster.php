@@ -15,4 +15,14 @@ class ProductsCluster extends Cluster
     protected static ?int $navigationSort = 15;
 
     protected static ?string $slug = 'gestion';
+
+    public function getHeading(): string
+    {
+        return '';
+    }
+    
+    public function getMaxContentWidth(): ?string
+    {
+        return 'full';
+    }
 }

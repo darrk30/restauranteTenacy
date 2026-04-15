@@ -26,10 +26,23 @@ class Sale extends Model
         'monto_igv',
         'total',
         'status',
+        'status_sunat',
         'notas',
         'costo_total',
         'canal',
         'fecha_emision',
+        'hash',
+        'path_xml',
+        'path_pdf',
+        'path_cdrZip',
+        'description',
+        'message',
+        'success',
+        'code',
+        'notes',
+        'total_letras',
+        'qr_data',
+        'daily_summary_id',
     ];
 
     public $monto_especifico_filtro;
@@ -66,6 +79,16 @@ class Sale extends Model
     public function restaurant()
     {
         return $this->belongsTo(Restaurant::class);
+    }
+
+    public function dailySummary()
+    {
+        return $this->belongsTo(DailySummary::class);
+    }
+
+    public function creditDebitNotes()
+    {
+        return $this->hasMany(CreditDebitNote::class);
     }
 
     public function getMontoFiltradoAttribute()

@@ -2,7 +2,7 @@
 
 namespace App\Filament\Restaurants\Resources;
 
-use App\Enums\DocumentSeriesType; // Importamos tu Enum
+use App\Enums\DocumentSeriesType;
 use App\Filament\Restaurants\Resources\DocumentSerieResource\Pages;
 use App\Models\DocumentSerie;
 use App\Models\Sale;
@@ -40,7 +40,7 @@ class DocumentSerieResource extends Resource
                     ->schema([
                         Select::make('type_documento')
                             ->label('Tipo de Documento')
-                            ->options(DocumentSeriesType::class) // 🔥 Usa el Enum directamente
+                            ->options(DocumentSeriesType::class)
                             ->required()
                             ->native(false),
 
@@ -49,23 +49,27 @@ class DocumentSerieResource extends Resource
                             ->placeholder('Ej: F001, B001')
                             ->required()
                             ->maxLength(4)
+                            ->dehydrateStateUsing(fn($state) => strtoupper($state))
                             ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                             ->unique(
                                 table: 'document_series',
                                 column: 'serie',
                                 ignorable: fn($record) => $record,
-                                modifyRuleUsing: function (Unique $rule) {
-                                    return $rule->where('restaurant_id', Filament::getTenant()->id);
+                                modifyRuleUsing: function (Unique $rule, Forms\Get $get) {
+                                    return $rule
+                                        ->where('restaurant_id', Filament::getTenant()->id)
+                                        ->where('type_documento', $get('type_documento'));
                                 }
                             )
                             ->validationMessages([
-                                'unique' => 'Esta serie ya ha sido registrada para este restaurante.',
+                                'unique' => 'Esta serie ya ha sido registrada para este tipo de documento en este restaurante.',
                             ]),
 
                         TextInput::make('current_number')
                             ->label('Correlativo Actual')
                             ->numeric()
                             ->default(0)
+                            ->minValue(0)
                             ->required()
                             ->helperText('Indica el último número emitido.'),
 
@@ -85,11 +89,11 @@ class DocumentSerieResource extends Resource
                 TextColumn::make('type_documento')
                     ->label('Tipo')
                     ->badge()
-                    // Aplicamos colores basados en el valor del Enum
                     ->color(fn($state): string => match ($state) {
                         DocumentSeriesType::FACTURA => 'info',
                         DocumentSeriesType::BOLETA => 'success',
                         DocumentSeriesType::NOTA_CREDITO => 'warning',
+                        DocumentSeriesType::NOTA_DEBITO => 'warning',
                         default => 'gray',
                     })
                     ->sortable(),
@@ -114,54 +118,39 @@ class DocumentSerieResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('type_documento')
                     ->label('Tipo de Documento')
-                    ->options(DocumentSeriesType::class), // 🔥 Filtro automático con Enum
+                    ->options(DocumentSeriesType::class),
             ])
             ->actions([
+                Tables\Actions\EditAction::make(), // Habilitado para editar
                 Tables\Actions\DeleteAction::make()
                     ->before(function (Tables\Actions\DeleteAction $action, DocumentSerie $record) {
-                        // 🟢 Validamos si existen ventas con esta serie para este restaurante
+                        // Validación de integridad
                         $tieneVentas = Sale::where('serie', $record->serie)
                             ->where('restaurant_id', Filament::getTenant()->id)
                             ->exists();
 
                         if ($tieneVentas) {
-                            // Notificación de advertencia personalizada
                             Notification::make()
                                 ->warning()
                                 ->title('Acción no permitida')
                                 ->body("La serie **{$record->serie}** tiene ventas asociadas y no puede eliminarse.")
                                 ->persistent()
                                 ->actions([
-                                    // 🟢 Botón de desactivar dentro de la notificación
                                     \Filament\Notifications\Actions\Action::make('desactivar')
-                                        ->label('Desactivar Serie')
+                                        ->label('Desactivar en su lugar')
                                         ->color('warning')
                                         ->button()
                                         ->close()
                                         ->action(function () use ($record) {
                                             $record->update(['is_active' => false]);
-
-                                            Notification::make()
-                                                ->success()
-                                                ->title('Serie desactivada')
-                                                ->send();
+                                            Notification::make()->success()->title('Serie desactivada')->send();
                                         }),
                                 ])
                                 ->send();
 
-                            // 🛑 Detiene la ejecución del borrado
                             $action->cancel();
                         }
                     }),
-
-                // Opcional: Agregar una acción de desactivar directa en la fila
-                Tables\Actions\Action::make('desactivar_fila')
-                    ->label('Desactivar')
-                    ->icon('heroicon-o-x-circle')
-                    ->color('warning')
-                    ->hidden(fn(DocumentSerie $record) => !$record->is_active)
-                    ->requiresConfirmation()
-                    ->action(fn(DocumentSerie $record) => $record->update(['is_active' => false])),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -174,8 +163,8 @@ class DocumentSerieResource extends Resource
     {
         return [
             'index' => Pages\ListDocumentSeries::route('/'),
-            // 'create' => Pages\CreateDocumentSerie::route('/create'),
-            // 'edit' => Pages\EditDocumentSerie::route('/{record}/edit'),
+            'create' => Pages\CreateDocumentSerie::route('/create'), // Ruta de creación habilitada
+            'edit' => Pages\EditDocumentSerie::route('/{record}/edit'), // Ruta de edición habilitada
         ];
     }
 }

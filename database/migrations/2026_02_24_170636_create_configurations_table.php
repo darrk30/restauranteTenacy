@@ -54,6 +54,12 @@ return new class extends Migration
             $table->boolean('precios_incluyen_impuesto')->default(true)
                 ->comment('¿Los precios registrados en el menú ya incluyen IGV/IVA?');
 
+            $table->boolean('envio_boletas')->default(false)
+                ->comment('Envio de boletas automatico');
+            
+                $table->boolean('envio_facturas')->default(false)
+                ->comment('Envio de facturas automatico');
+
             $table->decimal('porcentaje_impuesto', 5, 2)->default(18.00)
                 ->comment('Porcentaje de impuesto (Ej: 18 para IGV en Perú)');
 

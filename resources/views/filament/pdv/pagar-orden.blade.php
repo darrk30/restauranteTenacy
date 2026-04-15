@@ -5,8 +5,9 @@
 <x-filament-panels::page>
     <div>
         <div class="pos-layout" x-data="posCheckout({
-            subtotalBase: {{ $subtotal_base }},
-            metodosBackend: {{ $metodos_pago->toJson() }}
+            subtotalBase: {{ (float) $subtotal_base }},
+            metodosBackend: {{ $metodos_pago->toJson() }},
+            taxRate: {{ (float) get_tax_percentage() }}
         })">
 
             {{-- LAYOUT PRINCIPAL: 2 COLUMNAS --}}
@@ -119,107 +120,122 @@
 
 
                     {{-- MÉTODOS DE PAGO --}}
-                    <div class="card-section" x-data="{
-                        requiereReferencia: false,
-                        handleSelect(metodo) {
-                            this.selectMethod(metodo);
-                            this.requiereReferencia = metodo.requiere_referencia;
-                            if (!this.requiereReferencia) $wire.referencia_pago = '';
-                        }
-                    }">
-                        <h3 class="section-title" style="margin-bottom: 12px;">MÉTODO DE PAGO</h3>
+                    {{-- Sección de Métodos de Pago --}}
+                    {{-- SECCIÓN MÉTODO DE PAGO --}}
+                    <div class="card-section">
+                        <h3 class="section-title">MÉTODO DE PAGO</h3>
 
                         <div class="payment-grid">
-                            <template x-for="metodo in metodosDisponibles" :key="metodo.id">
-                                <button class="payment-btn" :class="{ 'active': currentMethodId == metodo.id }"
-                                    @click="handleSelect(metodo)">
+                            @foreach ($metodos_pago as $metodo)
+                                <button type="button"
+                                    class="payment-btn {{ $metodo_pago_seleccionado_id == $metodo->id ? 'active' : '' }}"
+                                    wire:click="seleccionarMetodo({{ $metodo->id }})">
                                     <div class="payment-icon">
-                                        <template x-if="metodo.image_path">
-                                            <img :src="'/storage/' + metodo.image_path">
-                                        </template>
-                                        <template x-if="!metodo.image_path">
-                                            <svg viewBox="0 0 24 24" fill="currentColor">
-                                                <path
-                                                    d="M20 8H4V6h16m0 10H4v-4h16m0-6H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
-                                            </svg>
-                                        </template>
+                                        @if ($metodo->image_path)
+                                            <img src="{{ asset('storage/' . $metodo->image_path) }}">
+                                        @else
+                                            <x-heroicon-o-banknotes class="w-6 h-6" />
+                                        @endif
                                     </div>
-                                    <span class="payment-name" x-text="metodo.name"></span>
+                                    <span class="payment-name">{{ $metodo->name }}</span>
                                 </button>
-                            </template>
+                            @endforeach
                         </div>
 
                         <div class="responsive-payment-row">
-
+                            {{-- Input con prefijo S/ --}}
                             <div class="flex-1">
-                                <input type="number" class="amount-input" x-model="currentAmount"
-                                    @keydown.enter="addPayment()" placeholder="S/ 0.00" onfocus="this.select()">
+                                <div style="position: relative; display: flex; align-items: center;">
+                                    <span
+                                        style="position: absolute; left: 12px; color: #6b7280; font-weight: bold; pointer-events: none;">S/</span>
+                                    <input type="number" step="0.01" class="amount-input" wire:model="monto_a_pagar"
+                                        style="padding-left: 35px; width: 100%;" placeholder="0.00">
+                                </div>
                             </div>
 
-                            <template x-if="requiereReferencia">
-                                <div class="flex-1" style="animation: fadeIn 0.3s;">
-                                    <input type="text" x-model="$wire.referencia_pago" class="amount-input"
-                                        style="border-color: #f59e0b;" placeholder="N° Operación...">
+                            @if ($requiere_referencia)
+                                <div class="flex-1">
+                                    <input type="text" wire:model="referencia_pago" class="amount-input"
+                                        style="border-color: #f59e0b;" placeholder="N° Operación (Opcional)">
                                 </div>
-                            </template>
+                            @endif
 
                             <div class="flex-btn">
-                                <button class="btn-agregar" @click="addPayment(); requiereReferencia = false;"
-                                    :disabled="!canAddPayment" style="width: 100%; margin: 0;">
-                                    + AGREGAR
+                                <button class="btn-agregar" wire:click="agregarPago" wire:loading.attr="disabled"
+                                    wire:target="agregarPago">
+                                    <span wire:loading.remove wire:target="agregarPago">+ AGREGAR</span>
+                                    <div wire:loading wire:target="agregarPago">
+                                        <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"
+                                            fill="none">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10"
+                                                stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor"
+                                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                            </path>
+                                        </svg>
+                                    </div>
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    {{-- PAGOS PARCIALES --}}
+                    {{-- SECCIÓN PAGOS REGISTRADOS (CON DISEÑO DE CARD) --}}
+                    {{-- SECCIÓN PAGOS REGISTRADOS --}}
                     <div class="card-section">
                         <h3 class="section-title-modern">PAGOS REGISTRADOS</h3>
+
                         <div class="pagos-grid-modern">
-                            <template x-for="(pago, index) in pagos" :key="index">
-                                <div class="pago-card" style="position: relative; overflow: hidden;">
-                                    {{-- ICONO DE MARCA DE AGUA (BILLETE) --}}
-                                    <div class="pago-watermark">
-                                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <path
-                                                d="M17 9V7C17 5.89543 16.1046 5 15 5H3C1.89543 5 1 5.89543 1 7V15C1 16.1046 1.89543 17 3 17H5M9 9H21C22.1046 9 23 9.89543 23 11V19C23 20.1046 22.1046 21 21 21H9C7.89543 21 7 20.1046 7 19V11C7 9.89543 7.89543 9 9 9ZM15 17C16.1046 17 17 16.1046 17 15C17 13.8954 16.1046 13 15 13C13.8954 13 13 13.8954 13 15C13 16.1046 13.8954 17 15 17Z"
-                                                stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-                                                stroke-linejoin="round" />
-                                        </svg>
-                                    </div>
+                            @forelse ($pagos_agregados as $index => $pago)
+                                <div class="pago-card"
+                                    style="position: relative; overflow: hidden; background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                     <div class="pago-card-content">
-                                        <div class="pago-details">
-                                            <div style="display: flex; flex-direction: column;">
-                                                <span class="pago-name-tag" x-text="pago.name"></span>
+                                        <div class="pago-details" style="display: flex; flex-direction: column;">
+                                            <span class="pago-name-tag"
+                                                style="font-weight: bold; color: #374151; font-size: 0.85rem; text-transform: uppercase;">
+                                                {{ $pago['name'] }}
+                                            </span>
 
-                                                <template x-if="pago.referencia">
-                                                    <span
-                                                        style="font-size: 10px; color: #f59e0b; font-weight: bold; margin-top: 2px;">
-                                                        <span style="opacity: 0.7;">Ref:</span> <span
-                                                            x-text="pago.referencia"></span>
-                                                    </span>
-                                                </template>
-                                            </div>
+                                            @if (!empty($pago['referencia']))
+                                                <span style="font-size: 11px; color: #f59e0b; font-weight: 600;">
+                                                    Ref: {{ $pago['referencia'] }}
+                                                </span>
+                                            @endif
 
-                                            <div class="pago-amount-display">
-                                                <span class="pago-currency">S/</span>
-                                                <span class="pago-value"
-                                                    x-text="parseFloat(pago.amount).toFixed(2)"></span>
+                                            <div class="pago-amount-display"
+                                                style="margin-top: 4px; color: #111827; font-size: 1.1rem; font-weight: 800;">
+                                                <span>S/ {{ number_format($pago['amount'], 2) }}</span>
                                             </div>
                                         </div>
                                     </div>
-                                    <button class="btn-delete-minimal" @click="removePayment(index)">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                            stroke-width="2">
-                                            <path
-                                                d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
-                                            </path>
-                                        </svg>
+
+                                    <button type="button" class="btn-delete-minimal"
+                                        wire:click="quitarPago({{ $index }})" wire:loading.attr="disabled"
+                                        wire:target="quitarPago({{ $index }})"
+                                        style="color: #ef4444; background: #fef2f2; border-radius: 8px; padding: 8px; border: none; cursor: pointer;">
+
+                                        <div wire:loading.remove wire:target="quitarPago({{ $index }})">
+                                            <x-heroicon-o-trash class="w-5 h-5" />
+                                        </div>
+
+                                        <div wire:loading wire:target="quitarPago({{ $index }})">
+                                            <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10"
+                                                    stroke="currentColor" stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor"
+                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                                </path>
+                                            </svg>
+                                        </div>
                                     </button>
                                 </div>
-                            </template>
+                                {{-- 🟢 LA CORRECCIÓN ESTÁ AQUÍ: De @afterelse a @empty --}}
+                            @empty
+                                <div class="empty-state-simple"
+                                    style="text-align: center; color: #9ca3af; padding: 20px;">
+                                    No hay pagos registrados
+                                </div>
+                            @endforelse
                         </div>
-                        <div x-show="pagos.length === 0" class="empty-state-simple">No hay pagos registrados</div>
                     </div>
                 </div>
 
@@ -250,7 +266,10 @@
                         <div class="totals-summary">
                             <div class="summary-row"><span>GRAVADA</span><span x-text="'S/ ' + opGravada"></span>
                             </div>
-                            <div class="summary-row"><span>IGV (18%)</span><span x-text="'S/ ' + igv"></span></div>
+                            <div class="summary-row">
+                                <span>IGV (<span x-text="taxPercentage"></span>%)</span>
+                                <span x-text="'S/ ' + igv"></span>
+                            </div>
                             <div class="summary-row" style="color: #EF4444;"><span>DESCUENTO</span><span
                                     x-text="'- S/ ' + (parseFloat(discountInput)||0).toFixed(2)"></span></div>
                             <div class="divider"></div>
@@ -308,7 +327,7 @@
                                         src="{{ route('sales.print.ticket', ['sale' => $ventaExitosaId]) }}?hide_actions=1"
                                         class="ticket-iframe"></iframe>
                                 </div>
-                            {{-- @else
+                                {{-- @else
                                 <div style="text-align: center; padding: 20px 0; color: #6b7280;">
                                     <x-heroicon-o-document-check
                                         style="width: 40px; height: 40px; margin: 0 auto; opacity: 0.5;" />
@@ -347,7 +366,7 @@
 
                                     {{-- Estado Cargando --}}
                                     <div wire:loading>
-                                       <x-spiner-text>PROCESANDO...</x-spiner-text>
+                                        <x-spiner-text>PROCESANDO...</x-spiner-text>
                                     </div>
                                 </button>
                             </div>
@@ -360,33 +379,24 @@
         @push('scripts')
             <script>
                 document.addEventListener('alpine:init', () => {
-                    Alpine.data('posCheckout', ({
-                        subtotalBase,
-                        metodosBackend
-                    }) => ({
-                        subtotalBase: parseFloat(subtotalBase),
+                    Alpine.data('posCheckout', (config) => ({
+                        // 🟢 Datos base (Vienen del servidor o configuración)
+                        subtotalBase: @entangle('subtotal_base'),
+                        taxPercentage: parseFloat(config.taxRate || 18),
+
+                        // 🟢 Sincronización Directa (Alpine solo "mira" lo que PHP hace)
                         discountInput: @entangle('monto_descuento'),
                         pagos: @entangle('pagos_agregados'),
                         tipo: @entangle('tipo_comprobante'),
-                        clienteActivo: @entangle('cliente_seleccionado'),
                         clienteTieneRuc: @entangle('cliente_tiene_ruc'),
 
-
-                        metodosDisponibles: metodosBackend,
-                        currentMethodId: metodosBackend.length > 0 ? metodosBackend[0].id : null,
-                        currentMethodName: metodosBackend.length > 0 ? metodosBackend[0].name : '',
-                        currentAmount: '',
-                        requiereReferencia: false,
+                        // 🟢 Variables de UI para el formulario de entrada
+                        // Nota: Estas ahora se controlan mejor mediante wire:model en el HTML
+                        currentAmount: @entangle('monto_a_pagar'),
+                        requiereReferencia: @entangle('requiere_referencia'),
 
                         init() {
-                            this.$nextTick(() => {
-                                this.currentAmount = this.totalFinal.toFixed(2);
-                            });
-                            this.$watch('pagos', value => {
-                                $wire.set('pagos_agregados', value);
-                            })
-
-                            // ✅ Escuchar cambios desde Livewire
+                            // Reacciona cuando el cliente cambia para ajustar el tipo de comprobante
                             Livewire.on('cliente-seleccionado', ({
                                 esRuc
                             }) => {
@@ -394,84 +404,48 @@
                             });
                         },
 
+                        // --- CÁLCULOS DINÁMICOS (Solo para visualización en el resumen) ---
                         get totalFinal() {
                             return Math.max(0, this.subtotalBase - (parseFloat(this.discountInput) || 0));
                         },
+
+                        get divisor() {
+                            return 1 + (this.taxPercentage / 100);
+                        },
+
                         get opGravada() {
-                            return (this.totalFinal / 1.18).toFixed(2);
+                            return (this.totalFinal / this.divisor).toFixed(2);
                         },
+
                         get igv() {
-                            return (this.totalFinal - (this.totalFinal / 1.18)).toFixed(2);
+                            return (this.totalFinal - (this.totalFinal / this.divisor)).toFixed(2);
                         },
+
                         get totalPagado() {
-                            return this.pagos.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+                            return (this.pagos || []).reduce((sum, p) => sum + parseFloat(p.amount || 0),
+                                0);
                         },
+
                         get faltante() {
                             let f = this.totalFinal - this.totalPagado;
-                            return f > 0 ? f.toFixed(2) : 0;
+                            return f > 0.001 ? f.toFixed(2) : '0.00';
                         },
+
                         get vuelto() {
                             let v = this.totalPagado - this.totalFinal;
-                            return v > 0 ? v.toFixed(2) : 0;
-                        },
-                        get canAddPayment() {
-                            return parseFloat(this.currentAmount) > 0 && this.currentMethodId != null;
+                            return v > 0.001 ? v.toFixed(2) : '0.00';
                         },
 
                         get esClienteRucValido() {
                             return this.clienteTieneRuc === true;
                         },
 
+                        // --- MÉTODOS DE APOYO VISUAL ---
                         validateDiscount() {
-                            let num = parseFloat(this.discountInput) || 0;
-                            this.discountInput = Math.min(Math.max(0, num), this.subtotalBase);
-                            this.updateCurrentAmount();
-                        },
-
-                        selectMethod(metodo) {
-                            this.currentMethodId = metodo.id;
-                            this.currentMethodName = metodo.name;
-                            this.requiereReferencia = metodo.requiere_referencia;
-                            this.updateCurrentAmount();
-                        },
-
-                        updateCurrentAmount() {
-                            let porPagar = this.totalFinal - this.totalPagado;
-                            this.currentAmount = porPagar > 0 ? porPagar.toFixed(2) : '';
-                        },
-
-                        addPayment() {
-                            if (!this.canAddPayment) return;
-
-                            let amountToAdd = parseFloat(this.currentAmount);
-
-                            // CORRECCIÓN: Acceder a Livewire correctamente
-                            let referenciaActual = this.$wire.referencia_pago || '';
-
-                            let existingIndex = this.pagos.findIndex(p =>
-                                p.id == this.currentMethodId && p.referencia == referenciaActual
-                            );
-
-                            if (existingIndex !== -1) {
-                                this.pagos[existingIndex].amount = (parseFloat(this.pagos[existingIndex]
-                                    .amount) + amountToAdd);
-                            } else {
-                                this.pagos.push({
-                                    id: this.currentMethodId,
-                                    name: this.currentMethodName,
-                                    amount: amountToAdd,
-                                    referencia: referenciaActual
-                                });
+                            // El servidor procesará el descuento, pero esto ayuda a la UI a no mostrar negativos
+                            if (parseFloat(this.discountInput) > this.subtotalBase) {
+                                this.discountInput = this.subtotalBase;
                             }
-
-                            this.updateCurrentAmount();
-                            this.$wire.set('referencia_pago', ''); // Limpiar en el backend
-                            this.requiereReferencia = false; // Ahora sí funcionará
-                        },
-
-                        removePayment(index) {
-                            this.pagos.splice(index, 1);
-                            this.updateCurrentAmount();
                         }
                     }));
                 });
@@ -480,32 +454,16 @@
                     const icon = btn.querySelector('.btn-icon');
                     const loader = btn.querySelector('.btn-loader');
                     const frame = document.querySelector('.ticket-iframe');
-
-                    // Escuchamos el evento de finalización dentro del IFRAME
                     frame.contentWindow.onafterprint = () => {
                         icon.classList.remove('hidden');
                         loader.classList.add('hidden');
                         btn.style.pointerEvents = 'auto';
-                        console.log("Impresión finalizada o cancelada");
                     };
-
-                    // Estado cargando
                     btn.style.pointerEvents = 'none';
                     icon.classList.add('hidden');
                     loader.classList.remove('hidden');
-
-                    // Ejecutar impresión
                     frame.contentWindow.focus();
                     frame.contentWindow.print();
-
-                    // Fallback: Si por alguna razón el navegador no dispara onafterprint
-                    setTimeout(() => {
-                        if (icon.classList.contains('hidden')) {
-                            icon.classList.remove('hidden');
-                            loader.classList.add('hidden');
-                            btn.style.pointerEvents = 'auto';
-                        }
-                    }, 5000);
                 }
             </script>
         @endpush

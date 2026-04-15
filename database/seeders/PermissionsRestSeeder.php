@@ -295,6 +295,35 @@ class PermissionsRestSeeder extends Seeder
                     'eliminar_usuario_rest' => 'Eliminar usuario',
                 ]
             ],
+
+            'comprobantes_electronicos' => [
+                'label' => 'Facturación: Comprobantes',
+                'permissions' => [
+                    'ver_comprobantes_rest' => 'Ver listado de facturas y boletas',
+                    'generar_comunicacion_baja_rest' => 'Anular comprobantes',
+                    'descargar_comprobantes_xml_cdr_pdf_rest' => 'Descargar archivos XML, CDR y PDF',
+                    'enviar_comprobante_sunat_rest' => 'Enviar comprobante a sunat',
+                    'emitir_nota_rest' => 'Generar Nota',
+                ]
+            ],
+
+            'notas_credito_debito' => [
+                'label' => 'Facturación: Notas de Crédito/Débito',
+                'permissions' => [
+                    'ver_notas_creditos_debitos_rest' => 'Ver listado de notas de crédito y débito',
+                    'descargar_notas_xml_cdr_pdf_rest' => 'Descargar archivos XML, CDR y PDF',
+                ]
+            ],
+
+            'resumenes_diarios' => [
+                'label' => 'Facturación: Resúmenes Diarios',
+                'permissions' => [
+                    'ver_resumenes_diarios_rest' => 'Ver listado de resúmenes diarios',
+                    'generar_resumen_diario_rest' => 'Generar y enviar Resumen Diario',
+                    'consultar_tiket_resumen_diario_rest' => 'Consultar Ticket de resumen diario',
+                    'descargar_resumenes_xml_cdr_rest' => 'Descargar archivos XML, CDR',
+                ]
+            ],
             // MODULO DE ROLES Y PERMISOS
             'roles_permisos' => [
                 'label' => 'Gestión de Roles',
@@ -306,6 +335,8 @@ class PermissionsRestSeeder extends Seeder
                     'ver_rol_rest' => 'Ver Rol',
                 ]
             ],
+
+
         ];
 
         // 3. Insertar a la base de datos
