@@ -322,7 +322,6 @@ class OrdenService
     public static function gestionarStockPromocion($promoId, $cantidadPromo, $operacion = 'restar')
     {
         $promo = \App\Models\Promotion::with('promotionproducts.product.variants')->find($promoId);
-
         if (!$promo) return;
 
         foreach ($promo->promotionproducts as $detalle) {
