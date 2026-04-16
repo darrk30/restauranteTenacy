@@ -55,5 +55,5 @@ Route::get('/cuenta-suspendida', function () {
     return view('filament.suspendido');
 })->name('suspendido');
 
-Route::post('webhook/github', [WebhookController::class, 'github'])->name('webhook');
-Route::get('webhook/github', [WebhookController::class, 'github'])->name('webhook');
+Route::post('webhook/github', [WebhookController::class, 'github']);
+Route::get('webhook/github', [WebhookController::class, 'github']);
