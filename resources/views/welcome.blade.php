@@ -213,7 +213,7 @@
                         <h3>Restaurantes & POS</h3>
                         <p>Gestión gastronómica total con nuestro sistema Kipu y menús digitales interactivos.</p>
                         <div class="card-actions">
-                            <a href="https://restaurant-central.tukipu.cloud/app/login" class="btn btn-primario">Ver Demo</a>
+                            <a href="https://restaurant-central.tukipu.cloud/pdv/login" class="btn btn-primario">Ver Demo</a>
                         </div>
                     </div>
                 </div>

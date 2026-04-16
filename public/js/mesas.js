@@ -130,8 +130,8 @@ document.addEventListener('alpine:init', () => {
             // Si está ocupada → ir a orden
             if (tableData.status !== 'free' && tableData.orderId) {
 
-                // window.location = `/app/orden-mesa/${tableData.id}/${tableData.orderId}`;
-                    Livewire.navigate(`/app/orden-mesa/${tableData.id}/${tableData.orderId}`);
+                // window.location = `/pdv/orden-mesa/${tableData.id}/${tableData.orderId}`;
+                    Livewire.navigate(`/pdv/orden-mesa/${tableData.id}/${tableData.orderId}`);
 
                 return;
             }

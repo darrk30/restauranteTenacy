@@ -415,7 +415,7 @@
                     <template x-if="activeTable.status !== 'free'">
                         <div>
                             @can('cobrar_pedido_rest')
-                                <button class="global-menu-item pay" @click="window.location = '/app/pedidos/' + activeTable.orderId + '/pagar'"><x-heroicon-o-credit-card class="icon" /> <span>Pagar cuenta</span></button>
+                                <button class="global-menu-item pay" @click="window.location = '/pdv/pedidos/' + activeTable.orderId + '/pagar'"><x-heroicon-o-credit-card class="icon" /> <span>Pagar cuenta</span></button>
                             @endcan
                             <button class="global-menu-item" style="color: #6366f1;" @click="$wire.abrirModalCambioMesa(activeTable.id); menuOpen = false"><x-heroicon-o-arrows-right-left class="icon" /> <span>Cambiar de Mesa</span></button>
                         </div>

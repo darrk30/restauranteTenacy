@@ -11,7 +11,7 @@
     $badgeLogisticoClass = 'badge-custom-yellow';
 
     $accionBoton = "avanzarEstado({$order->id})";
-    $redireccionPago = "window.location='/app/pedidos/{$order->id}/pagar'";
+    $redireccionPago = "window.location='/pdv/pedidos/{$order->id}/pagar'";
 
     if ($stLogistico === 'preparando') {
         $colorBarra = '#eab308';
@@ -133,7 +133,7 @@
 <div class="ticket-custom-card" wire:key="card-{{ $order->id }}">
     <div style="background-color: {{ $colorBarra }}; position: absolute; top:0; left:0; width:100%; height:5px;"></div>
 
-    <div class="ticket-custom-header" @click="window.location='/app/orden-mesa/nuevo/{{ $order->id }}'">
+    <div class="ticket-custom-header" @click="window.location='/pdv/orden-mesa/nuevo/{{ $order->id }}'">
         <div>
             <div>
                 <span class="tc-code">#{{ $order->code }}</span>
@@ -147,7 +147,7 @@
         </div>
     </div>
 
-    <div class="ticket-custom-body" @click="window.location='/app/orden-mesa/nuevo/{{ $order->id }}'">
+    <div class="ticket-custom-body" @click="window.location='/pdv/orden-mesa/nuevo/{{ $order->id }}'">
         <div class="tc-client-box">
             <div class="tc-client-name">
                 <x-heroicon-m-user style="width: 16px; height: 16px; color: var(--tc-text-muted);" />
