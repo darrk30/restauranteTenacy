@@ -56,4 +56,3 @@ Route::get('/cuenta-suspendida', function () {
 })->name('suspendido');
 
 Route::post('webhook/github', [WebhookController::class, 'github']);
-Route::get('webhook/github', [WebhookController::class, 'github']);
