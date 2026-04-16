@@ -117,7 +117,7 @@ class OrdenMesa extends Page implements HasActions
             }, 'details.product'])->find($this->pedido);
 
             if (!$ordenExistente || $ordenExistente->status === StatusPedido::Cancelado) {
-                return redirect()->to("/app/point-of-sale");
+                return redirect()->to("/pdv/point-of-sale");
             }
 
             $this->cliente_id = $ordenExistente->cliente_id;
@@ -215,7 +215,7 @@ class OrdenMesa extends Page implements HasActions
             // 4. Redirección
             $paramMesa = $this->mesa ?? 'nuevo';
             return redirect()
-                ->to("/app/orden-mesa/{$paramMesa}/{$order->id}")
+                ->to("/pdv/orden-mesa/{$paramMesa}/{$order->id}")
                 ->with('orden_creada_id', $order->id);
         } catch (\Exception $e) {
             Notification::make()->title('Error al procesar')->body($e->getMessage())->danger()->send();
@@ -545,7 +545,7 @@ class OrdenMesa extends Page implements HasActions
             DB::commit();
 
             Notification::make()->title('Pedido anulado correctamente')->success()->send();
-            return redirect()->to("/app/point-of-sale");
+            return redirect()->to("/pdv/point-of-sale");
         } catch (\Exception $e) {
             DB::rollBack();
             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();

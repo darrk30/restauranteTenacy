@@ -70,7 +70,7 @@ class Dashboard extends BaseDashboard
             // 🎯 Prioridad 1: Si es cajero/mozo y tiene acceso al POS, va directo allí.
             try {
                 if ($user->hasPermissionTo('ver_punto_venta' . $sufijo)) {
-                    return redirect()->to('/app/point-of-sale');
+                    return redirect()->to('/pdv/point-of-sale');
                 }
             } catch (\Exception $e) {}
 

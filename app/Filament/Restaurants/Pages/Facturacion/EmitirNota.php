@@ -328,7 +328,7 @@ class EmitirNota extends Page
                     'message'      => substr($respuesta['message'] ?? 'Error de conexión', 0, 250)
                 ]);
                 Notification::make()->title('Fallo envío a API')->danger()->send();
-                return redirect()->to('/app/comprobantes');
+                return redirect()->to('/pdv/comprobantes');
             }
 
             // 5. PROCESAR RESPUESTA COMPLETA Y GUARDAR ARCHIVOS
@@ -382,7 +382,7 @@ class EmitirNota extends Page
             Notification::make()->title('Error Crítico')->body($e->getMessage())->danger()->send();
         }
 
-        return redirect()->to('/app/comprobantes');
+        return redirect()->to('/pdv/comprobantes');
     }
 
     protected function getFormActions(): array

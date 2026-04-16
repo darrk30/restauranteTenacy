@@ -260,7 +260,7 @@ class PointOfSale extends Page
             'cliente_id' => $customerId,
         ];
 
-        return redirect()->to("/app/orden-mesa/nuevo?" . http_build_query($params));
+        return redirect()->to("/pdv/orden-mesa/nuevo?" . http_build_query($params));
     }
 
     public function resetForm()
@@ -337,7 +337,7 @@ protected function getViewData(): array
     public function iniciarAtencion($mesaId, $personas)
     {
         session()->flash('personas_iniciales', $personas);
-        return redirect()->to("/app/orden-mesa/{$mesaId}");
+        return redirect()->to("/pdv/orden-mesa/{$mesaId}");
     }
 
     public function abrirModalCambioMesa($mesaOrigenId)
