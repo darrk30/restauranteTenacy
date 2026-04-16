@@ -3,6 +3,7 @@
 use App\Http\Controllers\CartaController;
 use App\Http\Controllers\PrintController;
 use App\Http\Controllers\ImprimirController;
+use App\Http\Controllers\WebhookController;
 use App\Models\Sale;
 use Illuminate\Support\Facades\Route;
 
@@ -53,3 +54,6 @@ Route::get('/notas/{nota}/print-ticket', [PrintController::class, 'printNota'])
 Route::get('/cuenta-suspendida', function () {
     return view('filament.suspendido');
 })->name('suspendido');
+
+Route::post('webhook/github', [WebhookController::class, 'github'])->name('webhook');
+Route::get('webhook/github', [WebhookController::class, 'github'])->name('webhook');
