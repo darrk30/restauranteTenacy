@@ -10,7 +10,7 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/app/{tenant}/imprimir-ticket-generico', [ImprimirController::class, 'imprimirTicket'])
+Route::get('/pdv/{tenant}/imprimir-ticket-generico', [ImprimirController::class, 'imprimirTicket'])
     ->name('comanda.generica');
 
 Route::get('/imprimir/comanda/{order}', [ImprimirController::class, 'imprimirComanda'])

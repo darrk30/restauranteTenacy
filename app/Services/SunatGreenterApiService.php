@@ -11,8 +11,7 @@ class SunatGreenterApiService
 
     public function __construct()
     {
-        // Asegúrate de usar la variable de entorno o config correcta donde esté tu API
-        $this->apiUrl = config('app.api_facturacion_url', 'http://facturacion.test');
+        $this->apiUrl = env('GREENTER_API_URL', 'http://facturacion.test');
     }
 
     /**

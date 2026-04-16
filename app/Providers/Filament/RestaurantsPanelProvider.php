@@ -35,7 +35,7 @@ class RestaurantsPanelProvider extends PanelProvider
     public function panel(Panel $panel): Panel
     {
         return $panel
-            ->id('app')
+            ->id('pdv')
             ->default()
             ->brandName(fn() => auth()->user()?->restaurants()->first()?->name_comercial ?? 'Mi Restaurante')
             ->brandLogo(function () {
@@ -49,7 +49,7 @@ class RestaurantsPanelProvider extends PanelProvider
             })
             ->brandLogoHeight('3.5rem')
             ->favicon('/img/restaurant-favicon.ico')
-            ->path('app')
+            ->path('pdv')
             // ->profile()
             ->login()
             // ->colors([
@@ -198,7 +198,7 @@ class RestaurantsPanelProvider extends PanelProvider
                 @can("ver_punto_venta_rest")
                     <div class="flex justify-center p-2">
                         <x-filament::button 
-                            href="/app/point-of-sale" 
+                            href="/pdv/point-of-sale" 
                             tag="a" 
                             icon="heroicon-o-computer-desktop" 
                             color="success" 

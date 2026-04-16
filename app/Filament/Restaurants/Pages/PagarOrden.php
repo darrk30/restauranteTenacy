@@ -666,7 +666,7 @@ class PagarOrden extends Page implements HasForms, HasActions
 
     public function terminarProcesoVenta()
     {
-        return redirect()->to("/app/point-of-sale");
+        return redirect()->to("/pdv/point-of-sale");
     }
 
     public function getHeading(): string
