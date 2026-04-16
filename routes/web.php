@@ -28,7 +28,7 @@ Route::get('/sale/print/{sale}', function (Sale $sale) {
 })->name('sale.ticket.print');
 
 Route::get('/precuenta/{order}', function (\App\Models\Order $order) {
-    // 🟢 Cargamos las relaciones, pero filtramos los detalles para excluir los cancelados
+    // Cargamos las relaciones, pero filtramos los detalles para excluir los cancelados
     $order->load([
         'details' => function ($query) {
             $query->where('status', '!=', \App\Enums\StatusPedido::Cancelado);
