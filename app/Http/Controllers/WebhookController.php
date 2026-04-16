@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GithubWebhook;
 use Illuminate\Http\Request;
 
 class WebhookController extends Controller
@@ -13,9 +14,7 @@ class WebhookController extends Controller
         if ($request->header('X-Hub-Signature') !== $signature) {
             return response('Firma no válida', 403);
         }
-        putenv('HOME=/home/tukipu'); 
-        putenv('PATH=/usr/local/bin:/usr/bin:/bin');
-        shell_exec('dploy deploy master');
+        GithubWebhook::dispatch();
         return response('Webhook recibido', 200);
     }
 }
