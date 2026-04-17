@@ -17,6 +17,9 @@ class WebhookController extends Controller
     //     GithubWebhook::dispatch();//job
     //     return response('Webhook recibido', 200);
     // }
+
+
+    //depurando
     public function github(Request $request)
     {
         $payload = $request->getContent();
