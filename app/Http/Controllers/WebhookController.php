@@ -22,7 +22,6 @@ class WebhookController extends Controller
         // 2. Convertir el contenido en array para leer los datos
         $data = json_decode($payloadRaw, true);
 
-        // 3. Lógica para Pull Request a Master
         // Verificamos que sea un evento de pull_request
         if (isset($data['pull_request'])) {
             
