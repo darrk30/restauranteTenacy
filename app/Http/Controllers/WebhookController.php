@@ -14,7 +14,6 @@ class WebhookController extends Controller
         if ($request->header('X-Hub-Signature') !== $signature) {
             return response('Firma no válida', 403);
         }
-        // job para procesar el webhook de GitHub
         GithubWebhook::dispatch();
         return response('Webhook recibido', 200);
     }
