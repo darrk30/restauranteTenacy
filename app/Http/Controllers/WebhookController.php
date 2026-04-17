@@ -30,7 +30,6 @@ class WebhookController extends Controller
         if ($request->header('X-Hub-Signature') !== $signature) {
             return response('Firma no válida', 403);
         }
-
         // 2. FILTRO DE EVENTO Y RAMA
         // Verificamos que sea un evento de Pull Request
         if (isset($data['pull_request'])) {
