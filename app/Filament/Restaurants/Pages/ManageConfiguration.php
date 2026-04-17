@@ -11,9 +11,11 @@ use Filament\Forms\Components\Section;
 use Filament\Forms\Form;
 use Filament\Pages\Page;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Concerns\InteractsWithForms;
+use Illuminate\Support\Facades\Cache;
 
 class ManageConfiguration extends Page implements HasForms
 {
@@ -134,17 +136,24 @@ class ManageConfiguration extends Page implements HasForms
                                         ->required()
                                         ->minValue(0)
                                         ->maxValue(100),
-                                    
+
                                     Toggle::make('envio_boletas')
                                         ->label('Envio de boletas automatico')
                                         ->inline(false)
                                         ->onColor('success'),
-    
+
                                     Toggle::make('envio_facturas')
                                         ->label('Envio de facturas automatico')
                                         ->inline(false)
                                         ->onColor('success'),
                                 ]),
+                                Grid::make(2)->schema([
+                                    TextInput::make('api_url')->label('URL de la API Facturador')->placeholder('https://api.tu-facturador.com'),
+                                    TextInput::make('api_token')->label('Token de Seguridad API'),
+                                    TextInput::make('sol_user')->label('Usuario SOL'),
+                                    TextInput::make('sol_pass')->label('Clave SOL')->password()->revealable(),
+                                    FileUpload::make('cert_path')->label('Certificado (.pem)')->disk('public')->directory('certs'),
+                                ])
                             ]),
 
                     ])
@@ -158,19 +167,15 @@ class ManageConfiguration extends Page implements HasForms
         $data = $this->form->getState();
         $tenant = Filament::getTenant();
 
-        // 💡 NOTA SEGURA: Si una pestaña está oculta por falta de permisos,
-        // Filament no envía sus campos en $data. 
-        // `updateOrCreate` solo actualizará las columnas que vengan en el $data,
-        // por lo tanto, no borrará accidentalmente la configuración de las pestañas ocultas.
-        $config = Configuration::updateOrCreate(
+        // 1. Guardar configuración (esto dispara el booted() -> saved() y limpia la caché)
+        \App\Models\Configuration::updateOrCreate(
             ['restaurant_id' => $tenant->id],
             $data
         );
 
-        Notification::make()
-            ->success()
-            ->title('¡Cambios guardados!')
-            ->body('La configuración se aplicó correctamente.')
-            ->send();
+        // 2. Sincronizar (usamos el Service que ya lee la nueva caché)
+        \App\Services\BillingSyncService::sync($tenant);
+
+        Notification::make()->title('Configuración guardada')->success()->send();
     }
 }
