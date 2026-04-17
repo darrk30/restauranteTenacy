@@ -430,9 +430,7 @@ class OrdenMesa extends Page implements HasActions
             ]);
 
             DB::commit();
-            // broadcast(new StockActualizado())->toOthers();
             StockActualizado::dispatch();
-            // 🟢 PASO 6: IMPRESIÓN Y NOTIFICACIONES
             $config = Filament::getTenant()->cached_config;
             if (!empty($diffParaCocina['nuevos']) || !empty($diffParaCocina['cancelados'])) {
                 if ($config->mostrar_modal_impresion_comanda) {
