@@ -25,12 +25,8 @@ class Restaurant extends Model
         'status',
         'logo',
         'slug',
-        'api_token',
         'carta_activa_cliente',
         'carta_activa_admin',
-        'production',
-        'sol_user',
-        'sol_pass',
         // 'cert_path',
     ];
 
@@ -59,6 +55,11 @@ class Restaurant extends Model
                 'habilitar_recojo_web' => true,
                 'precios_incluyen_impuesto' => true,
                 'porcentaje_impuesto' => 18.00,
+                'production' => false,
+                'api_token' => null,
+                'api_url' => null,
+                'sol_user' => null,
+                'sol_pass' => null,
             ]);
         });
     }

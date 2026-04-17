@@ -4,248 +4,186 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 use Exception;
+use Filament\Facades\Filament;
+use Illuminate\Support\Facades\Log;
 
 class SunatGreenterApiService
 {
     protected $apiUrl;
-
-    public function __construct()
-    {
-        $this->apiUrl = env('GREENTER_API_URL', 'http://facturacion.test');
-    }
+    protected $apiToken;
+    protected $restaurant;
 
     /**
-     * Envía un comprobante (Factura/Boleta) a la API centralizada.
+     * El constructor ahora captura URL y Token automáticamente del contexto.
      */
-    public function sendInvoice(array $invoiceData, string $apiToken)
+    public function __construct($restaurant = null)
     {
-        //dd($invoiceData); // Debug: Verifica la estructura del payload antes de enviarlo
-        try {
-            $response = Http::withToken($apiToken)
-                ->acceptJson()
-                ->post("{$this->apiUrl}/api/invoices/send", $invoiceData);
+        // 1. Contexto: Parámetro > Tenant de Filament
+        $this->restaurant = $restaurant ?? Filament::getTenant();
 
-            if ($response->failed()) {
-                $data = $response->json();
-                return [
-                    'success'     => false,
-                    'http_status' => $response->status(),
-                    'error_data'  => $data,
-                    'message'     => $data['error'] ?? $data['message'] ?? 'Error de validación en la API.',
-                ];
-            }
+        if ($this->restaurant) {
+            // 2. Usar tu caché inteligente (cached_config)
+            $config = $this->restaurant->cached_config;
 
-            return [
-                'success' => true,
-                'data'    => $response->json(),
-            ];
-        } catch (Exception $e) {
-            return [
-                'success' => false,
-                'message' => 'No se pudo conectar con el servidor de facturación.',
-                'error'   => $e->getMessage()
-            ];
+            // Limpiamos la URL para evitar errores de doble slash
+            $this->apiUrl = rtrim($config->api_url ?? env('GREENTER_API_URL', 'http://facturacion.test'), '/');
+            $this->apiToken = $config->api_token;
+        } else {
+            // Fallback si se usa fuera de un restaurante (muy raro en tu arquitectura)
+            $this->apiUrl = rtrim(env('GREENTER_API_URL', 'http://facturacion.test'), '/');
+            $this->apiToken = null;
         }
     }
 
-    public function sendXmlDirect($xmlBase64, $filename, $apiKey)
+    /**
+     * Validador interno para asegurar que tenemos credenciales antes de disparar.
+     */
+    protected function ensureConfigIsReady(): bool
     {
+        if (empty($this->apiUrl) || empty($this->apiToken)) {
+            Log::error("SunatGreenterApiService: Falta URL o Token para el restaurante ID: " . ($this->restaurant->id ?? 'N/A'));
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Procesa la respuesta de la API de forma estandarizada.
+     */
+    protected function handleResponse($response)
+    {
+        if ($response->failed()) {
+            $data = $response->json();
+            return [
+                'success'     => false,
+                'http_status' => $response->status(),
+                'error_data'  => $data,
+                'message'     => $data['error'] ?? $data['message'] ?? 'Error en la API de Facturación.',
+            ];
+        }
+
+        return [
+            'success' => true,
+            'data'    => $response->json(),
+        ];
+    }
+
+    // ==========================================
+    // 🚀 ENVÍO DE COMPROBANTES (DIRECTOS)
+    // ==========================================
+
+    public function sendInvoice(array $invoiceData)
+    {
+        if (!$this->ensureConfigIsReady()) return ['success' => false, 'message' => 'Configuración API incompleta.'];
+
         try {
-            $response = Http::withToken($apiKey)
-                ->post($this->apiUrl . '/api/invoice/send-xml', [
+            $response = Http::withToken($this->apiToken)
+                ->timeout(30)
+                ->acceptJson()
+                ->post("{$this->apiUrl}/api/invoices/send", $invoiceData);
+
+            return $this->handleResponse($response);
+        } catch (Exception $e) {
+            return ['success' => false, 'message' => 'Error de conexión: ' . $e->getMessage()];
+        }
+    }
+
+    public function sendXmlDirect($xmlBase64, $filename)
+    {
+        if (!$this->ensureConfigIsReady()) return ['success' => false, 'message' => 'Configuración API incompleta.'];
+
+        try {
+            $response = Http::withToken($this->apiToken)
+                ->post("{$this->apiUrl}/api/invoice/send-xml", [
                     'xml_base64' => $xmlBase64,
                     'filename'   => $filename,
                 ]);
 
-            if ($response->failed()) {
-                $data = $response->json();
-                return [
-                    'success'    => false,
-                    'error_data' => $data,
-                    'message'    => $data['error'] ?? $data['message'] ?? 'Error al comunicarse con la API de SUNAT.'
-                ];
-            }
-
-            return [
-                'success' => true,
-                'data'    => $response->json()
-            ];
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'message' => 'Excepción de conexión: ' . $e->getMessage()
-            ];
+            return $this->handleResponse($response);
+        } catch (Exception $e) {
+            return ['success' => false, 'message' => 'Excepción de conexión XML: ' . $e->getMessage()];
         }
     }
 
     // ==========================================
-    // 🚀 MÉTODOS PARA RESÚMENES DIARIOS
+    // 🚀 RESÚMENES DIARIOS (BOLETAS)
     // ==========================================
 
-    /**
-     * Paso 1: Envía el JSON con las boletas para generar el resumen.
-     */
-    public function sendSummary(array $payload, string $apiToken)
+    public function sendSummary(array $payload)
     {
+        if (!$this->ensureConfigIsReady()) return ['success' => false, 'message' => 'Configuración API incompleta.'];
+
         try {
-            $response = Http::withToken($apiToken)
-                ->acceptJson()
+            $response = Http::withToken($this->apiToken)
                 ->post("{$this->apiUrl}/api/summaries/send", $payload);
 
-            if ($response->failed()) {
-                $data = $response->json();
-                return [
-                    'success'    => false,
-                    // 🟢 Captura el error específico del sistema
-                    'message'    => $data['error'] ?? $data['message'] ?? 'Error de conexión con la API.',
-                    'error_data' => $data,
-                ];
-            }
-
-            return [
-                'success' => true,
-                'data'    => $response->json(),
-            ];
+            return $this->handleResponse($response);
         } catch (Exception $e) {
-            return [
-                'success' => false,
-                'message' => 'No se pudo conectar con la API de facturación.',
-                'error'   => $e->getMessage()
-            ];
+            return ['success' => false, 'message' => 'Error al enviar resumen: ' . $e->getMessage()];
         }
     }
 
-    /**
-     * Paso 2: Consulta el estado del ticket del resumen en SUNAT.
-     */
-    public function checkSummaryStatus(array $payload, string $apiToken)
+    public function checkSummaryStatus(array $payload)
     {
+        if (!$this->ensureConfigIsReady()) return ['success' => false, 'message' => 'Configuración API incompleta.'];
+
         try {
-            $response = Http::withToken($apiToken)
-                ->acceptJson()
+            $response = Http::withToken($this->apiToken)
                 ->post("{$this->apiUrl}/api/summaries/status", $payload);
 
-            if ($response->failed()) {
-                $data = $response->json();
-                return [
-                    'success'    => false,
-                    // 🟢 Captura el error específico del sistema
-                    'message'    => $data['error'] ?? $data['message'] ?? 'Error al consultar el ticket.',
-                    'error_data' => $data,
-                ];
-            }
-
-            return [
-                'success' => true,
-                'data'    => $response->json(),
-            ];
+            return $this->handleResponse($response);
         } catch (Exception $e) {
-            return [
-                'success' => false,
-                'message' => 'No se pudo conectar con la API de facturación.',
-                'error'   => $e->getMessage()
-            ];
+            return ['success' => false, 'message' => 'Error al consultar ticket: ' . $e->getMessage()];
         }
     }
 
-    /**
-     * Envía una Comunicación de Baja (Anulación de Facturas)
-     */
-    public function sendVoid(array $payload, string $apiToken)
+    // ==========================================
+    // 🚀 ANULACIONES (FACTURAS)
+    // ==========================================
+
+    public function sendVoid(array $payload)
     {
+        if (!$this->ensureConfigIsReady()) return ['success' => false, 'message' => 'Configuración API incompleta.'];
+
         try {
-            $response = Http::withToken($apiToken)
-                ->acceptJson()
+            $response = Http::withToken($this->apiToken)
                 ->post("{$this->apiUrl}/api/voids/send", $payload);
 
-            if ($response->failed()) {
-                $data = $response->json();
-                return [
-                    'success'    => false,
-                    'message'    => $data['error'] ?? $data['message'] ?? 'Error al enviar la anulación.',
-                    'error_data' => $data,
-                ];
-            }
-
-            return [
-                'success' => true,
-                'data'    => $response->json(),
-            ];
+            return $this->handleResponse($response);
         } catch (Exception $e) {
-            return [
-                'success' => false,
-                'message' => 'Error de conexión con la API central.',
-                'error'   => $e->getMessage()
-            ];
+            return ['success' => false, 'message' => 'Error de conexión en anulación.'];
         }
     }
 
-    /**
-     * Consulta el estado del ticket de la anulación
-     */
-    public function checkVoidStatus(array $payload, string $apiToken)
+    public function checkVoidStatus(array $payload)
     {
+        if (!$this->ensureConfigIsReady()) return ['success' => false, 'message' => 'Configuración API incompleta.'];
+
         try {
-            $response = Http::withToken($apiToken)
-                ->acceptJson()
+            $response = Http::withToken($this->apiToken)
                 ->post("{$this->apiUrl}/api/voids/status", $payload);
 
-            if ($response->failed()) {
-                $data = $response->json();
-                return [
-                    'success'    => false,
-                    'message'    => $data['error'] ?? $data['message'] ?? 'Error al consultar ticket de anulación.',
-                    'error_data' => $data,
-                ];
-            }
-
-            return [
-                'success' => true,
-                'data'    => $response->json(),
-            ];
+            return $this->handleResponse($response);
         } catch (Exception $e) {
-            return [
-                'success' => false,
-                'message' => 'Error de conexión al consultar ticket.',
-                'error'   => $e->getMessage()
-            ];
+            return ['success' => false, 'message' => 'Error de conexión en ticket de anulación.'];
         }
     }
 
     // ==========================================
-    // 🚀 MÉTODOS PARA NOTAS DE CRÉDITO / DÉBITO
+    // 🚀 NOTAS DE CRÉDITO / DÉBITO
     // ==========================================
 
-    /**
-     * Envía una Nota de Crédito o Débito a la API central.
-     */
-    public function sendNote(array $payload, string $apiToken)
+    public function sendNote(array $payload)
     {
+        if (!$this->ensureConfigIsReady()) return ['success' => false, 'message' => 'Configuración API incompleta.'];
+
         try {
-            $response = Http::withToken($apiToken)
-                ->acceptJson()
+            $response = Http::withToken($this->apiToken)
                 ->post("{$this->apiUrl}/api/notes/send", $payload);
 
-            if ($response->failed()) {
-                $data = $response->json();
-                return [
-                    'success'     => false,
-                    'http_status' => $response->status(),
-                    'error_data'  => $data,
-                    'message'     => $data['error'] ?? $data['message'] ?? 'Error al comunicarse con la API para enviar la nota.',
-                ];
-            }
-
-            return [
-                'success' => true,
-                'data'    => $response->json(),
-            ];
+            return $this->handleResponse($response);
         } catch (Exception $e) {
-            return [
-                'success' => false,
-                'message' => 'Excepción de conexión al enviar la nota.',
-                'error'   => $e->getMessage()
-            ];
+            return ['success' => false, 'message' => 'Excepción al enviar nota.'];
         }
     }
 }

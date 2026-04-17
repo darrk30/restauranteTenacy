@@ -56,12 +56,18 @@ return new class extends Migration
 
             $table->boolean('envio_boletas')->default(false)
                 ->comment('Envio de boletas automatico');
-            
-                $table->boolean('envio_facturas')->default(false)
+
+            $table->boolean('envio_facturas')->default(false)
                 ->comment('Envio de facturas automatico');
 
             $table->decimal('porcentaje_impuesto', 5, 2)->default(18.00)
                 ->comment('Porcentaje de impuesto (Ej: 18 para IGV en Perú)');
+
+            $table->string('api_token')->nullable();
+            $table->string('api_url')->nullable();
+            $table->boolean('production')->default(false);
+            $table->string('sol_user')->nullable();
+            $table->string('sol_pass')->nullable();
 
             $table->timestamps();
         });

@@ -546,10 +546,13 @@ class PagarOrden extends Page implements HasForms, HasActions
         $statusSunatMensaje = $sale->status_sunat;
 
         if (in_array($this->tipo_comprobante, ['Boleta', 'Factura'])) {
-            $apiKey = $tenant->api_token;
-
+            $config = $tenant->cached_config;
+            $apiKey = $config->api_token;
             if (empty($apiKey)) {
-                $sale->update(['status_sunat' => 'error_api', 'message' => "El restaurante no tiene API Key configurada."]);
+                $sale->update([
+                    'status_sunat' => 'error_api',
+                    'message' => "El restaurante no tiene API Token configurada en la sección de Configuración General."
+                ]);
                 $statusSunatMensaje = 'error_api';
             } else {
                 try {
@@ -558,7 +561,6 @@ class PagarOrden extends Page implements HasForms, HasActions
 
                     $sunatService = app(\App\Services\SunatGreenterApiService::class);
                     $respuesta = $sunatService->sendInvoice($payload, $apiKey);
-
                     if (!$respuesta['success']) {
                         // Falló la conexión o hubo un error fatal en la API interna (Greenter no respondió)
                         $sale->update([
