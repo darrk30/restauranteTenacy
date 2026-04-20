@@ -1,5 +1,7 @@
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/ordenmesa.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/cardproduct.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/ticket-modal.css') }}">
 @endpush
 
 {{-- AGREGAMOS x-data AQUÍ PARA CONTROLAR EL CARRITO MÓVIL EN TODA LA PÁGINA --}}
@@ -71,17 +73,42 @@
                                     tooltipOpen: false,
                                     isPressing: false,
                                     pressTimer: null,
+                                    touchStartX: 0,
+                                    touchStartY: 0,
                                 
-                                    startPress() {
-                                        @if ($product->esta_agotado) return; @endif
+                                    resetAll() {
+                                        clearTimeout(this.pressTimer);
+                                        this.isPressing = false;
+                                        this.$nextTick(() => {
+                                            this.tooltipOpen = false;
+                                        });
+                                    },
                                 
+                                    startPress(e) {
+                                        @if($product->esta_agotado)
+                                        return;
+                                        @endif
+                                        if (e.touches) {
+                                            this.touchStartX = e.touches[0].clientX;
+                                            this.touchStartY = e.touches[0].clientY;
+                                        }
                                         this.isPressing = true;
                                         this.pressTimer = setTimeout(() => {
                                             this.isPressing = false;
                                             this.tooltipOpen = true;
-                                        }, 500); // 500ms para mantener presionado
+                                        }, 500);
                                     },
-                                    endPress() {
+                                
+                                    endPress(e) {
+                                        if (e.changedTouches) {
+                                            const dx = Math.abs(e.changedTouches[0].clientX - this.touchStartX);
+                                            const dy = Math.abs(e.changedTouches[0].clientY - this.touchStartY);
+                                            if (dx > 10 || dy > 10) {
+                                                clearTimeout(this.pressTimer);
+                                                this.isPressing = false;
+                                                return;
+                                            }
+                                        }
                                         clearTimeout(this.pressTimer);
                                         if (this.isPressing && !this.tooltipOpen) {
                                             this.isPressing = false;
@@ -90,13 +117,15 @@
                                             @endif
                                         }
                                     },
+                                
                                     cancelPress() {
                                         clearTimeout(this.pressTimer);
                                         this.isPressing = false;
                                     }
-                                }" @mousedown="startPress"
-                                @mouseup="endPress" @mouseleave="cancelPress" @touchstart.passive="startPress"
-                                @touchend.passive="endPress" @touchcancel="cancelPress">
+                                }" @mousedown="startPress($event)"
+                                @mouseup="endPress($event)" @mouseleave="cancelPress"
+                                @touchstart.passive="startPress($event)" @touchend.passive="endPress($event)"
+                                @touchmove.passive="cancelPress" @touchcancel="cancelPress">
 
                                 {{-- 1. SPINNER DE LIVEWIRE (Se muestra al hacer click rápido) --}}
                                 {{-- NOTA: Usamos wire:loading.flex para que Livewire lo controle correctamente --}}
@@ -182,19 +211,13 @@
 
                                 {{-- 3. EL TOOLTIP INFORMATIVO OVERLAY (Se abre al completar el Hold) --}}
                                 @if ($tipoProducto === 'Producto' || $tipoProducto === 'Promocion')
-                                    <div x-show="tooltipOpen" x-transition:enter="transition ease-out duration-200"
-                                        class="tooltip-overlay"
-                                        x-transition:enter-start="opacity-0 transform scale-95"
-                                        x-transition:enter-end="opacity-100 transform scale-100"
-                                        x-transition:leave="transition ease-in duration-150"
-                                        x-transition:leave-start="opacity-100 transform scale-100"
-                                        x-transition:leave-end="opacity-0 transform scale-95"
+                                    <div x-show="tooltipOpen" class="tooltip-overlay"
                                         @click.stop="tooltipOpen = false" {{-- Un clic en el overlay lo cierra --}}
                                         {{-- SE AGREGÓ: -webkit-backdrop-filter y backdrop-filter, y se ajustó la opacidad del background a 0.85 --}}>
                                         <h4
                                             class="text-xs font-bold text-gray-300 uppercase mb-3 border-b border-gray-600 pb-2 flex justify-between items-center">
                                             {{ $tipoProducto === 'Promocion' ? 'Descripción' : 'Detalles' }}
-                                            <button @click="tooltipOpen = false" style="color: white">✕</button>
+                                            <button @click.stop="resetAll()" style="color: white">✕</button>
                                         </h4>
 
                                         @if ($tipoProducto === 'Producto')

@@ -1,4 +1,7 @@
 <x-filament-panels::page>
+    @push('styles')
+        <link rel="stylesheet" href="{{ asset('css/kardex-page-filter.css') }}">
+    @endpush
     @php
         $filters = $this->getAppliedFilters();
         $prodId = $filters['producto_variante']['product_id'] ?? null;
@@ -7,38 +10,28 @@
         $fechaHasta = $filters['fecha']['hasta'] ?? null;
     @endphp
 
-    <div style="font-family: 'Inter', system-ui, sans-serif; color: #1f2937;">
+    <div class="kdx-wrap">
         @if ($prodId)
-            {{-- Contenedor Principal --}}
-            <div
-                style="background: #ffffff; border: 1px solid #f3f4f6; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+            <div class="kdx-box">
 
-                {{-- Encabezado Sutil --}}
-                <div
-                    style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid #f9fafb; padding-bottom: 12px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <div style="background: #e0f2fe; padding: 6px; border-radius: 8px;">
-                            <x-heroicon-o-funnel style="width: 18px; height: 18px; color: #0284c7;" />
+                <div class="kdx-header">
+                    <div class="kdx-header-left">
+                        <div class="kdx-icon-wrap">
+                            <x-heroicon-o-funnel class="kdx-icon-funnel" />
                         </div>
-                        <h3
-                            style="font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.025em; color: #6b7280; margin: 0;">
-                            Resumen de Filtros</h3>
+                        <h3 class="kdx-header-title">Resumen de filtros</h3>
                     </div>
-                    <span
-                        style="font-size: 11px; background: #f3f4f6; color: #6b7280; padding: 4px 10px; border-radius: 20px; font-weight: 500;">Kardex
-                        Activo</span>
+                    <span class="kdx-badge">Kardex activo</span>
                 </div>
 
-                {{-- Grid de Datos --}}
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+                <div class="kdx-grid">
 
                     {{-- Producto --}}
-                    <div style="padding: 12px; border-radius: 10px; background: #fcfcfc; border: 1px solid #f3f4f6;">
-                        <span
-                            style="display: block; font-size: 11px; color: #9ca3af; font-weight: 600; margin-bottom: 6px;">PRODUCTO</span>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <x-heroicon-s-cube style="width: 16px; height: 16px; color: #0284c7;" />
-                            <span style="font-size: 14px; font-weight: 600; color: #111827;">
+                    <div class="kdx-item">
+                        <span class="kdx-item-label">PRODUCTO</span>
+                        <div class="kdx-item-row">
+                            <x-heroicon-s-cube class="kdx-icon-blue" />
+                            <span class="kdx-item-value">
                                 {{ \App\Models\Product::find($prodId)?->name ?? 'No encontrado' }}
                             </span>
                         </div>
@@ -46,31 +39,26 @@
 
                     {{-- Variante --}}
                     @if ($varId)
-                        <div
-                            style="padding: 12px; border-radius: 10px; background: #fcfcfc; border: 1px solid #f3f4f6;">
-                            <span
-                                style="display: block; font-size: 11px; color: #9ca3af; font-weight: 600; margin-bottom: 6px;">VARIANTE
-                                / ALMACÉN</span>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <x-heroicon-s-tag style="width: 16px; height: 16px; color: #d97706;" />
-                                <span style="font-size: 14px; font-weight: 600; color: #111827;">
+                        <div class="kdx-item">
+                            <span class="kdx-item-label">VARIANTE / ALMACÉN</span>
+                            <div class="kdx-item-row">
+                                <x-heroicon-s-tag class="kdx-icon-amber" />
+                                <span class="kdx-item-value">
                                     {{ \App\Models\Variant::find($varId)?->full_name ?? 'Estándar' }}
                                 </span>
                             </div>
                         </div>
                     @endif
 
-                    {{-- Fecha --}}
-                    <div style="padding: 12px; border-radius: 10px; background: #fcfcfc; border: 1px solid #f3f4f6;">
-                        <span
-                            style="display: block; font-size: 11px; color: #9ca3af; font-weight: 600; margin-bottom: 6px;">RANGO
-                            DE FECHAS</span>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <x-heroicon-o-calendar style="width: 16px; height: 16px; color: #4b5563;" />
-                            <span style="font-size: 13px; font-weight: 500; color: #111827;">
+                    {{-- Fechas --}}
+                    <div class="kdx-item">
+                        <span class="kdx-item-label">RANGO DE FECHAS</span>
+                        <div class="kdx-item-row">
+                            <x-heroicon-o-calendar class="kdx-icon-muted" />
+                            <span class="kdx-item-value-sm">
                                 @if ($fechaDesde)
                                     {{ \Carbon\Carbon::parse($fechaDesde)->format('d/m/Y') }}
-                                    <span style="color: #d1d5db; margin: 0 4px;">—</span>
+                                    <span class="kdx-date-sep">—</span>
                                     {{ $fechaHasta ? \Carbon\Carbon::parse($fechaHasta)->format('d/m/Y') : 'Hoy' }}
                                 @else
                                     Todo el historial
@@ -82,29 +70,18 @@
                 </div>
             </div>
         @else
-            {{-- Estado Vacío Elegante --}}
-            <div
-                style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; border: 1px solid #f3f4f6; border-radius: 20px; background-color: #ffffff; text-align: center; margin-bottom: 24px;">
-
-                {{-- Icono más minimalista --}}
-                <div style="margin-bottom: 16px; opacity: 0.4;">
-                    <x-heroicon-o-magnifying-glass style="width: 28px; height: 28px; color: #6b7280;" />
-                </div>
-
-                {{-- Texto con tipografía más ligera --}}
-                <h3 style="font-size: 15px; font-weight: 500; color: #4b5563; margin: 0 0 6px 0;">
-                    Selecciona un producto
-                </h3>
-
-                <p style="color: #9ca3af; max-width: 240px; font-size: 12px; line-height: 1.4; margin: 0;">
-                    Usa los filtros de búsqueda para visualizar el historial del Kardex.
+            <div class="kdx-empty">
+                <x-heroicon-o-magnifying-glass class="kdx-empty-icon" />
+                <h3 class="kdx-empty-title">Selecciona un producto</h3>
+                <p class="kdx-empty-desc">
+                    Usa los filtros superiores para cargar el historial de movimientos de inventario.
                 </p>
             </div>
         @endif
 
-        {{-- Tabla --}}
-        <div style="margin-top: 10px;">
+        <div class="kdx-table">
             {{ $this->table }}
         </div>
     </div>
+
 </x-filament-panels::page>

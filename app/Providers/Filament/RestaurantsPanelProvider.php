@@ -17,6 +17,7 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
+use Filament\Support\Colors\Color;
 use Filament\Support\Enums\FontFamily;
 use Filament\Support\Facades\FilamentView;
 use Filament\Widgets;
@@ -50,15 +51,15 @@ class RestaurantsPanelProvider extends PanelProvider
             ->brandLogoHeight('3.5rem')
             ->favicon('/img/restaurant-favicon.ico')
             ->path('pdv')
-            // ->profile()
             ->login()
+            ->profile()
             // ->colors([
-            //     'danger' => '#ED3F27',
-            //     'gray' => '#31363F',
-            //     'info' => '#1A2A4F',
-            //     'primary' => '#1A2A4F',
-            //     'success' => '#73AF6F',
-            //     'warning' => '#FEB21A',
+            //     'danger'  => Color::hex('#E8320A'), // rojo fuego
+            //     'gray'    => Color::hex('#4A4A4A'), // carbón
+            //     'info'    => Color::hex('#F97316'), // naranja vibrante
+            //     'primary' => Color::hex('#4548f8'), // rojo fuego
+            //     'success' => Color::hex('#16A34A'), // verde fresco
+            //     'warning' => Color::hex('#ffc400'), // amarillo mostaza
             // ])
             ->font('Vend Sans', provider: GoogleFontProvider::class)
             ->sidebarCollapsibleOnDesktop()

@@ -117,6 +117,7 @@ class PromotionResource extends Resource
                                     DateTimePicker::make('date_start')
                                         ->label('Fecha de Inicio')
                                         ->native(false)
+                                        ->default(now())
                                         ->displayFormat('d/m/Y H:i'),
 
                                     DateTimePicker::make('date_end')
@@ -135,10 +136,12 @@ class PromotionResource extends Resource
                             ->icon('heroicon-m-shopping-bag')
                             ->schema([
                                 Repeater::make('promotionProducts')
+                                    ->label('Productos en Promoción')
                                     ->relationship()
                                     ->columns(3)
                                     ->schema([
                                         Select::make('product_id')
+                                            ->label('Producto')
                                             ->options(Product::where('status', 'activo')->pluck('name', 'id'))
                                             ->searchable()
                                             ->reactive()
@@ -151,12 +154,13 @@ class PromotionResource extends Resource
                                                 }
                                             }),
                                         Select::make('variant_id')
+                                            ->label('Variante')
                                             ->options(fn(Get $get) => Variant::where('product_id', $get('product_id'))
                                                 ->get()
                                                 ->pluck('full_name', 'id'))
                                             ->searchable()
                                             ->required(),
-                                        TextInput::make('quantity')->numeric()->default(1)->required(),
+                                        TextInput::make('quantity')->label('Cantidad')->numeric()->default(1)->required(),
                                     ]),
                             ]),
 
@@ -221,7 +225,7 @@ class PromotionResource extends Resource
                                         Section::make()
                                             ->schema([
                                                 Grid::make(2)->schema([
-                                                    TimePicker::make('value.start')->label('Inicio')->required(),
+                                                    TimePicker::make('value.start')->label('Inicio')->default(now())->required(),
                                                     TimePicker::make('value.end')->label('Fin')->required(),
                                                 ])
                                             ])

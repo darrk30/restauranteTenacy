@@ -13,6 +13,8 @@ class StockAdjustmentItem extends Model
         'product_id',
         'unit_id',
         'cantidad',
+        'costo',
+        'subtotal',
         'restaurant_id',
     ];
 

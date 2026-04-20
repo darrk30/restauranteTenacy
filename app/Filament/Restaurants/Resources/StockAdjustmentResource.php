@@ -13,8 +13,10 @@ use App\Services\StockAdjustmentService;
 use App\Traits\ManjoStockProductos;
 use Filament\Forms;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Tables;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Filament\Notifications\Notification;
 use Filament\Tables\Table;
@@ -39,48 +41,55 @@ class StockAdjustmentResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\Grid::make(12) // 🟢 Definimos una rejilla de 12 columnas
+                Forms\Components\Grid::make(12)
                     ->schema([
-                        // --- SECCIÓN IZQUIERDA (50%) ---
+                        // --- SECCIÓN IZQUIERDA ---
                         Forms\Components\Section::make('Configuración General')
-                            ->description('Detalles del movimiento')
                             ->schema([
                                 Forms\Components\Select::make('tipo')
                                     ->label('Tipo de Movimiento')
                                     ->options([
-                                        'entrada' => '➕ Entrada (Aumenta Stock)',
-                                        'salida' => '➖ Salida (Disminuye Stock)',
+                                        'entrada' => 'Entrada de stock',
+                                        'salida' => 'Salida de stock',
                                     ])
                                     ->required()
+                                    ->validationMessages([
+                                        'required' => 'Escoja una operación',
+                                    ])
                                     ->native(false)
+                                    ->reactive()
                                     ->preload(),
 
                                 Forms\Components\Textarea::make('motivo')
-                                    ->label('Razón del Ajuste')
-                                    ->placeholder('Ej: Rotura de stock, inventario mensual, merma...')
+                                    ->label('Descripcion')
                                     ->required()
+                                    ->validationMessages([
+                                        'required' => 'Ingrese una descripción del ajuste',
+                                    ])
                                     ->rows(3),
                             ])
-                            ->columnSpan(6), // 🟢 6 de 12 es el 50%
+                            ->columnSpan(8),
 
-                        // --- SECCIÓN DERECHA (50%) ---
+                        // --- SECCIÓN DERECHA: Resumen y TOTAL ---
                         Forms\Components\Section::make('Resumen')
-                            ->description('Información de control')
                             ->schema([
-                                Forms\Components\Placeholder::make('created_at')
-                                    ->label('Fecha de registro')
-                                    ->content(now()->format('d/m/Y h:i A')),
+                                TextInput::make('total')
+                                    ->label('Valor Total del Ajuste')
+                                    ->numeric()
+                                    ->prefix('S/')
+                                    ->readOnly()
+                                    ->default(0.00)
+                                    ->extraInputAttributes(['class' => 'text-xl font-bold text-primary-600']),
 
                                 Forms\Components\Placeholder::make('usuario')
                                     ->label('Responsable')
                                     ->content(Auth::user()->name),
 
-                                // Agregamos un pequeño aviso visual
                                 Forms\Components\Placeholder::make('info')
                                     ->label('Nota')
-                                    ->content('Los cambios afectarán el stock actual de forma inmediata.')
+                                    ->content('El costo ingresado afectará la valorización del Kardex.'),
                             ])
-                            ->columnSpan(6), // 🟢 6 de 12 es el 50%
+                            ->columnSpan(4),
                     ]),
 
                 Forms\Components\Section::make('Listado de Productos a Ajustar')
@@ -88,11 +97,11 @@ class StockAdjustmentResource extends Resource
                         Forms\Components\Repeater::make('items')
                             ->relationship()
                             ->label('')
-                            ->columns(6) // 🟢 Todo en una línea para ahorrar espacio
+                            ->columns(8) // Incrementamos columnas para que quepa todo
                             ->addActionLabel('Agregar otro producto')
                             ->schema([
                                 Select::make('product_id')
-                                    ->label('Producto / Insumo')
+                                    ->label('Producto')
                                     ->relationship(
                                         'product',
                                         'name',
@@ -103,81 +112,164 @@ class StockAdjustmentResource extends Resource
                                     ->preload()
                                     ->reactive()
                                     ->required()
+                                    ->validationMessages([
+                                        'required' => 'Escoja una producto',
+                                    ])
                                     ->columnSpan(2)
                                     ->afterStateUpdated(function ($state, Set $set) {
                                         $set('variant_id', null);
                                         if ($state) {
                                             $product = Product::find($state);
                                             $set('unit_id', $product?->unit_id);
+                                            // Opcional: Cargar último costo del producto
+                                            $set('costo', $product?->costo_referencial ?? 0);
                                         }
                                     }),
 
                                 Select::make('variant_id')
+                                    ->label('Variante')
                                     ->columnSpan(2)
-                                    ->options(function ($get) {
+                                    ->options(function (Get $get) {
                                         $productId = $get('product_id');
-                                        if (blank($productId)) {
-                                            return [];
-                                        }
+                                        if (blank($productId)) return [];
                                         return Variant::where('product_id', $productId)
                                             ->where('status', 'activo')
                                             ->get()
-                                            ->pluck('full_name', 'id');
-                                    }),
+                                            ->mapWithKeys(fn($variant) => [
+                                                $variant->id => $variant->full_name
+                                            ]);
+                                    })
+                                    ->searchable()
+                                    ->preload()
+                                    ->required()
+                                    ->validationMessages([
+                                        'required' => 'Escoja una variante',
+                                    ]),
 
-                                Forms\Components\TextInput::make('cantidad')
+                                TextInput::make('cantidad')
                                     ->label('Cant.')
                                     ->numeric()
                                     ->minValue(0.01)
                                     ->required()
+                                    ->validationMessages([
+                                        'required' => 'Ingrese una cantidad',
+                                    ])
+                                    ->reactive()
+                                    ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculateLine($get, $set))
                                     ->columnSpan(1),
 
-                                Forms\Components\Select::make('unit_id')
+                                Select::make('unit_id')
                                     ->label('Unidad')
                                     ->options(function ($get) {
                                         $product = Product::with('unit')->find($get('product_id'));
                                         return $product?->unit ? Unit::where('unit_category_id', $product->unit->unit_category_id)->pluck('name', 'id') : [];
                                     })
                                     ->required()
+                                    ->validationMessages([
+                                        'required' => 'Seleccione una unidad',
+                                    ])
+                                    ->columnSpan(1),
+
+                                TextInput::make('costo')
+                                    ->label('Costo Unit.')
+                                    ->numeric()
+                                    ->prefix('S/')
+                                    ->required()
+                                    ->reactive()
+                                    ->validationMessages([
+                                        'required' => 'Ingrese el costo unitario',
+                                    ])
+                                    ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculateLine($get, $set))
+                                    ->columnSpan(1),
+
+                                TextInput::make('subtotal')
+                                    ->label('Subtotal')
+                                    ->numeric()
+                                    ->prefix('S/')
+                                    ->readOnly()
                                     ->columnSpan(1),
                             ])
-                            ->collapsible()
-                            ->cloneable() // 🟢 Permite duplicar filas rápido
-                            ->itemLabel(
-                                fn($state) =>
-                                isset($state['variant_id']) ? Variant::find($state['variant_id'])?->full_name : 'Seleccione producto'
-                            ),
+                            ->reactive()
+                            ->afterStateUpdated(fn(Get $get, Set $set) => self::recalculateTotals($get, $set))
                     ]),
             ]);
+    }
+
+    // --- LÓGICA DE CÁLCULO (Similar a PurchaseResource) ---
+    // En la parte superior de StockAdjustmentResource.php
+    private static function recalculateLine(Get $get, Set $set): void
+    {
+        $cantidad = (float) ($get('cantidad') ?? 0);
+        $costo = (float) ($get('costo') ?? 0);
+        $subtotal = $cantidad * $costo;
+        $set('subtotal', round($subtotal, 2));
+        self::recalculateTotals($get, $set, true);
+    }
+
+    private static function recalculateTotals(Get $get, Set $set, bool $isInsideRepeater = false): void
+    {
+        $path = $isInsideRepeater ? '../../' : '';
+        $items = collect($get($path . 'items') ?? []);
+        $total = $items->sum(fn($item) => (float) ($item['subtotal'] ?? 0));
+        $set($path . 'total', round($total, 2));
     }
 
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
+                Tables\Columns\TextColumn::make('created_at')
+                    ->label('Fecha de Ajuste')
+                    ->sortable()
+                    ->description(fn($record) => $record->created_at->diffForHumans())
+                    ->dateTime('d/m/Y h:i A'),
+
                 Tables\Columns\TextColumn::make('codigo')
                     ->label('Código')
                     ->searchable()
                     ->weight('bold')
                     ->fontFamily('mono')
-                    ->copyable() // 🟢 Permite copiar el código rápido
+                    ->copyable()
                     ->formatStateUsing(
                         fn($state, $record) =>
                         $record->status === 'anulado' ? "<s>$state</s>" : $state
                     )->html(),
-                Tables\Columns\TextColumn::make('user.name') 
+
+                Tables\Columns\TextColumn::make('user.name')
                     ->label('Responsable')
                     ->sortable()
                     ->searchable()
-                    ->icon('heroicon-m-user') // Icono para identificarlo rápido
+                    ->icon('heroicon-m-user')
                     ->color('gray')
-                    ->description(fn($record) => $record->user->email ?? ''), // Opcional: muestra el correo debajo del nombre
+                    ->description(fn($record) => $record->user->email ?? ''),
 
-                Tables\Columns\TextColumn::make('created_at')
-                    ->label('Fecha de Ajuste')
+                Tables\Columns\TextColumn::make('motivo')
+                    ->label('Observación')
+                    ->limit(30) // 🟢 Acorta textos largos
+                    ->tooltip(fn($state) => $state)
+                    ->color('gray'),
+
+                Tables\Columns\TextColumn::make('items_count')
+                    ->counts('items')
+                    ->label('Productos')
+                    ->badge()
+                    ->color('gray')
+                    ->alignment('center')
+                    ->action(
+                        Tables\Actions\Action::make('verItems')
+                            ->modalHeading('Detalle de Productos Ajustados')
+                            ->modalWidth('xl')
+                            ->icon('heroicon-o-eye')
+                            ->modalContent(fn($record) => view('filament.ajustes.items-list', [
+                                'items' => $record->items()->with('product', 'variant', 'unit')->get(),
+                            ]))
+                    ),
+
+                Tables\Columns\TextColumn::make('total')
+                    ->label('Total')
+                    ->prefix('S/ ')
                     ->sortable()
-                    ->description(fn($record) => $record->created_at->diffForHumans()) // 🟢 Agrega "hace 2 horas"
-                    ->dateTime('d/m/Y h:i A'),
+                    ->alignment('right'),
 
                 Tables\Columns\TextColumn::make('tipo')
                     ->badge()
@@ -194,28 +286,6 @@ class StockAdjustmentResource extends Resource
                     })
                     ->formatStateUsing(fn($state) => strtoupper($state)),
 
-                Tables\Columns\TextColumn::make('motivo')
-                    ->label('Observación')
-                    ->limit(30) // 🟢 Acorta textos largos
-                    ->tooltip(fn($state) => $state)
-                    ->color('gray'),
-
-                Tables\Columns\TextColumn::make('items_count')
-                    ->counts('items')
-                    ->label('Items')
-                    ->badge()
-                    ->color('gray')
-                    ->alignment('center')
-                    ->action(
-                        Tables\Actions\Action::make('verItems')
-                            ->modalHeading('Detalle de Productos Ajustados')
-                            ->modalWidth('xl')
-                            ->icon('heroicon-o-eye')
-                            ->modalContent(fn($record) => view('filament.ajustes.items-list', [
-                                'items' => $record->items()->with('product', 'variant', 'unit')->get(),
-                            ]))
-                    ),
-
                 Tables\Columns\TextColumn::make('status')
                     ->label('Estado')
                     ->badge()
@@ -225,6 +295,7 @@ class StockAdjustmentResource extends Resource
                         'anulado' => 'danger',
                         default => 'gray',
                     }),
+
             ])
             ->defaultSort('created_at', 'desc')
             ->actions([

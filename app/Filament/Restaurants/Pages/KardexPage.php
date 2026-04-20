@@ -26,26 +26,6 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
     protected static ?string $navigationGroup = 'Inventario';
     protected static ?int $navigationSort = 30;
 
-
-    public static function canAccess(): bool
-    {
-        if (! Filament::getTenant()) {
-            return false;
-        }
-
-        $user = auth()->user();
-
-        if ($user->hasRole('Super Admin')) {
-            return false;
-        }
-
-        try {
-            return $user->hasPermissionTo('listar_kardex_rest');
-        } catch (\Exception $e) {
-            return false;
-        }
-    }
-
     public function table(Table $table): Table
     {
         return $table
@@ -59,86 +39,88 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                 TextColumn::make('created_at')
                     ->label('Fecha')
                     ->dateTime('d/m/Y H:i')
-                    ->sortable(),
+                    ->extraCellAttributes(fn ($record) => $this->getCancelaStyles($record)),
 
                 TextColumn::make('comprobante')
                     ->label('Documento/Motivo')
                     ->description(fn($record) => $this->getOrigenLabel($record->modelo_type))
-                    ->searchable(),
+                    ->extraCellAttributes(fn ($record) => $this->getCancelaStyles($record)),
 
-                // --- GRUPO ENTRADAS ---
                 ColumnGroup::make('ENTRADAS')
                     ->columns([
                         TextColumn::make('cant_in')
                             ->label('Cant.')
                             ->getStateUsing(fn($record) => $record->cantidad > 0 ? $record->cantidad : 0)
                             ->formatStateUsing(fn($state) => $state <= 0 ? '-' : number_format($state, 3))
-                            ->color(fn($state) => $state === '-' ? 'gray' : 'success')
+                            ->color(fn($state, $record) => $record->estado === 'cancelado' ? 'danger' : ($state === '-' ? 'gray' : 'success'))
+                            ->extraCellAttributes(fn ($record) => $this->getCancelaStyles($record))
                             ->alignRight(),
 
                         TextColumn::make('costo_u_in')
                             ->label('Costo U.')
                             ->getStateUsing(fn($record) => $record->cantidad > 0 ? $record->costo_unitario : 0)
                             ->formatStateUsing(fn($state) => $state <= 0 ? '-' : 'S/ ' . number_format($state, 2))
-                            ->color(fn($state) => $state === '-' ? 'gray' : null)
+                            ->extraCellAttributes(fn ($record) => $this->getCancelaStyles($record))
                             ->alignRight(),
 
                         TextColumn::make('total_in')
                             ->label('Total')
                             ->getStateUsing(fn($record) => $record->cantidad > 0 ? ($record->cantidad * $record->costo_unitario) : 0)
                             ->formatStateUsing(fn($state) => $state <= 0 ? '-' : 'S/ ' . number_format($state, 2))
-                            ->color(fn($state) => $state === '-' ? 'gray' : null)
+                            ->extraCellAttributes(fn ($record) => $this->getCancelaStyles($record))
                             ->alignRight(),
                     ]),
 
-                // --- GRUPO SALIDAS ---
                 ColumnGroup::make('SALIDAS')
                     ->columns([
                         TextColumn::make('cant_out')
                             ->label('Cant.')
                             ->getStateUsing(fn($record) => $record->cantidad < 0 ? abs($record->cantidad) : 0)
                             ->formatStateUsing(fn($state) => $state <= 0 ? '-' : number_format($state, 3))
-                            ->color(fn($state) => $state === '-' ? 'gray' : 'danger')
+                            ->color(fn($state, $record) => $record->estado === 'cancelado' ? 'danger' : ($state === '-' ? 'gray' : 'danger'))
+                            ->extraCellAttributes(fn ($record) => $this->getCancelaStyles($record))
                             ->alignRight(),
 
                         TextColumn::make('costo_u_out')
                             ->label('Costo U.')
                             ->getStateUsing(fn($record) => $record->cantidad < 0 ? $record->costo_unitario : 0)
                             ->formatStateUsing(fn($state) => $state <= 0 ? '-' : 'S/ ' . number_format($state, 2))
-                            ->color(fn($state) => $state === '-' ? 'gray' : null)
+                            ->extraCellAttributes(fn ($record) => $this->getCancelaStyles($record))
                             ->alignRight(),
 
                         TextColumn::make('total_out')
                             ->label('Total')
                             ->getStateUsing(fn($record) => $record->cantidad < 0 ? (abs($record->cantidad) * $record->costo_unitario) : 0)
                             ->formatStateUsing(fn($state) => $state <= 0 ? '-' : 'S/ ' . number_format($state, 2))
-                            ->color(fn($state) => $state === '-' ? 'gray' : null)
+                            ->extraCellAttributes(fn ($record) => $this->getCancelaStyles($record))
                             ->alignRight(),
                     ]),
 
-                // --- GRUPO SALDOS (EXISTENCIAS) ---
-                ColumnGroup::make('SALDO FINAL (VALORIZADO)')
+                ColumnGroup::make('SALDO FINAL (EXISTENCIAS)')
                     ->columns([
                         TextColumn::make('stock_restante')
                             ->label('Stock')
-                            ->formatStateUsing(fn($state) => $state == 0 ? '0.000' : number_format($state, 3))
+                            ->formatStateUsing(fn($state) => number_format($state, 3))
+                            ->extraCellAttributes(fn ($record) => $this->getCancelaStyles($record))
                             ->weight('bold')
                             ->alignRight(),
 
                         TextColumn::make('costo_promedio')
                             ->label('Costo Prom.')
                             ->getStateUsing(function ($record) {
-                                return $record->stock_restante > 0
-                                    ? ($record->saldo_valorizado / $record->stock_restante)
+                                return $record->stock_restante > 0 
+                                    ? ($record->saldo_valorizado / $record->stock_restante) 
                                     : 0;
                             })
                             ->formatStateUsing(fn($state) => $state <= 0 ? 'S/ 0.00' : 'S/ ' . number_format($state, 2))
+                            ->extraCellAttributes(fn ($record) => $this->getCancelaStyles($record))
                             ->color('info')
                             ->alignRight(),
 
                         TextColumn::make('saldo_valorizado')
                             ->label('Valor Total')
                             ->money('PEN')
+                            ->extraCellAttributes(fn ($record) => $this->getCancelaStyles($record))
                             ->weight('bold')
                             ->alignRight(),
                     ]),
@@ -148,12 +130,7 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                     ->form([
                         Select::make('product_id')
                             ->label('Producto')
-                            ->relationship(
-                                'product',
-                                'name',
-                                // 🟢 Filtramos la consulta para que solo traiga productos con control_stock = 1
-                                fn(Builder $query) => $query->where('control_stock', true)
-                            )
+                            ->relationship('product', 'name', fn(Builder $query) => $query->where('control_stock', true))
                             ->searchable()
                             ->preload()
                             ->reactive()
@@ -178,6 +155,19 @@ class KardexPage extends Page implements Tables\Contracts\HasTable
                             ->when($data['variant_id'], fn($q) => $q->where('variant_id', $data['variant_id']));
                     }),
             ]);
+    }
+
+    /**
+     * Helper para aplicar CSS de rayado (text-decoration)
+     */
+    private function getCancelaStyles($record): array
+    {
+        if ($record->estado === 'cancelado') {
+            return [
+                'style' => 'text-decoration: line-through; text-decoration-color: #ef4444; text-decoration-thickness: 2px; color: #7f1d1d;',
+            ];
+        }
+        return [];
     }
 
     private function getOrigenLabel(?string $modelType): string

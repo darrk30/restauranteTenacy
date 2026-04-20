@@ -549,7 +549,7 @@ class OrdenMesa extends Page implements HasActions
             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
         }
     }
-    
+
     #[On('echo:inventario,StockActualizado')]
     public function onStockUpdated()
     {
@@ -562,7 +562,7 @@ class OrdenMesa extends Page implements HasActions
             ->send();
 
         // 3. Forzamos el refresco de los datos (esto llamará a getViewData automáticamente)
-        $this->dispatch('$refresh'); 
+        $this->dispatch('$refresh');
     }
 
     public function getViewData(): array

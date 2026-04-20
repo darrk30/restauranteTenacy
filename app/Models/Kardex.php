@@ -18,8 +18,10 @@ class Kardex extends Model
         'modelo_type',
         'cantidad',
         'costo_unitario',
+        'costo_promedio',
         'saldo_valorizado',
         'stock_restante',
+        'estado',
     ];
 
     // Producto

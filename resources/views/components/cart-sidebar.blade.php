@@ -149,6 +149,7 @@
                                 {{-- Dirección Final --}}
                                 <input type="text" x-model="form.direccion"
                                     @direccion-actualizada.window="form.direccion = $event.detail"
+                                    @coordenadas-actualizadas.window="form.lat = $event.detail.lat; form.lng = $event.detail.lng"
                                     class="w-full border-2 border-gray-100 rounded-xl p-3 bg-gray-50 text-sm font-medium"
                                     placeholder="Usa el buscador del mapa o mueve el pin...">
 

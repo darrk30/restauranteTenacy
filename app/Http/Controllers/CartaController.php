@@ -136,12 +136,21 @@ class CartaController extends Controller
             $divisor = get_tax_divisor($tenant->id);
             $subtotalCalculado = $totalRealServidor / $divisor;
 
+            $direccionConCoordenadas = strip_tags($request->cliente_direccion ?? '');
+
+            if ($request->filled('cliente_lat') && $request->filled('cliente_lng')) {
+                $lat = round((float) $request->cliente_lat, 6);
+                $lng = round((float) $request->cliente_lng, 6);
+                $direccionConCoordenadas .= " [GPS: {$lat}, {$lng}]";
+            }
+
             $datosOrden = [
                 'restaurant_id'     => $tenant->id,
                 'canal'             => $request->mesa_id ? 'salon' : $request->tipo_pedido,
                 'mesa_id'           => $request->mesa_id,
                 'nombre_cliente'    => strip_tags($request->cliente_nombre ?? 'Cliente Digital'),
-                'direccion'         => strip_tags($request->cliente_direccion),
+                // 'direccion'         => strip_tags($request->cliente_direccion),
+                'direccion'         => $direccionConCoordenadas,
                 'telefono'          => strip_tags($request->cliente_telefono),
                 'subtotal'          => $subtotalCalculado,
                 'igv'               => $totalRealServidor - $subtotalCalculado,

@@ -1,0 +1,125 @@
+.ticket-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(17, 24, 39, 0.8);
+    /* Gris azulado oscuro */
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.ticket-modal-content {
+    background-color: white;
+    width: 100%;
+    max-width: 400px;
+    height: 60vh;
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    animation: modalZoomIn 0.3s ease-out;
+}
+
+.ticket-modal-header {
+    background-color: #111827;
+    color: white;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ticket-modal-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+}
+
+.ticket-modal-close-icon {
+    color: #9ca3af;
+    transition: color 0.2s;
+    border: none;
+    background: none;
+    cursor: pointer;
+}
+
+.ticket-modal-close-icon:hover {
+    color: white;
+}
+
+/* Eliminamos el padding y permitimos que el iframe llene el espacio */
+.ticket-modal-body {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+.ticket-modal-footer {
+    padding: 20px;
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    gap: 12px;
+    background-color: white;
+}
+
+.ticket-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+    border: none;
+    text-transform: uppercase;
+}
+
+.ticket-btn-primary {
+    background-color: #2563eb;
+    color: white;
+}
+
+.ticket-btn-primary:hover {
+    background-color: #1d4ed8;
+}
+
+.ticket-btn-secondary {
+    background-color: #f3f4f6;
+    color: #4b5563;
+}
+
+.ticket-btn-secondary:hover {
+    background-color: #e5e7eb;
+}
+
+.ticket-btn-disabled {
+    background-color: #d1d5db;
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
+@keyframes modalZoomIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}

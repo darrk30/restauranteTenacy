@@ -35,25 +35,31 @@ class VentasPorMetodoPagoStats extends BaseWidget
         // 2. OBTENER TODOS LOS MÉTODOS DE PAGO DISPONIBLES
         // Si tus métodos son globales usa PaymentMethod::all()
         // Si son por restaurante usa ->where('restaurant_id', Filament::getTenant()->id)
-        $metodos = PaymentMethod::where('status', true)->get(); 
+        $metodos = PaymentMethod::where('status', true)->get();
 
         $stats = [];
 
         foreach ($metodos as $metodo) {
             // 3. CALCULAR EL TOTAL PARA ESTE MÉTODO ESPECÍFICO
-            $total = CashRegisterMovement::query()
-                ->where('payment_method_id', $metodo->id) // Filtramos por el ID del método actual
-                // Filtro de Restaurante (Tenant)
+            // 1. Armamos la consulta base con los filtros comunes
+            $queryBase = CashRegisterMovement::query()
+                ->where('payment_method_id', $metodo->id)
                 ->whereHas('sessionCashRegister.cashRegister', function ($q) {
                     $q->where('restaurant_id', Filament::getTenant()->id);
                 })
-                ->where('tipo', 'ingreso')
-                ->whereBetween('created_at', [$inicio, $fin])
-                ->sum('monto'); // Sumamos directamente
+                ->where('status', 'aprobado')
+                ->whereBetween('created_at', [$inicio, $fin]);
+
+            // 2. Calculamos usando "clone" para no alterar la query original
+            $ingresos = (clone $queryBase)->where('tipo', 'ingreso')->sum('monto');
+            $egresos  = (clone $queryBase)->where('tipo', 'egreso')->sum('monto');
+
+            // 3. Obtenemos el total real
+            $total = $ingresos - $egresos; // Sumamos directamente
 
             // 4. CONFIGURACIÓN VISUAL
             $nombre = $metodo->name;
-            
+
             // Iconos
             $icon = match (strtolower($nombre)) {
                 'efectivo' => 'heroicon-m-banknotes',
@@ -63,13 +69,13 @@ class VentasPorMetodoPagoStats extends BaseWidget
             };
 
             // Colores (Gris si es 0, Color si tiene ventas)
-            $color = $total > 0 
+            $color = $total > 0
                 ? match (strtolower($nombre)) {
                     'efectivo' => 'success',
                     'yape', 'plin' => 'info',
                     'tarjeta' => 'warning',
                     default => 'primary',
-                } 
+                }
                 : 'gray'; // Si es 0 se ve gris
 
             $stats[] = Stat::make($nombre, 'S/ ' . number_format($total, 2))

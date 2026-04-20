@@ -19,6 +19,7 @@ return new class extends Migration
             $table->string('codigo');
             $table->text('motivo')->nullable();
             $table->string('status')->default('activo');
+            $table->decimal('total', 12, 2)->default(0);
             $table->unique(['restaurant_id', 'codigo']);
             $table->timestamps();
         });

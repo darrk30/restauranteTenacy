@@ -50,7 +50,7 @@ class PagarOrden extends Page implements HasForms, HasActions
     public $total_final = 0;
     public $op_gravada = 0;
     public $monto_igv = 0;
-    public $tipo_comprobante = 'Nota de venta'; // ✅ CAMBIO: Defecto es Nota de Venta
+    public $tipo_comprobante = 'Nota de venta';
     public $serie_id;
     public $notas_pago = '';
     public bool $cliente_tiene_ruc = false;
@@ -269,7 +269,7 @@ class PagarOrden extends Page implements HasForms, HasActions
             ->where('restaurant_id', filament()->getTenant()->id);
 
         if (ctype_digit($this->search_cliente)) {
-            // 🔥 DNI o RUC → índice directo
+            // DNI o RUC → índice directo
             $query->where('numero', 'like', $this->search_cliente . '%');
         } else {
             // Texto → solo nombres/razón social
@@ -405,7 +405,7 @@ class PagarOrden extends Page implements HasForms, HasActions
                 : 'CLIENTES VARIOS';
 
             // =========================
-            // 💾 1. GUARDAR VENTA PRIMERO EN BD
+            // 1. GUARDAR VENTA PRIMERO EN BD
             // =========================
             $sale = Sale::create([
                 'restaurant_id'    => $tenantId,
@@ -487,7 +487,7 @@ class PagarOrden extends Page implements HasForms, HasActions
             $sale->update(['costo_total' => $costoTotalVenta]);
 
             // =========================
-            // 📊 3. MOVIMIENTO DE STOCK (Kardex)
+            // 3. MOVIMIENTO DE STOCK (Kardex)
             // =========================
             if ($detallesParaKardex->isNotEmpty()) {
                 $this->applyVentaMasiva(
@@ -499,7 +499,7 @@ class PagarOrden extends Page implements HasForms, HasActions
             }
 
             // =========================
-            // 💵 4. REGISTRO CAJA
+            // 4. REGISTRO CAJA
             // =========================
             $movimientosCaja = collect($this->pagos_agregados)->map(function ($pago) use ($sale, $userId) {
                 $referenciaStr = !empty($this->referencia_pago) ? " | Ref: " . $this->referencia_pago : "";
@@ -520,7 +520,7 @@ class PagarOrden extends Page implements HasForms, HasActions
             $this->referencia_pago = '';
 
             // =========================
-            // 🍽️ 5. ACTUALIZACIÓN ESTADOS MESA/ORDEN
+            // 5. ACTUALIZACIÓN ESTADOS MESA/ORDEN
             // =========================
             $order->update(['status' => 'pagado']);
 
@@ -541,7 +541,7 @@ class PagarOrden extends Page implements HasForms, HasActions
         }
 
         // ==========================================
-        // 🚀 6. COMUNICACIÓN CON SUNAT (POST-GUARDADO)
+        //  6. COMUNICACIÓN CON SUNAT (POST-GUARDADO)
         // ==========================================
         $statusSunatMensaje = $sale->status_sunat;
 

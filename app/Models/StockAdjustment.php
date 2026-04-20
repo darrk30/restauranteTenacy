@@ -16,6 +16,7 @@ class StockAdjustment extends Model
         'tipo',
         'motivo',
         'codigo',
+        'total',
         'status', 
     ];
 
