@@ -37,7 +37,7 @@ class ResumenesDiarios extends Page implements HasTable
     protected static ?string $title = 'Bandeja de Resúmenes y Bajas';
     protected static string $view = 'filament.facturacion.resumenes-diarios';
 
-        
+
     public static function canAccess(): bool
     {
         if (! Filament::getTenant()) {
@@ -331,7 +331,7 @@ class ResumenesDiarios extends Page implements HasTable
                                 "ticket"  => $record->ticket
                             ];
 
-                            $sunatService = app(SunatGreenterApiService::class);
+                            $sunatService = app(\App\Services\SunatGreenterApiService::class);
 
                             // 🚀 DERIVAMOS AL ENDPOINT CORRECTO SEGÚN EL TIPO
                             if ($record->tipo_documento === 'Voided') {
@@ -374,30 +374,85 @@ class ResumenesDiarios extends Page implements HasTable
                                     Storage::disk('public')->put($pathCdrZip, base64_decode($cdrBase64));
                                 }
 
-                                // 1. Actualizar el Registro del Resumen/Baja
-                                $record->update([
-                                    'status_sunat' => $nuevoEstado,
-                                    'path_cdrZip'  => $pathCdrZip,
-                                    'code'         => $code,
-                                    'description'  => $description,
-                                    'notes'        => json_encode($cdrResponse['notes'] ?? []),
-                                ]);
+                                \Illuminate\Support\Facades\DB::beginTransaction();
+                                try {
+                                    // 1. Actualizar el Registro del Resumen/Baja
+                                    $record->update([
+                                        'status_sunat' => $nuevoEstado,
+                                        'path_cdrZip'  => $pathCdrZip,
+                                        'code'         => $code,
+                                        'description'  => $description,
+                                        'notes'        => json_encode($cdrResponse['notes'] ?? []),
+                                    ]);
 
-                                // 2. Lógica Inteligente para actualizar las Ventas Originales
-                                if ($isAceptado) {
-                                    foreach ($record->sales as $sale) {
-                                        // Si es Baja, o si el Resumen llevaba una boleta con orden de anulación
-                                        if ($record->tipo_documento === 'Voided' || $sale->status_sunat === 'procesando_anulacion') {
-                                            $sale->update(['status_sunat' => 'anulado', 'status' => 'anulado']);
-                                        } else {
-                                            $sale->update(['status_sunat' => 'aceptado']);
+                                    // 2. Lógica Inteligente para actualizar Ventas Y NOTAS Originales
+                                    if ($isAceptado) {
+                                        // Extraemos los detalles del DailySummary (ahí guardamos qué documentos se mandaron)
+                                        $detalles = is_array($record->details) ? $record->details : json_decode($record->details, true);
+
+                                        if (!empty($detalles)) {
+                                            foreach ($detalles as $detalle) {
+                                                $tipoDoc = $detalle['tipoDoc'] ?? null;
+
+                                                // Para bajas es 'serie' y 'correlativo'. Para resumenes es 'serieNro' (ej. B001-1)
+                                                if ($record->tipo_documento === 'Voided') {
+                                                    $serie = $detalle['serie'] ?? null;
+                                                    $correlativo = $detalle['correlativo'] ?? null;
+                                                } else {
+                                                    $partes = explode('-', $detalle['serieNro'] ?? '');
+                                                    $serie = $partes[0] ?? null;
+                                                    $correlativo = $partes[1] ?? null;
+                                                    $estadoOperacion = $detalle['estado'] ?? null; // '3' significa Anulación
+                                                }
+
+                                                if ($serie && $correlativo) {
+                                                    // Es una Nota (Crédito o Débito)
+                                                    if (in_array($tipoDoc, ['07', '08'])) {
+                                                        $nota = \App\Models\CreditDebitNote::where('restaurant_id', $tenant->id)
+                                                            ->where('serie', $serie)
+                                                            ->where('correlativo', $correlativo)
+                                                            ->first();
+
+                                                        if ($nota) {
+                                                            if ($record->tipo_documento === 'Voided' || ($record->tipo_documento === 'Summary_Anulacion' && $estadoOperacion == '3')) {
+                                                                $nota->update(['status_sunat' => 'anulado']);
+                                                            } else {
+                                                                $nota->update(['status_sunat' => 'aceptado']);
+                                                            }
+                                                        }
+                                                    }
+                                                    // Es una Venta (Factura o Boleta)
+                                                    else {
+                                                        $venta = \App\Models\Sale::where('restaurant_id', $tenant->id)
+                                                            ->where('serie', $serie)
+                                                            ->where('correlativo', $correlativo)
+                                                            ->first();
+
+                                                        if ($venta) {
+                                                            if ($record->tipo_documento === 'Voided' || ($record->tipo_documento === 'Summary_Anulacion' && $estadoOperacion == '3')) {
+                                                                $venta->update(['status_sunat' => 'anulado', 'status' => 'anulado']);
+                                                            } else {
+                                                                $venta->update(['status_sunat' => 'aceptado']);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
+
+                                        \Illuminate\Support\Facades\DB::commit();
+                                        Notification::make()->title('Operación Aceptada')->body($description)->success()->send();
+                                    } else {
+                                        // Si rechazan el Resumen/Baja, regresamos las ventas/notas a "aceptado" (porque SUNAT no aprobó la anulación)
+                                        // O si era un resumen de envío nuevo, a "rechazado". 
+                                        // Por seguridad, usaremos la lógica actual que tienes para las ventas.
+                                        $record->sales()->update(['status_sunat' => 'rechazado']);
+                                        \Illuminate\Support\Facades\DB::commit();
+                                        Notification::make()->title('Operación Rechazada')->body($description)->danger()->send();
                                     }
-                                    Notification::make()->title('Operación Aceptada')->body($description)->success()->send();
-                                } else {
-                                    // Si rechazan el Resumen, marcamos las ventas como rechazadas
-                                    $record->sales()->update(['status_sunat' => 'rechazado']);
-                                    Notification::make()->title('Operación Rechazada')->body($description)->danger()->send();
+                                } catch (\Exception $e) {
+                                    \Illuminate\Support\Facades\DB::rollBack();
+                                    Notification::make()->title('Error interno')->body('No se pudo actualizar el estado de los comprobantes.')->danger()->send();
                                 }
                             } else {
                                 Notification::make()->title('Error Interno')->body('La respuesta de SUNAT no pudo ser procesada.')->warning()->send();

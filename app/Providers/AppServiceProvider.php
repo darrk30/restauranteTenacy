@@ -3,6 +3,9 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use App\Helpers\DireccionHelper;
+use App\Helpers\TaxHelper;
+
 
 class AppServiceProvider extends ServiceProvider
 {

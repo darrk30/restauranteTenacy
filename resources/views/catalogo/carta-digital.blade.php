@@ -52,6 +52,8 @@
                         nombre: '',
                         telefono: '',
                         direccion: '',
+                        lat: null,
+                        lng: null,
                         metodo_pago: '',
                         notas: ''
                     },
@@ -62,6 +64,8 @@
                             nombre: '',
                             telefono: '',
                             direccion: '',
+                            lat: null,
+                            lng: null,
                             metodo_pago: '',
                             notas: ''
                         };
@@ -85,6 +89,8 @@
                                         cliente_nombre: this.form.nombre,
                                         cliente_telefono: this.form.telefono,
                                         cliente_direccion: this.form.direccion,
+                                        cliente_lat: this.form.lat, // ← nuevo
+                                        cliente_lng: this.form.lng, // ← nuevo
                                         metodo_pago: this.form.metodo_pago,
                                         notas: this.form.notas,
                                         items: Alpine.store('cart').items
@@ -214,26 +220,45 @@
 
                             this.map.addControl(this.searchControl);
 
-                            // --- EVENTO: CUANDO EL USUARIO SELECCIONA UN RESULTADO DEL BUSCADOR ---
+                            // En geosearch (cuando selecciona resultado del buscador)
                             this.map.on('geosearch/showlocation', (result) => {
                                 const pos = {
                                     lat: result.location.y,
                                     lng: result.location.x
                                 };
                                 this.marker.setLatLng(pos);
-                                this.form.direccion = result.location
-                                    .label; // Actualizamos el input
+                                this.form.direccion = result.location.label;
+                                window.dispatchEvent(new CustomEvent(
+                                    'coordenadas-actualizadas', {
+                                        detail: {
+                                            lat: pos.lat,
+                                            lng: pos.lng
+                                        }
+                                    }));
                             });
 
-                            // --- EVENTOS MANUALES (CLIC Y DRAG) ---
                             this.marker.on('dragend', () => {
                                 const pos = this.marker.getLatLng();
                                 this.getAddress(pos.lat, pos.lng);
+                                window.dispatchEvent(new CustomEvent(
+                                    'coordenadas-actualizadas', {
+                                        detail: {
+                                            lat: pos.lat,
+                                            lng: pos.lng
+                                        }
+                                    }));
                             });
 
                             this.map.on('click', (e) => {
                                 this.marker.setLatLng(e.latlng);
                                 this.getAddress(e.latlng.lat, e.latlng.lng);
+                                window.dispatchEvent(new CustomEvent(
+                                    'coordenadas-actualizadas', {
+                                        detail: {
+                                            lat: e.latlng.lat,
+                                            lng: e.latlng.lng
+                                        }
+                                    }));
                             });
 
                             this.locateUser();
@@ -243,7 +268,7 @@
                     // ... (Mantenemos locateUser y getAddress igual que antes)
                     locateUser() {
                         console.log("UBICANDO..");
-                        
+
                         if (!navigator.geolocation) return;
 
                         // Forzamos alta precisión para móviles
@@ -259,20 +284,31 @@
                                     lat: position.coords.latitude,
                                     lng: position.coords.longitude
                                 };
-                                this.map.setView(pos, 17); // Zoom más cercano
+                                this.map.setView(pos, 17);
                                 this.marker.setLatLng(pos);
                                 this.getAddress(pos.lat, pos.lng);
+                                window.dispatchEvent(new CustomEvent(
+                                    'coordenadas-actualizadas', { // ← nuevo
+                                        detail: {
+                                            lat: pos.lat,
+                                            lng: pos.lng
+                                        }
+                                    }));
                             },
                             (error) => {
                                 console.error("Error detectado:", error.message);
-                                
+
                                 // 🟢 Le avisamos al usuario exactamente qué falló
-                                if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-                                    Alpine.store('toast').trigger('El GPS requiere una conexión segura (HTTPS)', 'error');
+                                if (window.location.protocol !== 'https:' && window.location
+                                    .hostname !== 'localhost') {
+                                    Alpine.store('toast').trigger(
+                                        'El GPS requiere una conexión segura (HTTPS)', 'error');
                                 } else if (error.code === error.PERMISSION_DENIED) {
-                                    Alpine.store('toast').trigger('Permiso de GPS denegado por el navegador', 'error');
+                                    Alpine.store('toast').trigger(
+                                        'Permiso de GPS denegado por el navegador', 'error');
                                 } else {
-                                    Alpine.store('toast').trigger('No se pudo obtener la ubicación precisa', 'error');
+                                    Alpine.store('toast').trigger(
+                                        'No se pudo obtener la ubicación precisa', 'error');
                                 }
 
                                 // Intento de respaldo de Leaflet si falla el GPS fino
@@ -294,7 +330,7 @@
 
                             if (data.address) {
                                 const a = data.address;
-                                
+
                                 // 1. Buscamos el nombre de la vía
                                 const calle = a.road || a.pedestrian || a.street || '';
                                 // 2. Buscamos el número (si existe en el mapa)
@@ -302,7 +338,8 @@
                                 // 3. Buscamos la urbanización o barrio
                                 const barrio = a.neighbourhood || a.suburb || a.residential || '';
                                 // 4. Buscamos el distrito/ciudad
-                                const distrito = a.city_district || a.district || a.city || a.town || '';
+                                const distrito = a.city_district || a.district || a.city || a.town ||
+                                    '';
 
                                 let direccionCorta = '';
 
@@ -310,7 +347,8 @@
                                 if (calle) {
                                     direccionCorta = `${calle}${numero}`;
                                     if (barrio) direccionCorta += `, ${barrio}`;
-                                    if (distrito && !direccionCorta.includes(distrito)) direccionCorta += `, ${distrito}`;
+                                    if (distrito && !direccionCorta.includes(distrito))
+                                        direccionCorta += `, ${distrito}`;
                                 } else {
                                     // Si estamos en un descampado o lugar sin nombre de calle, usamos el nombre completo
                                     direccionCorta = data.display_name;
@@ -320,9 +358,9 @@
                                 window.dispatchEvent(new CustomEvent('direccion-actualizada', {
                                     detail: direccionCorta
                                 }));
-                                
+
                                 // (Opcional) Intentamos actualizar directamente por si están anidados
-                                if(this.form) this.form.direccion = direccionCorta;
+                                if (this.form) this.form.direccion = direccionCorta;
                             }
                         } catch (error) {
                             console.error("Error al obtener dirección:", error);

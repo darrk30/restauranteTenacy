@@ -54,34 +54,6 @@
                     x-transition>
                 </span>
             </button>
-
-            {{-- <div class="w-px h-6 bg-gray-200 hidden md:block"></div> --}}
-
-            {{-- @auth
-                <div
-                    class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-gray-100 overflow-hidden cursor-pointer border-2 border-transparent hover:border-[#ce6439] transition-all shadow-sm">
-                    <img src="https://ui-avatars.com/api/?name={{ urlencode(auth()->user()->name ?? 'U') }}&background=ce6439&color=fff&bold=true"
-                        alt="Perfil">
-                </div>
-            @else
-                <a href="{{ route('login') }}"
-                    class="hidden md:flex items-center gap-2 bg-[#ce6439]/10 hover:bg-[#ce6439]/20 text-[#ce6439] text-sm font-bold px-4 py-2 rounded-full transition-colors">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1">
-                        </path>
-                    </svg>
-                    Ingresar
-                </a>
-
-                <a href="{{ route('login') }}" class="md:hidden text-gray-600 hover:text-[#ce6439] p-2">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1">
-                        </path>
-                    </svg>
-                </a>
-            @endauth --}}
         </div>
     </div>
 

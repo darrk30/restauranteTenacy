@@ -5,23 +5,26 @@ namespace App\Filament\Restaurants\Widgets;
 use App\Models\Purchase;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
-use Flowframe\Trend\Trend;
-use Flowframe\Trend\TrendValue;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class ComprasMensualesChart extends ChartWidget
 {
     use InteractsWithPageFilters;
 
-    protected static ?string $heading = 'Gastos en Compras de Insumos';
+    protected static ?string $heading = 'Resumen de Pagos y Compras';
     protected static ?int $sort = 4;
-    protected static string $color = 'danger';
+
+    // 🟢 1. Controla cuántas columnas ocupa en la cuadrícula (1 de 2, o 1 de 3)
+    protected int | string | array $columnSpan = 1;
+
+    // 🟢 2. Define una altura máxima para que no crezca demasiado hacia abajo
+    protected static ?string $maxHeight = '250px';
 
     protected function getData(): array
     {
         $rango = $this->filters['rango'] ?? 'hoy';
-        
-        // 1. Configuración de fechas según el filtro del Dashboard
+
         switch ($rango) {
             case 'hoy':
                 $start = now()->startOfDay();
@@ -44,39 +47,66 @@ class ComprasMensualesChart extends ChartWidget
                 $end = now()->endOfMonth();
         }
 
-        // 2. Consulta usando Trend
-        // Nota: No necesitamos filtrar por restaurant_id aquí porque tu modelo Purchase 
-        // ya tiene un GlobalScope que lo hace automáticamente.
-        $data = Trend::model(Purchase::class)
-            ->dateColumn('fecha_compra') // Usamos tu columna real
-            ->between(start: $start, end: $end);
+        $resumen = Purchase::query()
+            ->whereBetween('fecha_compra', [$start, $end])
+            ->select(
+                'estado_pago',
+                DB::raw('SUM(total) as monto_total'),
+                DB::raw('COUNT(*) as cantidad_compras')
+            )
+            ->groupBy('estado_pago')
+            ->get();
 
-        // 3. Ajustar agrupación
-        if ($rango === 'hoy') {
-            $data = $data->perHour()->sum('total');
-        } else {
-            $data = $data->perDay()->sum('total');
-        }
+        $pagado = $resumen->where('estado_pago', 'pagado')->first();
+        $pendiente = $resumen->where('estado_pago', 'pendiente')->first();
+
+        $montoPagado = (float) ($pagado?->monto_total ?? 0);
+        $montoPendiente = (float) ($pendiente?->monto_total ?? 0);
+
+        $cantPagado = $pagado?->cantidad_compras ?? 0;
+        $cantPendiente = $pendiente?->cantidad_compras ?? 0;
 
         return [
             'datasets' => [
                 [
-                    'label' => 'Compras Realizadas (S/)',
-                    'data' => $data->map(fn (TrendValue $value) => $value->aggregate),
-                    'backgroundColor' => '#ef4444',
-                    'borderColor' => '#ef4444',
-                    'borderRadius' => 4,
+                    'data' => [$montoPagado, $montoPendiente],
+                    'backgroundColor' => ['#22c55e', '#ef4444'],
                 ],
             ],
-            'labels' => $data->map(function (TrendValue $value) use ($rango) {
-                $date = Carbon::parse($value->date);
-                return $rango === 'hoy' ? $date->format('H:i') : $date->format('d/m');
-            }),
+            // 🟢 MODIFICACIÓN AQUÍ: Array de arrays para multilínea
+            'labels' => [
+                [
+                    "Total: S/ " . number_format($montoPagado, 2),
+                    "Pagados: $cantPagado compras",
+                ],
+                [
+                    "Total: S/ " . number_format($montoPendiente, 2),
+                    "Pendientes: $cantPendiente compras",
+                ],
+            ],
         ];
     }
 
     protected function getType(): string
     {
-        return 'bar';
+        return 'doughnut';
+    }
+
+    protected function getOptions(): array
+    {
+        return [
+            // 🟢 3. Ajustes de Chart.js para que sea más pequeño
+            'maintainAspectRatio' => false,
+            'plugins' => [
+                'legend' => [
+                    'display' => true,
+                    'position' => 'bottom',
+                    'labels' => [
+                        'boxWidth' => 12, // Cuadros de leyenda más pequeños
+                        'font' => ['size' => 11], // Letra más pequeña
+                    ],
+                ],
+            ],
+        ];
     }
 }

@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\MotivoNotaCredito;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -61,7 +60,7 @@ class CreditDebitNote extends Model
         'details'       => 'array',
         'notes'         => 'array',
         'success'       => 'boolean',
-        'cod_motivo'    => MotivoNotaCredito::class,
+        'cod_motivo'    => 'string',
     ];
 
     // ==========================================

@@ -57,7 +57,7 @@ class VentasPorDiaChart extends ChartWidget
         // 4. CONFIGURAR LA TENDENCIA (Trend)
         // Usamos Trend::query() para poder filtrar por el Tenant manualmente y asegurar que funcione
         $query = Sale::query()
-            ->where('restaurant_id', Filament::getTenant()->id);
+            ->where('restaurant_id', Filament::getTenant()->id)->where('status', 'completado'); // Solo ventas completadas
 
         $trend = Trend::query($query)
             ->dateColumn('fecha_emision')

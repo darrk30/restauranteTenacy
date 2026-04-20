@@ -47,6 +47,7 @@ class CantidadVentasCanalChart extends ChartWidget
         $getTrend = function ($canal) use ($start, $end, $rango) {
             $query = Sale::query()
                 ->where('restaurant_id', Filament::getTenant()->id)
+                ->where('status', 'completado')
                 ->where('canal', $canal);
 
             $trend = Trend::query($query)

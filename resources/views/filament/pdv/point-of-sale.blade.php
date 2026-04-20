@@ -1,6 +1,7 @@
 <x-filament-panels::page>
     @push('styles')
         <link rel="stylesheet" href="{{ asset('css/pdv_mesas.css') }}">
+        <link rel="stylesheet" href="{{ asset('css/ticket-modal.css') }}">
     @endpush
 
     <div x-data="{
@@ -316,10 +317,13 @@
                                         
                                         @if ($ordenParaDetalles->direccion)
                                             <div class="dm-value" style="margin-bottom: 15px; width: 100%;">
-                                                {{-- 🟢 2. ENLACE CON FLEX Y SPAN ADAPTATIVO PARA SALTO DE LÍNEA --}}
-                                                <a href="http://maps.google.com/?q={{ urlencode($ordenParaDetalles->direccion) }}" target="_blank" style="color: inherit; text-decoration: underline; display: flex; align-items: flex-start; gap: 6px; width: 100%; word-break: break-word;">
+                                                <a href="{{ \App\Helpers\DireccionHelper::urlMapa($ordenParaDetalles->direccion) }}"
+                                                    target="_blank"
+                                                    style="color: inherit; text-decoration: underline; display: flex; align-items: flex-start; gap: 6px; width: 100%; word-break: break-word;">
                                                     <x-heroicon-m-map-pin style="width: 16px; height: 16px; color: #ef4444; flex-shrink: 0; margin-top: 2px;" />
-                                                    <span style="line-height: 1.3; opacity: 0.8; flex: 1; min-width: 0; white-space: normal;">{{ $ordenParaDetalles->direccion }}</span>
+                                                    <span style="line-height: 1.3; opacity: 0.8; flex: 1; min-width: 0; white-space: normal;">
+                                                        {{ \App\Helpers\DireccionHelper::texto($ordenParaDetalles->direccion) }}
+                                                    </span>
                                                 </a>
                                             </div>
                                         @endif

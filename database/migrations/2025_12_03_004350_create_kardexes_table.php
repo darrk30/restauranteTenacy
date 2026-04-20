@@ -27,11 +27,12 @@ return new class extends Migration
 
             // Costo unitario y saldo valorizado después del movimiento
             $table->decimal('costo_unitario', 10, 4)->default(0);
+            $table->decimal('costo_promedio', 10, 4)->default(0);
             $table->decimal('saldo_valorizado', 15, 4)->default(0);
             
             // Stock restante después del movimiento
             $table->decimal('stock_restante', 12, 3)->nullable();
-            
+            $table->string('estado')->nullable();
             // Relación polimórfica (purchase, adjustment, sale)
             $table->nullableMorphs('modelo'); // modelo_id + modelo_type
             $table->timestamps();

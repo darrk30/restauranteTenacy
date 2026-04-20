@@ -18,6 +18,8 @@ return new class extends Migration
             $table->foreignId('product_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('unit_id')->nullable()->constrained()->onDelete('restrict');
             $table->decimal('cantidad', 12, 2)->default(0);
+            $table->decimal('costo', 12, 2)->default(0);
+            $table->decimal('subtotal', 12, 2)->default(0);
             $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
             $table->timestamps();
         });

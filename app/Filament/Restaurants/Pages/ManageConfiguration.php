@@ -84,14 +84,6 @@ class ManageConfiguration extends Page implements HasForms
                                             Toggle::make('mostrar_modal_impresion_comprobante')->label('Boletas/Facturas')->onColor('warning'),
                                         ]),
                                     ]),
-
-                                // Section::make('Pantalla KDS (Cocina)')
-                                //     ->schema([
-                                //         Toggle::make('mostrar_pantalla_cocina')
-                                //             ->label('Activar visualización de pedidos en pantalla de cocina')
-                                //             ->helperText('Ideal si no usas tiquetera física de comandas.')
-                                //             ->onColor('primary'),
-                                //     ]),
                             ]),
 
                         // 📱 PESTAÑA: CARTA DIGITAL Y WEB
@@ -117,17 +109,13 @@ class ManageConfiguration extends Page implements HasForms
                                 ]),
                             ]),
 
-                        // 💰 PESTAÑA: FACTURACIÓN
+                        //PESTAÑA: FACTURACIÓN
                         Tabs\Tab::make('Facturación')
                             ->icon('heroicon-o-receipt-percent')
                             // 🟢 4. Muestra esta pestaña solo si tiene este permiso específico
                             ->visible(fn() => auth()->user()->can('guardar_configuracion_facturacion_rest'))
                             ->schema([
                                 Grid::make(3)->schema([
-                                    // Toggle::make('precios_incluyen_impuesto')
-                                    //     ->label('Los precios ya incluyen impuestos')
-                                    //     ->helperText('Actívalo si tus precios en carta ya tienen el IGV sumado.')
-                                    //     ->onColor('success'),
 
                                     TextInput::make('porcentaje_impuesto')
                                         ->label('Porcentaje de Impuesto (%)')
