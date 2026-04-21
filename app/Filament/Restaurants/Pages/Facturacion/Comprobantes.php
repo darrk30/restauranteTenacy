@@ -158,7 +158,8 @@ class Comprobantes extends Page implements HasTable
                     })
                     ->formatStateUsing(fn(string $state) => ucfirst(str_replace('_', ' ', $state))),
                 TextColumn::make('code')->label('Cód. API')->toggleable(true),
-                TextColumn::make('description')->label('Detalle / Mensaje')->state(fn(Sale $record) => $record->description ?? $record->message ?? 'Sin detalles')->toggleable(true)->wrap(),
+                TextColumn::make('description')->label('Descripcion')->state(fn(Sale $record) => $record->description ?? $record->message ?? 'Sin detalles')->toggleable(true)->wrap(),
+                TextColumn::make('message')->label('Mensaje')->state(fn(Sale $record) => $record->message ?? $record->message ?? 'Sin mensaje')->toggleable(true)->wrap(),
             ])
             ->filters([
                 // Filtro 1: Comprobantes o Notas
@@ -247,8 +248,31 @@ class Comprobantes extends Page implements HasTable
                             }
 
                             if ($respuesta['data']['sunatResponse']['success'] ?? false) {
-                                $record->update(['status_sunat' => 'aceptado', 'success' => true]);
-                                Notification::make()->title('Aceptado')->success()->send();
+                                // 1. Extraemos la descripción y las notas (observaciones) de SUNAT
+                                $cdrResponse = $respuesta['data']['sunatResponse']['cdrResponse'] ?? [];
+                                $descripcionSunat = $cdrResponse['description'] ?? 'Aceptado por SUNAT';
+                                $observaciones = $cdrResponse['notes'] ?? [];
+
+                                // 2. Si hay observaciones, las concatenamos al mensaje
+                                $mensajeFinal = $descripcionSunat;
+                                if (!empty($observaciones)) {
+                                    $mensajeFinal .= " | Observaciones: " . implode(' - ', $observaciones);
+                                }
+
+                                // 3. Actualizamos el registro en la base de datos
+                                $record->update([
+                                    'status_sunat' => 'aceptado',
+                                    'success'      => true,
+                                    'description'  => $descripcionSunat,
+                                    'message'      => $mensajeFinal
+                                ]);
+
+                                // 4. Mostramos el mensaje real en la notificación verde
+                                Notification::make()
+                                    ->title('Aceptado')
+                                    ->body($descripcionSunat)
+                                    ->success()
+                                    ->send();
                             }
                         }),
 

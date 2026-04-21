@@ -52,20 +52,85 @@ class SunatGreenterApiService
      */
     protected function handleResponse($response)
     {
+        // 1. Intentamos convertir la respuesta a un arreglo de PHP
+        $data = $response->json();
+
+        // 2. Si la respuesta no es JSON o llegó vacía
+        if (is_null($data)) {
+            return [
+                'success'     => false,
+                'http_status' => $response->status(),
+                'error_data'  => $response->body(),
+                'message'     => 'La API devolvió una respuesta no válida o no es JSON.',
+            ];
+        }
+
+        // 3. Verificamos fallos de red o de servidor (Errores HTTP 400, 500, etc.)
         if ($response->failed()) {
-            $data = $response->json();
             return [
                 'success'     => false,
                 'http_status' => $response->status(),
                 'error_data'  => $data,
-                'message'     => $data['error'] ?? $data['message'] ?? 'Error en la API de Facturación.',
+                'message'     => $this->extractErrorMessage($data),
             ];
         }
 
+        // 4. Verificamos Falsos Positivos: HTTP 200, pero SUNAT dice "success: false"
+        // Este es el caso exacto de tu captura de pantalla
+        if (isset($data['sunatResponse']) && isset($data['sunatResponse']['success']) && $data['sunatResponse']['success'] === false) {
+            return [
+                'success'     => false,
+                'http_status' => $response->status(),
+                'error_data'  => $data,
+                'message'     => $this->extractErrorMessage($data),
+            ];
+        }
+
+        // Verificación de Falso Positivo genérico
+        if (isset($data['success']) && $data['success'] === false) {
+            return [
+                'success'     => false,
+                'http_status' => $response->status(),
+                'error_data'  => $data,
+                'message'     => $this->extractErrorMessage($data),
+            ];
+        }
+
+        // 5. Todo salió perfecto
         return [
             'success' => true,
-            'data'    => $response->json(),
+            'data'    => $data,
         ];
+    }
+
+    /**
+     * Función auxiliar inteligente para extraer el mensaje de error de cualquier estructura.
+     */
+    protected function extractErrorMessage(array $data): string
+    {
+        // Caso 1: La estructura exacta que me mostraste (sunatResponse -> error -> message)
+        if (isset($data['sunatResponse']['error']['message'])) {
+            $code = $data['sunatResponse']['error']['code'] ?? 'API';
+            return "SUNAT [$code]: " . $data['sunatResponse']['error']['message'];
+        }
+
+        // Caso 2: Si el error viene en la raíz como un array con 'message'
+        if (isset($data['error']['message'])) {
+            return $data['error']['message'];
+        }
+
+        // Caso 3: Si viene como un mensaje directo en la raíz
+        if (isset($data['message'])) {
+            return is_string($data['message']) ? $data['message'] : json_encode($data['message']);
+        }
+
+        // Caso 4: Si el error viene como string directo
+        if (isset($data['error']) && is_string($data['error'])) {
+            return $data['error'];
+        }
+
+        // Default si la API mandó un JSON raro que no sabemos leer
+        return 'Error en la API de Facturación, pero no se proporcionó un mensaje detallado.';
     }
 
     // ==========================================
