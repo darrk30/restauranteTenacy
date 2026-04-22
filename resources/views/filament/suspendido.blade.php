@@ -32,7 +32,7 @@
            Contactar a soporte
         </a>
         
-        <a href="/app" class="inline-block text-sm text-gray-400 hover:text-gray-900 transition-colors">
+        <a href="/pdv" class="inline-block text-sm text-gray-400 hover:text-gray-900 transition-colors">
             Volver a intentar
         </a>
     </div>

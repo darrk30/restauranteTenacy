@@ -6,6 +6,8 @@ use App\Http\Controllers\ImprimirController;
 use App\Http\Controllers\WebhookController;
 use App\Models\Sale;
 use Illuminate\Support\Facades\Route;
+use Mike42\Escpos\Printer;
+use Mike42\Escpos\PrintConnectors\DummyPrintConnector;
 
 Route::get('/', function () {
     return view('welcome');
@@ -56,3 +58,9 @@ Route::get('/cuenta-suspendida', function () {
 })->name('suspendido');
 
 Route::post('webhook/github', [WebhookController::class, 'github']);
+
+
+// Faltó definir {id_venta} en la cadena de texto de la URL
+Route::get('/impresion/ticket', function ($id_venta = 1) {
+    return view('pdf.print-test', ['id_venta' => $id_venta]);
+});
