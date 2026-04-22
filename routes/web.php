@@ -61,6 +61,12 @@ Route::post('webhook/github', [WebhookController::class, 'github']);
 
 
 // Faltó definir {id_venta} en la cadena de texto de la URL
-Route::get('/impresion/ticket', function ($id_venta = 1) {
-    return view('pdf.print-test', ['id_venta' => $id_venta]);
+// En routes/web.php de tu VPS
+Route::get('/test-print', function () {
+    event(new \App\Events\PrintJob([
+        'id_venta' => '12345',
+        'total' => '85.00',
+        'restaurant_id' => 1
+    ]));
+    return "Evento enviado al monitor local";
 });
