@@ -68,6 +68,8 @@ class PagarOrden extends Page implements HasForms, HasActions
     public $ventaExitosaId = null; // ID de la venta recién creada
     public $mostrarPantallaExito = false;
     public $puedeImprimirComprobante = false;
+    public $esDirecta = false;
+    public $imprimirComprobante = false;
     public $canal_orden;
 
     // Propiedades para el formulario de pago
@@ -652,7 +654,15 @@ class PagarOrden extends Page implements HasForms, HasActions
             \Log::error("Error generando PDF de la venta {$sale->id}: " . $e->getMessage());
         }
 
-        $this->puedeImprimirComprobante = $config->mostrar_modal_impresion_comprobante ?? true;
+        // $this->puedeImprimirComprobante = $config->mostrar_modal_impresion_comprobante ?? true;
+        // 1. ¿Debemos procesar un comprobante? (Si cualquiera de los dos está activo)
+        $this->imprimirComprobante = $config->mostrar_modal_impresion_comprobante || $config->impresion_directa_comprobante;
+
+        // 2. ¿Se debe mostrar visualmente en el modal?
+        $this->puedeImprimirComprobante = $config->mostrar_modal_impresion_comprobante;
+
+        // 3. ¿Es una impresión silenciosa/directa?
+        $this->esDirecta = $config->impresion_directa_comprobante;
 
         if ($statusSunatMensaje === 'aceptado') {
             Notification::make()->title('Venta y SUNAT exitosos')->success()->send();

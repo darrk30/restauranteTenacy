@@ -320,25 +320,69 @@
 
                         <div class="modal-exito-body">
 
-                            {{-- 🟢 CONDICIONAL DE IMPRESIÓN --}}
+                            {{-- Solo entra si al menos uno de los dos está activo --}}
+                            @if ($imprimirComprobante)
+                                <div class="ticket-wrapper {{ !$puedeImprimirComprobante ? 'hidden-visual' : '' }}">
+
+                                    @if ($esDirecta && $puedeImprimirComprobante)
+                                        <div class="alerta-directa-flotante">
+                                            <span class="text-xs text-emerald-600 font-bold">✔ Enviando a
+                                                tiquetera...</span>
+                                        </div>
+                                    @endif
+
+                                    {{-- Esta es la única llamada que se hace --}}
+                                    <iframe
+                                        src="{{ route('sales.print.ticket', ['sale' => $ventaExitosaId]) }}?hide_actions=1"
+                                        class="ticket-iframe">
+                                    </iframe>
+                                </div>
+                            @else
+                                {{-- Si ambos están apagados, mostramos un icono de check simple --}}
+                                <div class="sin-impresion-placeholder">
+                                    <x-heroicon-o-document-check class="icon-muted" />
+                                    <p>Venta registrada sin impresión automática</p>
+                                </div>
+                            @endif
+
+                            <div class="grupo-botones-exito">
+                                {{-- El botón de reimprimir solo sale si el modal visual estaba permitido o por comodidad del cajero --}}
+                                @if ($puedeImprimirComprobante)
+                                    <button onclick="ejecutarReimpresion(this)" class="btn-exito btn-reimprimir">
+                                        <x-heroicon-o-printer class="btn-icon" />
+                                        <span>Reimprimir</span>
+                                    </button>
+                                @endif
+
+                                <button wire:click="terminarProcesoVenta" class="btn-exito btn-nueva-venta">
+                                    <span>Nueva Venta</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <style>
+                            /* Si solo es impresión directa, ocultamos el contenedor pero dejamos que el iframe cargue */
+                            .hidden-visual {
+                                visibility: hidden;
+                                height: 0;
+                                margin: 0;
+                                padding: 0;
+                                overflow: hidden;
+                            }
+                        </style>
+                        {{-- <div class="modal-exito-body">
+
                             @if ($puedeImprimirComprobante)
                                 <div class="ticket-wrapper">
                                     <iframe
                                         src="{{ route('sales.print.ticket', ['sale' => $ventaExitosaId]) }}?hide_actions=1"
                                         class="ticket-iframe"></iframe>
                                 </div>
-                                {{-- @else
-                                <div style="text-align: center; padding: 20px 0; color: #6b7280;">
-                                    <x-heroicon-o-document-check
-                                        style="width: 40px; height: 40px; margin: 0 auto; opacity: 0.5;" />
-                                    <p style="margin-top: 10px; font-size: 14px;">Impresión de comprobantes deshabilitada.</p>
-                                </div> --}}
                             @endif
 
                             <div class="grupo-botones-exito"
                                 style="{{ !$puedeImprimirComprobante ? 'grid-template-columns: 1fr;' : '' }}">
 
-                                {{-- 🟢 CONDICIONAL DEL BOTÓN REIMPRIMIR --}}
                                 @if ($puedeImprimirComprobante)
                                     <button onclick="ejecutarReimpresion(this)" class="btn-exito btn-reimprimir">
                                         <x-heroicon-o-printer class="btn-icon" style="width: 20px; height: 20px;" />
@@ -357,20 +401,18 @@
 
                                 <button wire:click="terminarProcesoVenta" wire:loading.attr="disabled"
                                     class="btn-exito btn-nueva-venta">
-                                    {{-- Estado Normal --}}
                                     <div wire:loading.remove class="flex items-center gap-2"
                                         style="justify-content: center; width: 100%;">
                                         <span>Nueva Venta</span>
                                         <x-heroicon-o-arrow-right style="width: 20px; height: 20px;" />
                                     </div>
 
-                                    {{-- Estado Cargando --}}
                                     <div wire:loading>
                                         <x-spiner-text>PROCESANDO...</x-spiner-text>
                                     </div>
                                 </button>
                             </div>
-                        </div>
+                        </div> --}}
                     </div>
                 </div>
             @endif

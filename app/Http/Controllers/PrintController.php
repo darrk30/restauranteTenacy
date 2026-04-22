@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\PrintJob;
 use App\Models\CreditDebitNote;
 use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -31,4 +32,6 @@ class PrintController extends Controller
 
         return $pdf->stream($nombreArchivo);
     }
+
+
 }
