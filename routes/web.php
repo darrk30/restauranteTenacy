@@ -1,9 +1,11 @@
 <?php
 
+use App\Events\PrintJob;
 use App\Http\Controllers\CartaController;
 use App\Http\Controllers\PrintController;
 use App\Http\Controllers\ImprimirController;
 use App\Http\Controllers\WebhookController;
+use App\Models\Restaurant;
 use App\Models\Sale;
 use Illuminate\Support\Facades\Route;
 use Mike42\Escpos\Printer;
@@ -62,10 +64,25 @@ Route::post('webhook/github', [WebhookController::class, 'github']);
 
 // test de evento de impresión para monitor local
 Route::get('/test-print', function () {
-    event(new \App\Events\PrintJob([
+    // 1. Buscamos el restaurante (en la vida real lo sacas del usuario logueado)
+    $restaurante = Restaurant::find(1);
+
+    // 2. Usamos tu excelente método de caché para obtener el token
+    // Esto NO hace consulta a la BD si ya está en RAM
+    $tokenImpresion = $restaurante->cached_config->api_token;
+
+    // 3. Validamos que el restaurante realmente tenga un token configurado
+    if (!$tokenImpresion) {
+        return "El restaurante no tiene un token de impresión configurado.";
+    }
+
+    // 4. Disparamos el evento
+    event(new PrintJob([
         'id_venta' => '12345',
         'total' => '85.00',
-        'restaurant_id' => 1
+        'restaurant_id' => $restaurante->id,
+        'api_token' => $tokenImpresion
     ]));
-    return "Evento enviado al monitor local";
+    
+    return "Evento enviado al monitor local usando el token en caché";
 });
