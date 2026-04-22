@@ -23,8 +23,9 @@ class PrintJob implements ShouldBroadcast
 
     public function broadcastOn()
     {
-        // El canal ahora será algo como: impresora.token_secreto_123
-        return new PrivateChannel('impresora.' . $this->venta['api_token']);
+        // El 'api_token' es lo que garantiza que el mensaje 
+        // viaje por un "túnel" único para ese cliente.
+        return new Channel('impresora.' . $this->venta['api_token']);
     }
 
     public function broadcastAs()
