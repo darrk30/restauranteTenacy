@@ -4,6 +4,7 @@ namespace App\Events;
 
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -22,9 +23,8 @@ class PrintJob implements ShouldBroadcast
 
     public function broadcastOn()
     {
-        // MAGIA MULTI-TENANT: El canal ahora incluye el ID del restaurante
-        // Ejemplo: 'impresora.restaurante.5'
-        return new Channel('impresora.restaurante.' . $this->venta['restaurant_id']);
+        // El canal ahora será algo como: impresora.token_secreto_123
+        return new PrivateChannel('impresora.' . $this->venta['api_token']);
     }
 
     public function broadcastAs()
