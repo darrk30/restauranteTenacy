@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('code');
             $table->boolean('status')->default(true);
             $table->foreignId('restaurant_id')->constrained()->onDelete('cascade');
+            $table->foreignId('printer_id')->nullable()->constrained('printers')->restrictOnDelete();
             $table->unique(['restaurant_id', 'code']);
             $table->timestamps();
         });

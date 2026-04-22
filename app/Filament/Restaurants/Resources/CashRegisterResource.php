@@ -7,6 +7,7 @@ use App\Filament\Restaurants\Resources\CashRegisterResource\RelationManagers;
 use App\Filament\Restaurants\Resources\CashRegisterResource\RelationManagers\UsersRelationManager;
 use App\Models\CashRegister;
 use Filament\Forms;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -35,6 +36,15 @@ class CashRegisterResource extends Resource
                     ->label('Nombre')
                     ->required()
                     ->maxLength(255),
+
+                Select::make('printer_id')
+                    ->label('Impresora asignada')
+                    ->relationship('printer', 'name')
+                    ->searchable()
+                    ->placeholder('Ninguna')
+                    ->preload()
+                    ->columnSpan(1),
+
                 Forms\Components\TextInput::make('code')
                     ->label('Código')
                     ->required()
@@ -50,6 +60,7 @@ class CashRegisterResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')->label('Nombre')->sortable()->searchable(),
+                Tables\Columns\TextColumn::make('printer.name')->label('Impresora')->sortable()->searchable(),
                 Tables\Columns\TextColumn::make('code')->label('Código')->sortable()->searchable(),
                 Tables\Columns\IconColumn::make('status')->label('Activo')->sortable()->boolean(),
                 Tables\Columns\TextColumn::make('created_at')

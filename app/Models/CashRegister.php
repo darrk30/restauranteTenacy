@@ -9,6 +9,7 @@ class CashRegister extends Model
 {
     protected $fillable = [
         'restaurant_id',
+        'printer_id',
         'name',
         'code',
         'status',
@@ -17,6 +18,11 @@ class CashRegister extends Model
     public function restaurant()
     {
         return $this->belongsTo(Restaurant::class);
+    }
+
+    public function printer()
+    {
+        return $this->belongsTo(Printer::class);
     }
 
     public function users()
