@@ -60,8 +60,7 @@ Route::get('/cuenta-suspendida', function () {
 Route::post('webhook/github', [WebhookController::class, 'github']);
 
 
-// Faltó definir {id_venta} en la cadena de texto de la URL
-// En routes/web.php de tu VPS
+// test de evento de impresión para monitor local
 Route::get('/test-print', function () {
     event(new \App\Events\PrintJob([
         'id_venta' => '12345',
