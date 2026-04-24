@@ -103,94 +103,17 @@ class ImprimirController extends Controller
         ]);
     }
 
-    // public function printTicket(Sale $sale)
-    // {
-    //     // 1. Cargamos todas las relaciones necesarias
-    //     $sale->load(['details', 'user', 'restaurant']);
-    //     $tenant = $sale->restaurant;
-
-    //     if (!$tenant) {
-    //         abort(404, 'Información del restaurante no encontrada.');
-    //     }
-
-    //     // 2. Mostramos la pantalla normal para que el cajero pueda imprimirlo
-    //     return view('pdf.ticket-venta', compact('sale', 'tenant'));
-    // }
-
     public function printTicket(Sale $sale)
     {
-        // 1. Cargamos lo básico
         $sale->load(['details', 'user', 'restaurant']);
         $tenant = $sale->restaurant;
-        $config = $tenant->cached_config;
-
-        $esDirecta = $config->impresion_directa_comprobante ?? false;
-        $mostrarModal = $config->mostrar_modal_impresion_comprobante ?? false;
-
-        // --- ACCIÓN 1: Si es directa, buscamos la caja y enviamos a Reverb ---
-        if ($esDirecta) {
-
-            // Buscamos la sesión de caja abierta según tu lógica
-            // Usamos el user_id de la venta para saber en qué caja se procesó
-            $sesionCaja = \App\Models\SessionCashRegister::where('restaurant_id', $tenant->id)
-                ->where('user_id', $sale->user_id)
-                ->where('status', 'open')
-                ->with('cashRegister.printer') // Cargamos la impresora de la caja
-                ->first();
-
-            // Extraemos el nombre de la impresora (o usamos una por defecto)
-            $nombreImpresora = $sesionCaja?->cashRegister?->printer?->name ?? 'Impresora_Predeterminada';
-
-            // Generamos el PDF en memoria
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.ticket-venta', [
-                'sale' => $sale,
-                'tenant' => $tenant
-            ])->setPaper([0, 0, 226.77, 800], 'portrait');
-
-            // Despachamos a Electron usando el método interno
-            $this->dispatchToElectron([
-                'base64'        => base64_encode($pdf->output()),
-                'api_token'     => $config->api_token,
-                'restaurant_id' => $tenant->id,
-                'nro_orden'     => $sale->serie . '-' . $sale->correlativo,
-                'mozo'          => $sale->user->name ?? 'Cajero',
-                'total'         => $sale->total,
-                'printer_name'  => $nombreImpresora // Enviamos el nombre de la impresora de la caja
-            ]);
+        if (!$tenant) {
+            abort(404, 'Información del restaurante no encontrada.');
         }
-
-        // --- ACCIÓN 2: Respuesta para el Iframe ---
-        if (!$mostrarModal && $esDirecta) {
-            return response('<p style="font-family:sans-serif; text-align:center; color:#10b981; font-size:12px; margin-top:50px;">✔ Enviado a tiquetera física</p>');
-        }
-
         return view('pdf.ticket-venta', compact('sale', 'tenant'));
     }
 
-    /**
-     * Método interno: Despachador de Eventos
-     * Se puede usar internamente por otros métodos del controlador
-     */
-    protected function dispatchToElectron(array $data)
-    {
-        // Preparamos el payload final
-        $payload = [
-            'base64'        => $data['base64'],
-            'api_token'     => $data['api_token'],
-            'restaurant_id' => $data['restaurant_id'],
-            'nro_orden'     => $data['nro_orden'],
-            'mozo'          => $data['mozo'],
-            'total'         => $data['total'] ?? '0.00',
-            'printer_name'  => $data['printer_name'] ?? 'Default',
-            'fecha'         => now()->format('d/m/Y H:i:s'),
-        ];
-
-        // Disparamos el evento de Laravel Reverb
-        event(new PrintJob($payload));
-
-        return true;
-    }
-
+    
     /**
      * Opcional: Si aún necesitas una RUTA API para enviar datos externos,
      * este método recibe el Request y usa el despachador interno.

@@ -26,7 +26,7 @@ class GestionNotas extends Page implements HasTable
     protected static ?int $navigationSort = 150;
     protected static string $view = 'filament.facturacion.gestion-notas';
 
-    
+
     public static function canAccess(): bool
     {
         if (! Filament::getTenant()) {
@@ -49,25 +49,29 @@ class GestionNotas extends Page implements HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->query(CreditDebitNote::query()->latest()) // 🟢 Datos base de la tabla
+            ->query(
+                CreditDebitNote::query()
+                    ->where('restaurant_id', Filament::getTenant()->id)
+                    ->latest()
+            )
             ->columns([
                 TextColumn::make('fecha_emision')
                     ->label('Fecha Emisión')
-                    ->date('d/m/Y H:i')
+                    ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->searchable(),
 
                 TextColumn::make('comprobante')
                     ->label('Nota C/D')
-                    ->state(fn (CreditDebitNote $record): string => "{$record->serie}-{$record->correlativo}")
+                    ->state(fn(CreditDebitNote $record): string => "{$record->serie}-{$record->correlativo}")
                     ->searchable(['serie', 'correlativo'])
                     ->weight('bold')
                     ->sortable(),
 
                 TextColumn::make('sale.comprobante')
                     ->label('Doc. Afectado')
-                    ->state(fn (CreditDebitNote $record): string => "{$record->sale->serie}-{$record->sale->correlativo}")
-                    ->description(fn (CreditDebitNote $record): string => $record->des_motivo)
+                    ->state(fn(CreditDebitNote $record): string => "{$record->sale->serie}-{$record->sale->correlativo}")
+                    ->description(fn(CreditDebitNote $record): string => $record->des_motivo)
                     ->searchable()
                     ->sortable(),
 
@@ -80,43 +84,51 @@ class GestionNotas extends Page implements HasTable
                 TextColumn::make('status_sunat')
                     ->label('Estado SUNAT')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'aceptado'   => 'success',
                         'registrado' => 'warning',
                         'rechazado'  => 'danger',
                         'error_api'  => 'danger',
                         default      => 'gray',
                     })
-                    ->formatStateUsing(fn (string $state): string => strtoupper($state)),
+                    ->formatStateUsing(fn(string $state): string => strtoupper($state)),
             ])
             ->filters([
                 //
             ])
             ->actions([
-                // 🟢 ACCIÓN: PDF
-                Action::make('descargar_pdf')
-                    ->label('PDF')
-                    ->icon('heroicon-o-document-text')
-                    ->color('danger')
-                    ->visible(fn() => Auth::user()->can('descargar_notas_xml_cdr_pdf_rest'))
-                    ->url(fn (CreditDebitNote $record) => route('notas.print.ticket', ['nota' => $record->id]))
-                    ->openUrlInNewTab(),
+                // Envolvemos todo en un ActionGroup
+                \Filament\Tables\Actions\ActionGroup::make([
 
-                // 🟢 ACCIÓN: XML
-                Action::make('descargar_xml')
-                    ->label('XML')
-                    ->icon('heroicon-o-code-bracket')
-                    ->color('warning')
-                    ->visible(fn (CreditDebitNote $record) => Auth::user()->can('descargar_notas_xml_cdr_pdf_rest') && !empty($record->path_xml))
-                    ->action(fn (CreditDebitNote $record) => Storage::disk('public')->download($record->path_xml)),
+                    // 🟢 ACCIÓN: PDF
+                    Action::make('descargar_pdf')
+                        ->label('Descargar PDF')
+                        ->icon('heroicon-o-document-text')
+                        ->color('danger')
+                        ->visible(fn() => Auth::user()->can('descargar_notas_xml_cdr_pdf_rest'))
+                        ->url(fn(CreditDebitNote $record) => route('notas.print.ticket', ['nota' => $record->id]))
+                        ->openUrlInNewTab(),
 
-                // 🟢 ACCIÓN: CDR
-                Action::make('descargar_cdr')
-                    ->label('CDR')
-                    ->icon('heroicon-o-archive-box')
-                    ->color('success')
-                    ->visible(fn (CreditDebitNote $record) => Auth::user()->can('descargar_notas_xml_cdr_pdf_rest') && !empty($record->path_cdrZip))
-                    ->action(fn (CreditDebitNote $record) => Storage::disk('public')->download($record->path_cdrZip)),
+                    // 🟢 ACCIÓN: XML
+                    Action::make('descargar_xml')
+                        ->label('Descargar XML')
+                        ->icon('heroicon-o-code-bracket')
+                        ->color('warning')
+                        ->visible(fn(CreditDebitNote $record) => Auth::user()->can('descargar_notas_xml_cdr_pdf_rest') && !empty($record->path_xml))
+                        ->action(fn(CreditDebitNote $record) => Storage::disk('public')->download($record->path_xml)),
+
+                    // 🟢 ACCIÓN: CDR
+                    Action::make('descargar_cdr')
+                        ->label('Descargar CDR')
+                        ->icon('heroicon-o-archive-box')
+                        ->color('success')
+                        ->visible(fn(CreditDebitNote $record) => Auth::user()->can('descargar_notas_xml_cdr_pdf_rest') && !empty($record->path_cdrZip))
+                        ->action(fn(CreditDebitNote $record) => Storage::disk('public')->download($record->path_cdrZip)),
+
+                ])
+                    ->icon('heroicon-m-ellipsis-vertical') // Icono de los 3 puntos
+                    ->tooltip('Opciones')
+                    ->color('gray') // Color del botón de los 3 puntos
             ])
             ->bulkActions([
                 BulkActionGroup::make([

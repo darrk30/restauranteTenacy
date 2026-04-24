@@ -714,25 +714,24 @@
         {{-- LÓGICA DE PREPARACIÓN DE PESTAÑAS Y LLAMADA AL MODAL --}}
         {{-- ========================================================================= --}}
         @php
-            $jobId = session('print_job_id');
             $areasCollection = collect();
 
-            // 1. Intentamos obtener datos del Cache (Impresión Parcial/Actualización)
-            $datosCache = $jobId ? \Illuminate\Support\Facades\Cache::get($jobId) : null;
+            // 1. Intentamos obtener datos del Cache usando la propiedad de la clase
+            $datosCache = $currentPrintJobId ? \Illuminate\Support\Facades\Cache::get($currentPrintJobId) : null;
 
             if ($datosCache) {
-                // Fusionamos 'nuevos' y 'cancelados' que vienen del cache
+                // Fusionamos 'nuevos' y 'cancelados' para saber qué pestañas de áreas mostrar
                 $items = array_merge($datosCache['nuevos'] ?? [], $datosCache['cancelados'] ?? []);
                 foreach ($items as $item) {
-                    // Aquí usamos el 'area_id' que agregamos al backend en el paso anterior
                     $areasCollection->push([
                         'id' => $item['area_id'] ?? 'general',
                         'name' => $item['area_nombre'] ?? 'GENERAL',
                     ]);
                 }
             }
-            // 2. Si no hay cache, usamos el objeto Order completo (Impresión Total/Reimpresión)
-            elseif ($ordenGenerada) {
+            // 2. Fallback: Si no hay cache, PERO NO es una actualización (es decir, impresión total)
+            // Solo entramos aquí si realmente queremos imprimir TODA la orden
+            elseif ($ordenGenerada && !$currentPrintJobId) {
                 foreach ($ordenGenerada->details as $det) {
                     $prod = $det->product->production ?? null;
                     $printer = $prod?->printer ?? null;
@@ -745,13 +744,11 @@
                 }
             }
 
-            // Filtramos para tener solo una pestaña por área
             $areasUnicas = $areasCollection->unique('id');
         @endphp
 
         @if ($mostrarModalComanda && $ordenGenerada)
-            {{-- PASAMOS LA VARIABLE $areasUnicas AL COMPONENTE --}}
-            <x-modal-ticket :orderId="$ordenGenerada->id" :jobId="$jobId" :areas="$areasUnicas" />
+            <x-modal-ticket :orderId="$ordenGenerada->id" :jobId="$currentPrintJobId" :areas="$areasUnicas" />
         @endif
         {{-- ========================================================================= --}}
 

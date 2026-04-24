@@ -307,112 +307,88 @@
         <div id="contenedor-pantalla-exito">
             @if ($mostrarPantallaExito && $ventaExitosaId)
                 <div class="pantalla-exito-overlay">
-                    <div class="modal-exito-contenedor animate-zoom-in">
+                    <div class="modal-exito-contenedor animate-zoom-in"
+                        style="max-width: 450px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
 
-                        <div class="modal-exito-header">
-                            <div class="icono-check-circulo">
-                                <x-heroicon-o-check-badge style="width: 40px; height: 40px; color: white;" />
+                        {{-- HEADER --}}
+                        <div class="modal-exito-header"
+                            style="padding: 20px; background: #10b981; color: white; text-align: center;">
+                            <div class="icono-check-circulo" style="margin-bottom: 10px;">
+                                <x-heroicon-o-check-badge
+                                    style="width: 50px; height: 50px; color: white; margin: 0 auto;" />
                             </div>
-                            <h2 class="titulo-exito" style="font-size: 1.5rem; font-weight: bold; margin:0;">¡Venta
-                                Exitosa!</h2>
-                            <p style="margin: 5px 0 0 0; opacity: 0.9;">El cobro se ha registrado correctamente</p>
+                            <h2 style="font-size: 1.5rem; font-weight: bold; margin:0;">¡Venta Exitosa!</h2>
+                            <p style="margin: 5px 0 0 0; font-size: 0.9rem; opacity: 0.9;">Documento registrado
+                                correctamente</p>
                         </div>
 
-                        <div class="modal-exito-body">
+                        <div class="modal-exito-body" style="padding: 20px;">
 
-                            {{-- Solo entra si al menos uno de los dos está activo --}}
-                            @if ($imprimirComprobante)
-                                <div class="ticket-wrapper {{ !$puedeImprimirComprobante ? 'hidden-visual' : '' }}">
+                            {{-- ESCENARIO: MODAL DE COMPROBANTE ACTIVO --}}
+                            @if ($puedeImprimirComprobante)
+                                <div class="ticket-wrapper"
+                                    style="position: relative; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin-bottom: 20px; background: #f9fafb;">
 
-                                    @if ($esDirecta && $puedeImprimirComprobante)
-                                        <div class="alerta-directa-flotante">
-                                            <span class="text-xs text-emerald-600 font-bold">✔ Enviando a
-                                                tiquetera...</span>
+                                    {{-- LA CINTA DE ESTADO --}}
+                                    @if ($esDirecta && !$impresionFallida)
+                                        <div
+                                            style="background: #ecfdf5; color: #065f46; padding: 8px; text-align: center; font-size: 0.75rem; font-weight: bold; border-bottom: 1px solid #10b981; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                            <x-heroicon-s-printer class="w-4 h-4" />
+                                            ✔ TICKET ENVIADO A IMPRESORA
+                                        </div>
+                                    @elseif($impresionFallida)
+                                        <div
+                                            style="background: #fef2f2; color: #991b1b; padding: 8px; text-align: center; font-size: 0.75rem; font-weight: bold; border-bottom: 1px solid #f87171; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                            <x-heroicon-s-exclamation-triangle class="w-4 h-4" />
+                                            ⚠ FALLÓ LA IMPRESIÓN AUTOMÁTICA
                                         </div>
                                     @endif
 
-                                    {{-- Esta es la única llamada que se hace --}}
                                     <iframe
                                         src="{{ route('sales.print.ticket', ['sale' => $ventaExitosaId]) }}?hide_actions=1"
-                                        class="ticket-iframe">
+                                        class="ticket-iframe"
+                                        style="width: 100%; height: 300px; border: none; display: block;">
                                     </iframe>
                                 </div>
                             @else
-                                {{-- Si ambos están apagados, mostramos un icono de check simple --}}
-                                <div class="sin-impresion-placeholder">
-                                    <x-heroicon-o-document-check class="icon-muted" />
-                                    <p>Venta registrada sin impresión automática</p>
+                                {{-- ESCENARIO: COMPROBANTE OCULTO PERO IMPRESIÓN DIRECTA ACTIVA --}}
+                                <div
+                                    style="text-align: center; padding: 20px; background: #f9fafb; border-radius: 8px; margin-bottom: 20px; border: 1px dashed #d1d5db;">
+                                    <x-heroicon-o-document-check class="w-12 h-12 mx-auto text-gray-400" />
+                                    @if ($esDirecta && !$impresionFallida)
+                                        <p
+                                            style="margin-top: 10px; color: #059669; font-weight: bold; font-size: 0.9rem;">
+                                            ✔ Ticket enviado a impresora</p>
+                                    @else
+                                        <p style="margin-top: 10px; color: #6b7280; font-size: 0.9rem;">Comprobante
+                                            guardado correctamente</p>
+                                    @endif
                                 </div>
                             @endif
 
-                            <div class="grupo-botones-exito">
-                                {{-- El botón de reimprimir solo sale si el modal visual estaba permitido o por comodidad del cajero --}}
-                                @if ($puedeImprimirComprobante)
-                                    <button onclick="ejecutarReimpresion(this)" class="btn-exito btn-reimprimir">
-                                        <x-heroicon-o-printer class="btn-icon" />
-                                        <span>Reimprimir</span>
+                            {{-- GRUPO DE BOTONES --}}
+                            <div class="grupo-botones-exito"
+                                style="display: grid; grid-template-columns: {{ $puedeImprimirComprobante || $esDirecta ? '1fr 1fr' : '1fr' }}; gap: 10px;">
+
+                                @if ($puedeImprimirComprobante || $esDirecta)
+                                    <button onclick="manejadorImpresion(this)" class="btn-exito"
+                                        style="background: {{ $impresionFallida ? '#fee2e2' : '#f3f4f6' }}; color: {{ $impresionFallida ? '#991b1b' : '#374151' }}; border: 1px solid {{ $impresionFallida ? '#f87171' : '#d1d5db' }}; border-radius: 8px; padding: 10px; font-size: 0.9rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
+
+                                        @if ($esDirecta && !$impresionFallida)
+                                            <x-heroicon-o-bolt class="w-4 h-4" /> <span>Reimprimir</span>
+                                        @else
+                                            <x-heroicon-o-printer class="w-4 h-4" /> <span>Mostrar Ticket</span>
+                                        @endif
                                     </button>
                                 @endif
 
-                                <button wire:click="terminarProcesoVenta" class="btn-exito btn-nueva-venta">
-                                    <span>Nueva Venta</span>
+                                <button wire:click="terminarProcesoVenta" class="btn-exito"
+                                    style="background: #10b981; color: white; border: none; border-radius: 8px; padding: 10px; font-size: 0.9rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
+                                    <span>Siguiente</span>
+                                    <x-heroicon-o-arrow-right class="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
-
-                        <style>
-                            /* Si solo es impresión directa, ocultamos el contenedor pero dejamos que el iframe cargue */
-                            .hidden-visual {
-                                visibility: hidden;
-                                height: 0;
-                                margin: 0;
-                                padding: 0;
-                                overflow: hidden;
-                            }
-                        </style>
-                        {{-- <div class="modal-exito-body">
-
-                            @if ($puedeImprimirComprobante)
-                                <div class="ticket-wrapper">
-                                    <iframe
-                                        src="{{ route('sales.print.ticket', ['sale' => $ventaExitosaId]) }}?hide_actions=1"
-                                        class="ticket-iframe"></iframe>
-                                </div>
-                            @endif
-
-                            <div class="grupo-botones-exito"
-                                style="{{ !$puedeImprimirComprobante ? 'grid-template-columns: 1fr;' : '' }}">
-
-                                @if ($puedeImprimirComprobante)
-                                    <button onclick="ejecutarReimpresion(this)" class="btn-exito btn-reimprimir">
-                                        <x-heroicon-o-printer class="btn-icon" style="width: 20px; height: 20px;" />
-
-                                        <svg class="btn-loader hidden animate-spin" style="width: 20px; height: 20px;"
-                                            viewBox="0 0 24 24">
-                                            <circle class="opacity-25" cx="12" cy="12" r="10"
-                                                stroke="currentColor" stroke-width="4" fill="none"></circle>
-                                            <path class="opacity-75" fill="currentColor"
-                                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
-                                            </path>
-                                        </svg>
-                                        <span>Reimprimir</span>
-                                    </button>
-                                @endif
-
-                                <button wire:click="terminarProcesoVenta" wire:loading.attr="disabled"
-                                    class="btn-exito btn-nueva-venta">
-                                    <div wire:loading.remove class="flex items-center gap-2"
-                                        style="justify-content: center; width: 100%;">
-                                        <span>Nueva Venta</span>
-                                        <x-heroicon-o-arrow-right style="width: 20px; height: 20px;" />
-                                    </div>
-
-                                    <div wire:loading>
-                                        <x-spiner-text>PROCESANDO...</x-spiner-text>
-                                    </div>
-                                </button>
-                            </div>
-                        </div> --}}
                     </div>
                 </div>
             @endif
@@ -492,20 +468,37 @@
                     }));
                 });
 
-                function ejecutarReimpresion(btn) {
-                    const icon = btn.querySelector('.btn-icon');
-                    const loader = btn.querySelector('.btn-loader');
-                    const frame = document.querySelector('.ticket-iframe');
-                    frame.contentWindow.onafterprint = () => {
-                        icon.classList.remove('hidden');
-                        loader.classList.add('hidden');
-                        btn.style.pointerEvents = 'auto';
-                    };
-                    btn.style.pointerEvents = 'none';
-                    icon.classList.add('hidden');
-                    loader.classList.remove('hidden');
-                    frame.contentWindow.focus();
-                    frame.contentWindow.print();
+                async function manejadorImpresion(btn) {
+                    // 1. Obtenemos los valores EN TIEMPO REAL desde el objeto @this
+                    const esDirecta = await @this.get('esDirecta');
+                    const impresionFallida = await @this.get('impresionFallida');
+                    const ventaId = await @this.get('ventaExitosaId');
+                    if (esDirecta && !impresionFallida) {
+                        const originalHTML = btn.innerHTML;
+                        btn.innerHTML = '<span>Procesando...</span>';
+                        btn.disabled = true;
+                        const exito = await @this.reimprimirDirecto();
+                        btn.disabled = false;
+                        if (!exito) {
+                            console.log("El envío directo falló, el botón cambiará de estado.");
+                        } else {
+                            console.log("Envío directo exitoso.");
+                            btn.innerHTML = `<x-heroicon-o-printer class="w-4 h-4" /> <span>Reimprimir</span>`;
+                        }
+                        return;
+                    }
+
+                    const iframe = document.querySelector('.ticket-iframe');
+                    if (iframe && iframe.contentWindow) {
+                        iframe.contentWindow.print();
+                    } else {
+                        if (ventaId) {
+                            const url = `/sales/print-ticket/${ventaId}`;
+                            window.open(url, '_blank');
+                        } else {
+                            alert("No se encontró el ID de la venta. Intenta refrescar.");
+                        }
+                    }
                 }
             </script>
         @endpush
