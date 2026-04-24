@@ -12,6 +12,8 @@ use App\Models\Promotion;
 use App\Models\Table;
 use App\Services\OrdenService;
 use App\Models\Variant;
+use App\Services\ComandaPrintService;
+use App\Services\PrecuentaPrintService;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
@@ -76,6 +78,7 @@ class OrdenMesa extends Page implements HasActions
     public $mostrarModalPrecuenta = false;
     public $mesa = null;
     public ?int $pedido = null;
+    public $currentPrintJobId = null;
 
     public function mount(Request $request, $mesa = null, ?int $pedido = null)
     {
@@ -205,10 +208,14 @@ class OrdenMesa extends Page implements HasActions
 
             if (!empty($diffParaCocina['nuevos'])) {
                 // 🟢 Solo genera caché si imprime directo o usa modal
-                if ($config->mostrar_modal_impresion_comanda) {
+                if ($config->mostrar_modal_impresion_comanda || $config->impresion_directa_comanda) {
                     $jobId = 'print_' . $order->id . '_' . time();
                     Cache::put($jobId, $diffParaCocina, now()->addMinutes(5));
-                    session()->flash('print_job_id', $jobId);
+                    // session()->flash('print_job_id', $jobId);
+                    $this->currentPrintJobId = $jobId;
+                    if($config->impresion_directa_comanda){
+                        app(ComandaPrintService::class)->enviarComandaDirecta($order->id, $jobId);
+                    }
                 }
             }
 
@@ -433,23 +440,80 @@ class OrdenMesa extends Page implements HasActions
             StockActualizado::dispatch();
             $config = Filament::getTenant()->cached_config;
             if (!empty($diffParaCocina['nuevos']) || !empty($diffParaCocina['cancelados'])) {
-                if ($config->mostrar_modal_impresion_comanda) {
+                if ($config->mostrar_modal_impresion_comanda || $config->impresion_directa_comanda) {
                     $jobId = 'print_' . $this->pedido . '_' . time();
                     Cache::put($jobId, $diffParaCocina, now()->addMinutes(5));
-                    session()->flash('print_job_id', $jobId);
+                    // session(['current_print_job_id' => $jobId]);
+                    $this->currentPrintJobId = $jobId;
+                    if($config->impresion_directa_comanda){
+                        app(ComandaPrintService::class)->enviarComandaDirecta($this->pedido, $jobId);
+                    }
                 }
             }
 
-            $this->ordenGenerada = $order->refresh()->load(['details.product.production.printer', 'table', 'user']);
+            $this->ordenGenerada = $order->refresh()->load([
+                'details.product.production.printer',
+                'table',
+                'user'
+            ]);
             if ($config->mostrar_modal_impresion_comanda) {
                 $this->mostrarModalComanda = true;
             }
             Notification::make()->title('Orden actualizada')->success()->send();
-            $this->cargarDatosPedido();
+            $this->recargarSoloCarrito();
         } catch (\Exception $e) {
             DB::rollBack();
             Notification::make()->title('Error')->body($e->getMessage())->danger()->send();
         }
+    }
+
+    // Nuevo método — solo recarga el carrito, no toca ordenGenerada ni el modal
+    private function recargarSoloCarrito(): void
+    {
+        if (!$this->pedido) return;
+
+        $ordenExistente = Order::with(['details' => function ($query) {
+            $query->where('status', '!=', StatusPedido::Cancelado);
+        }, 'details.product'])->find($this->pedido);
+
+        if (!$ordenExistente) return;
+
+        $this->cantidadesOriginales = [];
+        $this->notasOriginales      = [];
+        $this->preciosOriginales    = [];
+
+        $this->carrito = $ordenExistente->details->map(function ($detalle) {
+            $this->cantidadesOriginales[$detalle->id] = $detalle->cantidad;
+            $this->notasOriginales[$detalle->id]      = $detalle->notes;
+            $this->preciosOriginales[$detalle->id]    = $detalle->price;
+
+            $esPromocion = $detalle->item_type === TipoProducto::Promocion->value
+                || !empty($detalle->promotion_id);
+
+            $tipo  = $esPromocion ? TipoProducto::Promocion->value : TipoProducto::Producto->value;
+            $idReal = $esPromocion ? $detalle->promotion_id : $detalle->product_id;
+
+            return [
+                'item_id'      => $detalle->id,
+                'product_id'   => $esPromocion ? null : $detalle->product_id,
+                'variant_id'   => $detalle->variant_id,
+                'promotion_id' => $esPromocion ? $detalle->promotion_id : null,
+                'type'         => $tipo,
+                'name'         => $detalle->product_name,
+                'price'        => $detalle->price,
+                'quantity'     => $detalle->cantidad,
+                'total'        => $detalle->subTotal,
+                'is_cortesia'  => (bool) $detalle->cortesia,
+                'notes'        => $detalle->notes,
+                'image'        => $esPromocion
+                    ? (\App\Models\Promotion::find($idReal)?->image_path)
+                    : ($detalle->product?->image_path),
+                'guardado'     => true,
+            ];
+        })->toArray();
+
+        $this->hayCambios      = false;
+        $this->itemsEliminados = [];
     }
 
     // --- ACCIONES DE ANULACIÓN ---
@@ -532,11 +596,14 @@ class OrdenMesa extends Page implements HasActions
             }
             $config = Filament::getTenant()->cached_config;
             if (!empty($diffParaCocina['cancelados'])) {
-                if ($config->mostrar_modal_impresion_comanda) {
+                if ($config->mostrar_modal_impresion_comanda || $config->impresion_directa_comanda) {
                     $jobId = 'print_anul_' . $pedidoId . '_' . time();
                     Cache::put($jobId, $diffParaCocina, now()->addMinutes(5));
                     session()->flash('print_job_id', $jobId);
                     session()->flash('print_order_id', $pedidoId);
+                    if($config->impresion_directa_comanda){
+                        app(ComandaPrintService::class)->enviarComandaDirecta($pedidoId, $jobId);
+                    }
                 }
             }
 
@@ -990,6 +1057,10 @@ class OrdenMesa extends Page implements HasActions
     public function cerrarModalComanda()
     {
         $this->mostrarModalComanda = false;
+        $this->ordenGenerada = null;
+        $this->currentPrintJobId = null; // <--- Agrega esto
+
+        session()->forget(['print_job_id', 'current_print_job_id']);
     }
 
     public function incrementarCantidad($index)
@@ -1160,6 +1231,7 @@ class OrdenMesa extends Page implements HasActions
                 ->info()
                 ->send();
         }
+        app(PrecuentaPrintService::class)->enviarPrecuentaDirecta($this->pedido);
     }
 
     public function mostrarPrecuenta(): Action

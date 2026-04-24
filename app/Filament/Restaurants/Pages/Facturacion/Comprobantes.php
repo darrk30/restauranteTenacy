@@ -190,8 +190,17 @@ class Comprobantes extends Page implements HasTable
                         ->color('success')
                         ->visible(fn(Sale $record) => Auth::user()->can('descargar_comprobantes_xml_cdr_pdf_rest') && !empty($record->path_xml))
                         ->action(function (Sale $record) {
-                            $realId = $record->tipo_registro === 'nota' ? $record->id - 9000000 : $record->id;
-                            $modelo = $record->tipo_registro === 'nota' ? \App\Models\CreditDebitNote::find($realId) : \App\Models\Sale::find($realId);
+                            $isNota = $record->tipo_registro === 'nota';
+                            $realId = $isNota ? abs($record->id) : $record->id;
+
+                            $modelo = $isNota
+                                ? \App\Models\CreditDebitNote::find($realId)
+                                : \App\Models\Sale::find($realId);
+
+                            if (!$modelo || empty($modelo->path_xml) || !Storage::disk('public')->exists($modelo->path_xml)) {
+                                Notification::make()->title('Archivo no encontrado')->danger()->send();
+                                return;
+                            }
                             return Storage::disk('public')->download($modelo->path_xml);
                         }),
 
@@ -201,18 +210,45 @@ class Comprobantes extends Page implements HasTable
                         ->color('success')
                         ->visible(fn(Sale $record) => Auth::user()->can('descargar_comprobantes_xml_cdr_pdf_rest') && !empty($record->path_cdrZip))
                         ->action(function (Sale $record) {
-                            $realId = $record->tipo_registro === 'nota' ? $record->id - 9000000 : $record->id;
-                            $modelo = $record->tipo_registro === 'nota' ? \App\Models\CreditDebitNote::find($realId) : \App\Models\Sale::find($realId);
+                            // Detectamos si es nota y obtenemos el ID real usando valor absoluto
+                            $isNota = $record->tipo_registro === 'nota';
+                            $realId = $isNota ? abs($record->id) : $record->id;
+
+                            $modelo = $isNota
+                                ? \App\Models\CreditDebitNote::find($realId)
+                                : \App\Models\Sale::find($realId);
+
+                            if (!$modelo || empty($modelo->path_cdrZip) || !Storage::disk('public')->exists($modelo->path_cdrZip)) {
+                                Notification::make()->title('Archivo no encontrado')->danger()->send();
+                                return;
+                            }
+
                             return Storage::disk('public')->download($modelo->path_cdrZip);
                         }),
 
                     Action::make('descargar_pdf')
-                        ->label('Descargar PDF')
-                        ->icon('heroicon-o-document')
+                        ->label('PDF')
+                        ->icon('heroicon-o-document-text')
                         ->color('info')
-                        ->visible(fn(Sale $record) => Auth::user()->can('descargar_comprobantes_xml_cdr_pdf_rest') && !empty($record->path_pdf) && $record->tipo_registro === 'venta')
-                        ->action(fn(Sale $record) => Storage::disk('public')->download($record->path_pdf)),
-
+                        ->visible(function (Sale $record) {
+                            $userCan = Auth::user()->can('descargar_comprobantes_xml_cdr_pdf_rest');
+                            if ($record->tipo_registro === 'venta') {
+                                return $userCan && !empty($record->path_pdf);
+                            }
+                            return $userCan && $record->tipo_registro === 'nota';
+                        })
+                        ->action(function (Sale $record) {
+                            $realId = abs($record->id);
+                            if ($record->tipo_registro === 'venta') {
+                                if (!empty($record->path_pdf) && Storage::disk('public')->exists($record->path_pdf)) {
+                                    return Storage::disk('public')->download($record->path_pdf);
+                                }
+                                Notification::make()->title('Archivo no encontrado')->warning()->send();
+                                return;
+                            } else {
+                                return redirect()->route('notas.print.ticket', ['nota' => $realId]);
+                            }
+                        }),
                     Action::make('enviar_sunat')
                         ->label(fn(Sale $record) => $record->status_sunat === 'error_api' ? 'Reenviar a SUNAT' : 'Enviar a SUNAT')
                         ->icon(fn(Sale $record) => $record->status_sunat === 'error_api' ? 'heroicon-o-arrow-path' : 'heroicon-o-cloud-arrow-up')
@@ -242,36 +278,92 @@ class Comprobantes extends Page implements HasTable
                             }
 
                             if (!$respuesta['success']) {
-                                $record->update(['status_sunat' => 'error_api', 'message' => $respuesta['message'] ?? 'Error']);
-                                Notification::make()->title('Fallo')->body($respuesta['message'] ?? '')->danger()->send();
+                                $mensajeError = $respuesta['error_data']['error'] ?? $respuesta['message'] ?? 'Error desconocido';
+                                $record->update([
+                                    'status_sunat' => 'error_api',
+                                    'message' => $mensajeError
+                                ]);
+                                Notification::make()->title('Fallo de Conexión')->body($mensajeError)->danger()->send();
                                 return;
                             }
 
-                            if ($respuesta['data']['sunatResponse']['success'] ?? false) {
+                            $data = $respuesta['data'];
+                            $sunatResponse = $data['sunatResponse'] ?? [];
+                            if ($sunatResponse['success'] ?? false) {
                                 // 1. Extraemos la descripción y las notas (observaciones) de SUNAT
-                                $cdrResponse = $respuesta['data']['sunatResponse']['cdrResponse'] ?? [];
+                                $cdrResponse = $sunatResponse['cdrResponse'] ?? [];
                                 $descripcionSunat = $cdrResponse['description'] ?? 'Aceptado por SUNAT';
                                 $observaciones = $cdrResponse['notes'] ?? [];
+
+                                $slug  = $tenant->slug ?? 'default';
+                                $fecha = \Carbon\Carbon::parse($record->fecha_emision)->format('Y-m-d');
+                                $tipoDocStr = $record->tipo_comprobante === 'Factura' ? '01' : '03';
+                                $correlativoInt = (int) $record->correlativo;
+                                $nombreBase = "{$tenant->ruc}-{$tipoDocStr}-{$record->serie}-{$correlativoInt}";
+
+                                // A. Si no tenía XML, lo guardamos ahora (viene en la respuesta de la API)
+                                if (!$tieneXml) {
+                                    $xmlBase64Nuevo = $data['xml'] ?? null;
+                                    if ($xmlBase64Nuevo) {
+                                        $pathXml = "tenants/{$slug}/comprobantes/xml/{$fecha}/{$nombreBase}.xml";
+                                        Storage::disk('public')->put($pathXml, base64_decode($xmlBase64Nuevo));
+                                        $record->path_xml = $pathXml;
+                                        $record->hash = $data['hash'] ?? null;
+                                    }
+                                }
+
+                                // B. Guardamos el CDR ZIP recibido
+                                $cdrBase64 = $sunatResponse['cdrZip'] ?? $data['cdrZip'] ?? null;
+                                $pathCdrZip = $record->path_cdrZip;
+                                if ($cdrBase64) {
+                                    $pathCdrZip = "tenants/{$slug}/comprobantes/cdr/{$fecha}/R-{$nombreBase}.zip";
+                                    Storage::disk('public')->put($pathCdrZip, base64_decode($cdrBase64));
+                                }
 
                                 // 2. Si hay observaciones, las concatenamos al mensaje
                                 $mensajeFinal = $descripcionSunat;
                                 if (!empty($observaciones)) {
-                                    $mensajeFinal .= " | Observaciones: " . implode(' - ', $observaciones);
+                                    $mensajeFinal .= " | Obs: " . implode(' - ', $observaciones);
                                 }
 
                                 // 3. Actualizamos el registro en la base de datos
+                                // 3. Actualización final del Registro
                                 $record->update([
                                     'status_sunat' => 'aceptado',
                                     'success'      => true,
+                                    'path_xml'     => $record->path_xml,
+                                    'path_cdrZip'  => $pathCdrZip,
+                                    'hash'         => $record->hash,
                                     'description'  => $descripcionSunat,
-                                    'message'      => $mensajeFinal
+                                    'message'      => $mensajeFinal,
+                                    'code'         => $cdrResponse['code'] ?? '0'
                                 ]);
 
-                                // 4. Mostramos el mensaje real en la notificación verde
                                 Notification::make()
-                                    ->title('Aceptado')
+                                    ->title('¡Aceptado!')
                                     ->body($descripcionSunat)
                                     ->success()
+                                    ->send();
+                            } else {
+                                // ==============================================================
+                                // 🔴 EL COMPROBANTE FUE RECHAZADO POR SUNAT
+                                // ==============================================================
+                                $errorSunat = $sunatResponse['error'] ?? [];
+                                $apiCode    = $errorSunat['code'] ?? 'Error';
+                                $apiMessage = $errorSunat['message'] ?? 'Rechazo desconocido';
+
+                                $record->update([
+                                    'status_sunat' => 'rechazado',
+                                    'success'      => false,
+                                    'code'         => $apiCode,
+                                    'message'      => $apiMessage,
+                                    'description'  => "Error SUNAT: " . $apiMessage,
+                                ]);
+
+                                Notification::make()
+                                    ->title('Rechazado por SUNAT')
+                                    ->body("[$apiCode] $apiMessage")
+                                    ->danger()
                                     ->send();
                             }
                         }),

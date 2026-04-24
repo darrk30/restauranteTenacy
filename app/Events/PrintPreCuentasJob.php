@@ -8,11 +8,11 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class PrintJob implements ShouldBroadcast
+class PrintPreCuentasJob implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $data;
+     public $data;
 
     public function __construct($data)
     {
@@ -21,12 +21,11 @@ class PrintJob implements ShouldBroadcast
 
     public function broadcastOn()
     {
-        // Usar el api_token es buena idea para identificar la tiquetera física
-        return new Channel('impresora.' . $this->data['api_token']);
+        return new Channel('precuenta.' . $this->data['api_token']);
     }
 
     public function broadcastAs()
     {
-        return 'nuevo-ticket';
+        return 'nueva-precuenta';
     }
 }

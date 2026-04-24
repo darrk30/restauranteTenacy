@@ -76,6 +76,7 @@ class PagarOrden extends Page implements HasForms, HasActions
     public $metodo_pago_seleccionado_id;
     public $monto_a_pagar = 0;
     public $requiere_referencia = false;
+    public $impresionFallida = false;
 
     public function mount($record)
     {
@@ -379,7 +380,7 @@ class PagarOrden extends Page implements HasForms, HasActions
             Notification::make()->title('Caja Cerrada')->danger()->send();
             return;
         }
-
+        $nombreImpresora = $sesionCaja->cashRegister?->printer?->name ?? 'Impresora_Predeterminada';
         if ($totalPagado < ($this->total_final - 0.01)) {
             Notification::make()->title('Pago incompleto')->danger()->send();
             return;
@@ -673,7 +674,83 @@ class PagarOrden extends Page implements HasForms, HasActions
         }
 
         $this->ventaExitosaId = $sale->id;
+        // Si es directa, disparamos el evento de una vez desde aquí
+        if ($config->impresion_directa_comprobante) {
+            $this->ejecutarImpresionDirecta($sale, $tenant, $nombreImpresora);
+        }
         $this->mostrarPantallaExito = true;
+    }
+
+    // Método auxiliar para no repetir código
+    protected function ejecutarImpresionDirecta($sale, $tenant, $nombreImpresora)
+    {
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.ticket-venta', [
+            'sale' => $sale,
+            'tenant' => $tenant
+        ])->setPaper([0, 0, 226.77, 800], 'portrait');
+
+        event(new \App\Events\PrintJob([
+            'tipo'          => 'comprobante',
+            'pdf_base64'        => base64_encode($pdf->output()),
+            'api_token'     => $tenant->cached_config->api_token,
+            'restaurant_id' => $tenant->id,
+            'nro_orden'     => "{$sale->serie}-{$sale->correlativo}",
+            'mozo'          => Auth::user()->name,
+            'total'         => $sale->total,
+            'printer_name'  => $nombreImpresora,
+            'fecha'         => now()->format('d/m/Y H:i:s'),
+        ]));
+    }
+
+
+    public function reimprimirDirecto()
+    {
+        try {
+            $sale = Sale::with(['details', 'user', 'restaurant'])->find($this->ventaExitosaId);
+            $tenant = $sale->restaurant;
+            $config = $tenant->cached_config;
+
+            $sesionCaja = \App\Models\SessionCashRegister::where('restaurant_id', $tenant->id)
+                ->where('user_id', Auth::id())
+                ->where('status', 'open')
+                ->with('cashRegister.printer')
+                ->first();
+
+            if (!$sesionCaja) throw new \Exception("Caja no encontrada");
+
+            $nombreImpresora = $sesionCaja->cashRegister?->printer?->name ?? 'Default';
+
+            // Ejecutamos la impresión (el método que ya teníamos)
+            $this->ejecutarImpresionDirecta($sale, $tenant, $nombreImpresora);
+
+            $this->impresionFallida = false; // Si llega aquí, todo bien
+            Notification::make()->title('Ticket enviado')->success()->send();
+            return true;
+        } catch (\Exception $e) {
+            $this->impresionFallida = true; // Marcamos el fallo
+            Notification::make()->title('La tiquetera local no respondió')->warning()->send();
+            return false;
+        }
+    }
+
+
+    public function reimprimirComprobante()
+    {
+        $sale = Sale::find($this->ventaExitosaId);
+        $tenant = Filament::getTenant();
+        $config = $tenant->cached_config;
+
+        if ($config->impresion_directa_comprobante) {
+            $sesionCaja = SessionCashRegister::where('user_id', Auth::id())->where('status', 'open')->first();
+            $nombreImpresora = $sesionCaja?->cashRegister?->printer?->name ?? 'Default';
+
+            $this->ejecutarImpresionDirecta($sale, $tenant, $nombreImpresora);
+
+            Notification::make()->title('Reenviado a ticketera local')->success()->send();
+        } else {
+            // 🔵 MODO NAVEGADOR: Disparamos JS para abrir el diálogo de impresión
+            $this->dispatch('open-print-window', url: route('sales.print.ticket', $sale->id));
+        }
     }
 
     public function terminarProcesoVenta()

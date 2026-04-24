@@ -8,7 +8,7 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class PrintJob implements ShouldBroadcast
+class PrintComandaJob implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -21,12 +21,11 @@ class PrintJob implements ShouldBroadcast
 
     public function broadcastOn()
     {
-        // Usar el api_token es buena idea para identificar la tiquetera física
-        return new Channel('impresora.' . $this->data['api_token']);
+        return new Channel('comanda.' . $this->data['api_token']);
     }
 
     public function broadcastAs()
     {
-        return 'nuevo-ticket';
+        return 'nueva-comanda';
     }
 }

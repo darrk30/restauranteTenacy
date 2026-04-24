@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\Table;
 use App\Models\TypeDocument;
 use App\Models\User;
+use App\Services\ComandaPrintService;
 use App\Services\DocumentoService;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
@@ -38,20 +39,41 @@ class PointOfSale extends Page
     public $mostrarModalCambioMesa = false;
     public $mesaOrigenId = null;
     public $mesaDestinoId = null;
-        // Añade esta variable pública a tu componente
+    // Añade esta variable pública a tu componente
     public $repartidorAsignadoRapido = '';
 
+    // public function mount()
+    // {
+    //     if (session()->has('print_order_id')) {
+    //         $idOrden = session('print_order_id');
+    //         $this->ordenGenerada = Order::with(['details.product.production.printer', 'table', 'user'])->find($idOrden);
+    //         if ($this->ordenGenerada) {
+    //             $this->mostrarModalComanda = true;
+    //         }
+    //     }
+    // }
     public function mount()
     {
+        // 🟢 Limpiar sesiones de creación que pudieran haber quedado
+        // (por si el usuario navegó sin completar el flujo)
+        if (!session()->has('print_order_id') && !session()->has('print_job_id')) {
+            session()->forget('orden_creada_id');
+            session()->forget('current_print_job_id');
+        }
+
         if (session()->has('print_order_id')) {
-            $idOrden = session('print_order_id');
-            $this->ordenGenerada = Order::with(['details.product.production.printer', 'table', 'user'])->find($idOrden);
+            $idOrden = session()->pull('print_order_id'); // 🟢 pull, no get
+            $this->ordenGenerada = Order::with([
+                'details.product.production.printer',
+                'table',
+                'user'
+            ])->find($idOrden);
+
             if ($this->ordenGenerada) {
                 $this->mostrarModalComanda = true;
             }
         }
     }
-
     public static function canAccess(): bool
     {
         if (! Filament::getTenant()) {
@@ -144,8 +166,6 @@ class PointOfSale extends Page
     public function cargarDetallesOrden($id)
     {
         $this->ordenParaDetalles = \App\Models\Order::with('details')->find($id);
-
-        // 🟢 INICIALIZAMOS EL SELECT CON EL REPARTIDOR ACTUAL (Si existe)
         if ($this->ordenParaDetalles && $this->ordenParaDetalles->canal === 'delivery') {
             $this->repartidorAsignadoRapido = $this->ordenParaDetalles->delivery_id ?? '';
         }
@@ -279,8 +299,14 @@ class PointOfSale extends Page
         session()->forget('print_order_id');
     }
 
+    public function reimprimirComanda($orderId)
+    {
+        // Sin jobId → el service usa la Order completa
+        app(ComandaPrintService::class)->enviarComandaDirecta($orderId);
+    }
+
     // 3. CONSULTA FILTRADA (getViewData)
-protected function getViewData(): array
+    protected function getViewData(): array
     {
         $tenant = Filament::getTenant();
         $user = auth()->user(); // 🟢 Obtenemos al usuario actual
@@ -312,11 +338,10 @@ protected function getViewData(): array
         // 🛡️ EL ESCUDO: Si el usuario TIENE el permiso de ver solo lo suyo, lo limitamos.
         // EXCEPTO si es Super Admin o Administrador (a ellos siempre les muestra todo, tengan o no el permiso)
         if ($debeFiltrar && ! $user->hasRole(['Super Admin', 'Administrador'])) {
-            
+
             // Filtramos las órdenes a solo las de ese motorizado
             $queryDelivery->where('delivery_id', $user->id);
-            
-        } 
+        }
         // Si NO tiene el permiso, el if se ignora y "queryDelivery" carga absolutamente TODO.
 
         return [
@@ -422,7 +447,7 @@ protected function getViewData(): array
     public function asignarRepartidorRapido($orderId)
     {
         $order = \App\Models\Order::find($orderId);
-        
+
         // Si se selecciona un repartidor, lo asignamos. Si se selecciona la opción vacía, lo removemos.
         $repartidorId = $this->repartidorAsignadoRapido ?: null;
         $repartidorNombre = null;
@@ -442,7 +467,7 @@ protected function getViewData(): array
                 ->title($repartidorId ? 'Repartidor asignado/cambiado' : 'Repartidor removido')
                 ->success()
                 ->send();
-                
+
             $this->cargarDetallesOrden($orderId); // Recargamos el modal
         }
     }

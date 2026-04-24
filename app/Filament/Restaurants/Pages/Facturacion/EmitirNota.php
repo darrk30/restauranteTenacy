@@ -340,9 +340,10 @@ class EmitirNota extends Page
                 'monto_igv'     => $igv,
                 'total'         => $total,
                 'details'       => $data['items'],
+                'status_sunat'  => 'registrado',
             ]);
 
-            DB::commit(); // Solo guardamos la existencia de la nota para tener el registro
+            DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
             Notification::make()->title('Error Crítico')->body($e->getMessage())->danger()->send();
@@ -365,17 +366,15 @@ class EmitirNota extends Page
                 return redirect()->to('/pdv/comprobantes');
             }
 
-            // ==========================================
-            // 3. PROCESAR RESPUESTA COMPLETA Y ARCHIVOS
-            // ==========================================
+            // 3. PROCESAR RESPUESTA Y ARCHIVOS
             $apiData = $respuesta['data'];
-            $apiSuccess = $apiData['sunatResponse']['success'] ?? false;
+            $sunatResponse = $apiData['sunatResponse'] ?? [];
+            $apiSuccess = $sunatResponse['success'] ?? false;
             $nombreBase = "{$tenant->ruc}-{$nota->tipo_nota}-{$nota->serie}-{$nota->correlativo}";
             $slug = $tenant->slug ?? 'default';
-            $fechaFolder = Carbon::parse($nota->fecha_emision)->format('Y-m-d');
+            $fechaFolder = \Carbon\Carbon::parse($nota->fecha_emision)->format('Y-m-d');
 
-            // Guardar XML
-            $pathXml = null;
+            $pathXml = $nota->path_xml;
             if (!empty($apiData['xml'])) {
                 $pathXml = "tenants/{$slug}/notas/xml/{$fechaFolder}/{$nombreBase}.xml";
                 Storage::disk('public')->put($pathXml, base64_decode($apiData['xml']));
@@ -388,18 +387,15 @@ class EmitirNota extends Page
                 'total_letras' => $apiData['total_letras'] ?? null,
             ];
 
-            // 🟢 AQUÍ OCURRE LA MAGIA: SOLO SI SUNAT ACEPTA 🟢
             if ($apiSuccess) {
                 DB::beginTransaction();
                 try {
-                    // A. Procesar Stock (Kardex)
                     if ($data['tipo_nota'] === '07') {
                         $this->sale->update(['status' => 'anulada_por_nota']);
                         if (($data['devolver_stock'] ?? false)) {
                             foreach ($data['items'] as $item) {
-                                $saleDetail = SaleDetail::with(['product', 'variant', 'promotion.promotionproducts.product', 'promotion.promotionproducts.variant'])->find($item['id']);
+                                $saleDetail = SaleDetail::find($item['id']);
                                 if (!$saleDetail) continue;
-
                                 $saleDetail->cantidad = $item['cantidad'];
                                 $this->reverseItem($saleDetail, 'salida', "{$nota->serie}-{$nuevoCorrelativo}", 'NC Reingreso');
                             }
@@ -412,15 +408,16 @@ class EmitirNota extends Page
                                     'variant_id' => $item['variant_id'],
                                     'cantidad'   => $item['cantidad'],
                                 ]);
-                                $this->processItem($newItem, 'salida', "{$nota->serie}-{$nuevoCorrelativo}", 'ND Salida de Stock Nuevo');
+                                $this->processItem($newItem, 'salida', "{$nota->serie}-{$nuevoCorrelativo}", 'ND Salida Stock');
                             }
                         }
                     }
 
-                    // B. Registrar en Caja (También lo moví aquí para que no descuadre la caja si SUNAT rechaza)
                     $sesion = SessionCashRegister::where('user_id', Auth::id())->whereNull('closed_at')->first();
                     if ($sesion) {
-                        $origMov = CashRegisterMovement::where('referencia_type', Sale::class)->where('referencia_id', $this->sale->id)->first();
+                        $origMov = CashRegisterMovement::where('referencia_type', \App\Models\Sale::class)
+                            ->where('referencia_id', $this->sale->id)->first();
+
                         $sesion->cashRegisterMovements()->create([
                             'payment_method_id' => $origMov->payment_method_id ?? 1,
                             'usuario_id'        => Auth::id(),
@@ -432,33 +429,35 @@ class EmitirNota extends Page
                         ]);
                     }
 
-                    DB::commit(); // Confirmamos Kardex y Caja
+                    DB::commit();
                 } catch (\Exception $eKardex) {
                     DB::rollBack();
-                    Notification::make()->title('Error procesando Kardex/Caja post-SUNAT')->body($eKardex->getMessage())->danger()->send();
+                    Notification::make()->title('Error en Kardex/Caja')->body($eKardex->getMessage())->danger()->send();
                 }
 
-                // C. Guardar CDR
                 $pathCdrZip = null;
-                if (!empty($apiData['sunatResponse']['cdrZip'])) {
+                if (!empty($sunatResponse['cdrZip'])) {
                     $pathCdrZip = "tenants/{$slug}/notas/cdr/{$fechaFolder}/R-{$nombreBase}.zip";
-                    Storage::disk('public')->put($pathCdrZip, base64_decode($apiData['sunatResponse']['cdrZip']));
+                    Storage::disk('public')->put($pathCdrZip, base64_decode($sunatResponse['cdrZip']));
                 }
 
+                $cdrResponse = $sunatResponse['cdrResponse'] ?? [];
                 $updateData['status_sunat'] = 'aceptado';
                 $updateData['success']      = true;
                 $updateData['path_cdrZip']  = $pathCdrZip;
-                $updateData['code']         = $apiData['sunatResponse']['cdrResponse']['code'] ?? null;
-                $updateData['description']  = $apiData['sunatResponse']['cdrResponse']['description'] ?? null;
+                $updateData['code']         = $cdrResponse['code'] ?? null;
+                $updateData['description']  = $cdrResponse['description'] ?? 'Aceptado por SUNAT';
+                $updateData['message']      = $updateData['description'];
 
-                Notification::make()->title('¡Nota Aceptada por SUNAT!')->success()->send();
+                Notification::make()->title('¡Nota Aceptada!')->success()->send();
             } else {
+                $errorSunat = $sunatResponse['error'] ?? [];
                 $updateData['status_sunat'] = 'rechazado';
                 $updateData['success']      = false;
-                $updateData['message']      = $apiData['sunatResponse']['error']['message'] ?? 'Error desconocido';
+                $updateData['message']      = $errorSunat['message'] ?? 'Error desconocido';
                 $updateData['description']  = "Error SUNAT: " . ($updateData['message']);
 
-                Notification::make()->title('Nota Rechazada')->danger()->send();
+                Notification::make()->title('Nota Rechazada')->body($updateData['message'])->danger()->send();
             }
 
             $nota->update($updateData);
